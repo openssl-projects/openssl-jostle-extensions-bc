@@ -3,8 +3,6 @@ dependencies {
     implementation project(':util')
     implementation project(':pkix')
     implementation files(rootProject.jostleProviderJar())
-    implementation files(
-        rootProject.file("libs/mail.jar"),
-        rootProject.file("libs/activation.jar")
-    )
+    implementation group: 'javax.mail', name: 'mail', version: '1.4'
+    implementation group: 'javax.activation', name: 'activation', version: '1.1.1'
 }
