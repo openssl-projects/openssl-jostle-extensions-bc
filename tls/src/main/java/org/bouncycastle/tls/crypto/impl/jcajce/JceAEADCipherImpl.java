@@ -1,0 +1,136 @@
+package org.bouncycastle.tls.crypto.impl.jcajce;
+
+import java.io.IOException;
+import java.security.AlgorithmParameters;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.asn1.cms.GCMParameters;
+import org.bouncycastle.jcajce.util.JcaJceHelper;
+import org.bouncycastle.tls.crypto.impl.TlsAEADCipherImpl;
+import org.bouncycastle.util.Arrays;
+
+/**
+ * A basic wrapper for a JCE Cipher class to provide the needed AEAD cipher functionality for TLS.
+ */
+public class JceAEADCipherImpl
+    implements TlsAEADCipherImpl
+{
+    private static String getAlgParamsName(JcaJceHelper helper, String cipherName)
+    {
+        try
+        {
+            String algName = cipherName.indexOf("CCM") >= 0 ? "CCM" : "GCM";
+            helper.createAlgorithmParameters(algName);
+            return algName;
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    private final JcaTlsCrypto crypto;
+    private final JcaJceHelper helper;
+    private final int cipherMode;
+    private final Cipher cipher;
+    private final String algorithm;
+    private final int keySize;
+    private final String algorithmParamsName;
+
+    private SecretKey key;
+
+    public JceAEADCipherImpl(JcaTlsCrypto crypto, JcaJceHelper helper, String cipherName, String algorithm, int keySize,
+        boolean isEncrypting)
+        throws GeneralSecurityException
+    {
+        this.crypto = crypto;
+        this.helper = helper;
+        this.cipher = helper.createCipher(cipherName);
+        this.algorithm = algorithm;
+        this.keySize = keySize;
+        this.cipherMode = isEncrypting ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE;
+        this.algorithmParamsName = getAlgParamsName(helper, cipherName);
+    }
+
+    public void setKey(byte[] key, int keyOff, int keyLen)
+    {
+        if (keySize != keyLen)
+        {
+            throw new IllegalStateException();
+        }
+
+        this.key = new SecretKeySpec(key, keyOff, keyLen, algorithm);
+    }
+
+    public void init(byte[] nonce, int macSize)
+    {
+        // NOTE: Shouldn't need a SecureRandom, but this is cheaper if the provider would auto-create one
+        SecureRandom random = crypto.getSecureRandom();
+
+        try
+        {
+            if (algorithmParamsName != null)
+            {
+                AlgorithmParameters algParams = helper.createAlgorithmParameters(algorithmParamsName);
+
+                // believe it or not but there are things out there that do not support the ASN.1 encoding...
+                if (GCMUtil.isGCMParameterSpecAvailable())
+                {
+                    algParams.init(GCMUtil.createGCMParameterSpec(macSize * 8, nonce));
+                }
+                else
+                {
+                    // fortunately CCM and GCM parameters have the same ASN.1 structure
+                    algParams.init(new GCMParameters(nonce, macSize).getEncoded());
+                }
+
+                cipher.init(cipherMode, key, algParams, random);
+            }
+            else
+            {
+                // This provider exposes no AlgorithmParameters for GCM/CCM (e.g. JSL registers them
+                // only by OID). Init directly with a GCMParameterSpec, which carries the nonce and the
+                // tag length (CCM and GCM share that spec; CCM-8 needs the 64-bit tag conveyed here).
+                // The associated data is supplied via updateAAD in doFinal.
+                cipher.init(cipherMode, key, GCMUtil.createGCMParameterSpec(macSize * 8, nonce), random);
+            }
+        }
+        catch (Exception e)
+        {
+            throw Exceptions.illegalStateException(e.getMessage(), e);
+        }
+    }
+
+    public int getOutputSize(int inputLength)
+    {
+        return cipher.getOutputSize(inputLength);
+    }
+
+    public int doFinal(byte[] additionalData, byte[] input, int inputOffset, int inputLength, byte[] output, int outputOffset)
+        throws IOException
+    {
+        if (!Arrays.isNullOrEmpty(additionalData))
+        {
+            cipher.updateAAD(additionalData);
+        }
+
+        /*
+         * NOTE: Some providers don't allow cipher update methods with AEAD decryption,
+         * since they may return partial data that has not yet been authenticated. So we
+         * make sure to use a single call for the whole record.
+         */
+        try
+        {
+            return cipher.doFinal(input, inputOffset, inputLength, output, outputOffset);
+        }
+        catch (GeneralSecurityException e)
+        {
+            throw Exceptions.illegalStateException("", e);
+        }
+    }
+}

@@ -1,0 +1,120 @@
+// Root build for the OpenSSL Jostle (JSL) compatibility libraries.
+//
+// Each subproject is rebuilt from bc-java sources but compiled against the
+// minimal `core` module (asn.1 + util + supporting classes) and the jostle
+// provider jar in libs/, instead of bcprov. Crypto is delegated to OpenSSL via
+// the JSL provider through JCA/JCE.
+
+plugins {
+    // OSGi bundle metadata via bnd (matches bc-java's use of the bnd builder).
+    id 'biz.aQute.bnd.builder' version '7.0.0' apply false
+}
+
+def jostleJar = { -> rootProject.file("libs/openssl-jostle-${jostleVersion}.jar") }
+
+// Derive an OSGi-legal bundle version from the project version (mirrors bc-java):
+// snapshots extend to a fourth, time-based qualifier (days since epoch).
+static String deriveOSGIVersion(String prjVersion) {
+    if (prjVersion.contains("-SNAPSHOT")) {
+        prjVersion = prjVersion.replace("-SNAPSHOT", "")
+        while (prjVersion.count(".") < 2) {
+            prjVersion = prjVersion + ".0"
+        }
+        prjVersion = prjVersion + "." + System.currentTimeMillis().intdiv(1000L).intdiv(60).intdiv(60).intdiv(24)
+    }
+    return prjVersion
+}
+
+ext.bundle_version = deriveOSGIVersion(version.toString())
+
+// Per-module Export-Package patterns — the packages each bundle owns. bnd only
+// exports packages physically present in that jar, so these can be broad.
+ext.osgiExports = [
+    core: 'org.bouncycastle.*',
+    util: 'org.bouncycastle.asn1.{bsi|cmc|cmp|cms|crmf|cryptlib|dvcs|eac|edec|esf|ess|est|gnu|iana|icao|isara|isismtt|iso|kisa|microsoft|misc|mozilla|nsri|ntt|oiw|rosstandart|smime|tsp}.*,org.bouncycastle.oer.*',
+    pkix: 'org.bouncycastle.{cert|cmc|cms|dvcs|eac|est|its|mime|mozilla|voms|operator|pkix|openssl|pkcs|tsp}.*',
+    pg  : 'org.bouncycastle.{apache|bcpg|gpg|openpgp}.*',
+    tls : 'org.bouncycastle.{jsse|tls}.*',
+    mail: 'org.bouncycastle.mail.*',
+]
+
+allprojects {
+    tasks.withType(Javadoc).configureEach {
+        options.addStringOption('Xdoclint:none', '-quiet')
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+    apply plugin: 'biz.aQute.bnd.builder'
+
+    repositories {
+        mavenCentral()
+    }
+
+    // Built from bc-java sources that target Java 8.
+    compileJava {
+        options.release = 8
+        options.debug = true
+    }
+    compileTestJava {
+        options.release = 8
+    }
+
+    dependencies {
+        testImplementation 'junit:junit:4.13.2'
+    }
+
+    // The compat artifact name carries the -jsl qualifier (bccore-jsl, bcutil-jsl, ...).
+    ext.artifactBaseName = "bc${project.name == 'core' ? 'core' : project.name}-jsl"
+
+    afterEvaluate {
+        jar {
+            archiveBaseName = project.ext.artifactBaseName
+
+            // OSGi bundle headers (processed by the bnd builder plugin).
+            String v = rootProject.ext.bundle_version
+            String rawExports = rootProject.ext.osgiExports[project.name]
+            // Attach ;version to each exported package clause (skip bnd exclusions).
+            String exportHeader = rawExports.split(',').collect { c ->
+                c.startsWith('!') ? c : "${c};version=${v}"
+            }.join(',')
+
+            manifest.attributes(
+                "Specification-Vendor"      : "BouncyCastle.org",
+                "Specification-Version"     : "1.0",
+                "Implementation-Vendor"     : "BouncyCastle.org",
+                "Implementation-Version"    : project.version,
+                "Automatic-Module-Name"     : "org.bouncycastle.jsl.${project.name}",
+                "Bundle-Name"               : project.ext.artifactBaseName,
+                "Bundle-SymbolicName"       : project.ext.artifactBaseName,
+                "Bundle-Version"            : v,
+                "Bundle-RequiredExecutionEnvironment" : "JavaSE-1.8",
+                "Export-Package"            : exportHeader,
+                "Import-Package"            : "java.*;resolution:=optional,javax.*;resolution:=optional,org.bouncycastle.*;version=\"[${v},${project.maxVersion})\",*"
+            )
+        }
+
+        task sourcesJar(type: Jar, dependsOn: classes) {
+            archiveBaseName = project.ext.artifactBaseName
+            archiveClassifier = 'sources'
+            from sourceSets.main.allSource
+        }
+
+        task javadocJar(type: Jar, dependsOn: javadoc) {
+            archiveBaseName = project.ext.artifactBaseName
+            archiveClassifier = 'javadoc'
+            from javadoc.destinationDir
+        }
+
+        artifacts {
+            archives jar
+            archives sourcesJar
+            archives javadocJar
+        }
+    }
+}
+
+// Convenience accessor for the jostle provider jar used by subprojects.
+ext.jostleProviderJar = jostleJar

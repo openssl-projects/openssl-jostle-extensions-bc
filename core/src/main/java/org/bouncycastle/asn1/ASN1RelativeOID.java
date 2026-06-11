@@ -1,0 +1,464 @@
+package org.bouncycastle.asn1;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
+import org.bouncycastle.util.Properties;
+
+public class ASN1RelativeOID
+    extends ASN1Primitive
+{
+    static final ASN1UniversalType TYPE = new ASN1UniversalType(ASN1RelativeOID.class, BERTags.RELATIVE_OID)
+    {
+        ASN1Primitive fromImplicitPrimitive(DEROctetString octetString)
+        {
+            return createPrimitive(octetString.getOctets(), false);
+        }
+    };
+
+    /**
+     * Implementation limit on the length of the contents octets for a Relative OID.
+     * <p/>
+     * We adopt the same value used by OpenJDK for Object Identifier. In theory there is no limit on the
+     * length of the contents, or the number of subidentifiers, or the length of individual subidentifiers. In
+     * practice, supporting arbitrary lengths can lead to issues, e.g. denial-of-service attacks when
+     * attempting to convert a parsed value to its (decimal) string form.
+     */
+    private static final int MAX_CONTENTS_LENGTH = 4096;
+    private static final int MAX_IDENTIFIER_LENGTH = MAX_CONTENTS_LENGTH * 4 - 1;
+
+    public static ASN1RelativeOID fromContents(byte[] contents)
+    {
+        if (contents == null)
+        {
+            throw new NullPointerException("'contents' cannot be null");
+        }
+
+        return createPrimitive(contents, true);
+    }
+
+    public static ASN1RelativeOID getInstance(Object obj)
+    {
+        if (obj == null || obj instanceof ASN1RelativeOID)
+        {
+            return (ASN1RelativeOID)obj;
+        }
+        if (obj instanceof ASN1Encodable)
+        {
+            ASN1Primitive primitive = ((ASN1Encodable)obj).toASN1Primitive();
+            if (primitive instanceof ASN1RelativeOID)
+            {
+                return (ASN1RelativeOID)primitive;
+            }
+        }
+        else if (obj instanceof byte[])
+        {
+            byte[] enc = (byte[])obj;
+            try
+            {
+                return (ASN1RelativeOID)TYPE.fromByteArray(enc);
+            }
+            catch (IOException e)
+            {
+                throw Exceptions.illegalArgumentException("failed to construct relative OID from byte[]", e);
+            }
+        }
+
+        throw new IllegalArgumentException("illegal object in getInstance: " + obj.getClass().getName());
+    }
+
+    public static ASN1RelativeOID getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1RelativeOID)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1RelativeOID getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1RelativeOID)TYPE.getTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1RelativeOID tryFromID(String identifier)
+    {
+        if (identifier == null)
+        {
+            throw new NullPointerException("'identifier' cannot be null");
+        }
+        if (identifier.length() <= MAX_IDENTIFIER_LENGTH && isValidIdentifier(identifier, 0))
+        {
+            byte[] contents = parseIdentifier(identifier);
+            if (contents.length <= MAX_CONTENTS_LENGTH)
+            {
+                return new ASN1RelativeOID(contents, identifier);
+            }
+        }
+
+        return null;
+    }
+
+    private static final long LONG_LIMIT = (Long.MAX_VALUE >> 7) - 0x7F;
+
+    private static final ConcurrentMap<ASN1ObjectIdentifier.OidHandle, ASN1RelativeOID> pool =
+        new ConcurrentHashMap<ASN1ObjectIdentifier.OidHandle, ASN1RelativeOID>();
+
+    private final byte[] contents;
+    private String identifier;
+
+    public ASN1RelativeOID(String identifier)
+    {
+        checkIdentifier(identifier);
+
+        byte[] contents = parseIdentifier(identifier);
+        checkContentsLength(contents.length);
+
+        this.contents = contents;
+        this.identifier = identifier;
+    }
+
+    private ASN1RelativeOID(byte[] contents, String identifier)
+    {
+        this.contents = contents;
+        this.identifier = identifier;
+    }
+
+    public ASN1RelativeOID branch(String branchID)
+    {
+        checkIdentifier(branchID);
+
+        byte[] contents;
+        if (branchID.length() <= 2)
+        {
+            checkContentsLength(this.contents.length + 1);
+            int subID = branchID.charAt(0) - '0';
+            if (branchID.length() == 2)
+            {
+                subID *= 10;
+                subID += branchID.charAt(1) - '0';
+            }
+
+            contents = Arrays.append(this.contents, (byte)subID);
+        }
+        else
+        {
+            byte[] branchContents = parseIdentifier(branchID);
+            checkContentsLength(this.contents.length + branchContents.length);
+
+            contents = Arrays.concatenate(this.contents, branchContents);
+        }
+
+        String rootID = getId();
+        String identifier = rootID + "." + branchID;
+
+        return new ASN1RelativeOID(contents, identifier);
+    }
+
+    public synchronized String getId()
+    {
+        if (identifier == null)
+        {
+            identifier = parseContents(contents);
+        }
+
+        return identifier;
+    }
+
+    public int hashCode()
+    {
+        return Arrays.hashCode(contents);
+    }
+
+    public String toString()
+    {
+        return getId();
+    }
+
+    boolean asn1Equals(ASN1Primitive other)
+    {
+        if (this == other)
+        {
+            return true;
+        }
+        if (!(other instanceof ASN1RelativeOID))
+        {
+            return false;
+        }
+
+        ASN1RelativeOID that = (ASN1RelativeOID)other;
+
+        return Arrays.areEqual(this.contents, that.contents);
+    }
+
+    int encodedLength(boolean withTag)
+    {
+        return ASN1OutputStream.getLengthOfEncodingDL(withTag, contents.length);
+    }
+
+    void encode(ASN1OutputStream out, boolean withTag) throws IOException
+    {
+        out.writeEncodingDL(withTag, BERTags.RELATIVE_OID, contents);
+    }
+
+    boolean encodeConstructed()
+    {
+        return false;
+    }
+
+    private static int checkContentsLength(int contentsLength)
+    {
+        if (contentsLength > MAX_CONTENTS_LENGTH)
+        {
+            throw new IllegalArgumentException("exceeded relative OID contents length limit");
+        }
+        return contentsLength;
+    }
+
+    static void checkIdentifier(String identifier)
+    {
+        if (identifier == null)
+        {
+            throw new NullPointerException("'identifier' cannot be null");
+        }
+        if (identifier.length() > MAX_IDENTIFIER_LENGTH)
+        {
+            throw new IllegalArgumentException("exceeded relative OID contents length limit");
+        }
+        if (!isValidIdentifier(identifier, 0))
+        {
+            throw new IllegalArgumentException("string " + identifier + " not a valid relative OID");
+        }
+    }
+
+    static ASN1RelativeOID createPrimitive(DefiniteLengthInputStream defIn, byte[] tmp) throws IOException
+    {
+        int contentsLength = checkContentsLength(defIn.getRemaining());
+
+        boolean useTmp = contentsLength <= tmp.length;
+        if (useTmp)
+        {
+            defIn.readAllIntoByteArray(tmp);
+        }
+        else
+        {
+            tmp = defIn.toByteArray();
+        }
+
+        return createPrimitive(tmp, contentsLength, useTmp);
+    }
+
+    private static ASN1RelativeOID createPrimitive(byte[] contents, boolean clone)
+    {
+        return createPrimitive(contents, checkContentsLength(contents.length), clone);
+    }
+
+    private static ASN1RelativeOID createPrimitive(byte[] contents, int contentsLength, boolean clone)
+    {
+//        assert clone || contents.length == contentsLength;
+
+        final ASN1ObjectIdentifier.OidHandle hdl = new ASN1ObjectIdentifier.OidHandle(contents, contentsLength);
+        ASN1RelativeOID oid = pool.get(hdl);
+        if (oid != null)
+        {
+            return oid;
+        }
+
+        if (!isValidContents(contents, contentsLength))
+        {
+            throw new IllegalArgumentException("invalid relative OID contents");
+        }
+
+        byte[] newContents = clone ? Arrays.copyOfRange(contents, 0, contentsLength) : contents;
+
+        return new ASN1RelativeOID(newContents, null);
+    }
+
+    static boolean isValidContents(byte[] contents, int contentsLength)
+    {
+        if (Properties.isOverrideSet("org.bouncycastle.asn1.allow_wrong_oid_enc"))
+        {
+            return true;
+        }
+
+        if (contentsLength < 1)
+        {
+            return false;
+        }
+
+        boolean subIDStart = true;
+        for (int i = 0; i < contentsLength; ++i)
+        {
+            if (subIDStart && (contents[i] & 0xFF) == 0x80)
+            {
+                return false;
+            }
+
+            subIDStart = (contents[i] & 0x80) == 0;
+        }
+
+        return subIDStart;
+    }
+
+    static boolean isValidIdentifier(String identifier, int from)
+    {
+        int digitCount = 0;
+
+        int pos = identifier.length();
+        while (--pos >= from)
+        {
+            char ch = identifier.charAt(pos);
+
+            if (ch == '.')
+            {
+                if (0 == digitCount || (digitCount > 1 && identifier.charAt(pos + 1) == '0'))
+                {
+                    return false;
+                }
+
+                digitCount = 0;
+            }
+            else if ('0' <= ch && ch <= '9')
+            {
+                ++digitCount;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        if (0 == digitCount || (digitCount > 1 && identifier.charAt(pos + 1) == '0'))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    static String parseContents(byte[] contents)
+    {
+        StringBuilder objId = new StringBuilder();
+        long value = 0;
+        BigInteger bigValue = null;
+        boolean first = true;
+
+        for (int i = 0; i != contents.length; i++)
+        {
+            int b = contents[i] & 0xff;
+
+            if (value <= LONG_LIMIT)
+            {
+                value += b & 0x7F;
+                if ((b & 0x80) == 0)
+                {
+                    if (first)
+                    {
+                        first = false;
+                    }
+                    else
+                    {
+                        objId.append('.');
+                    }
+
+                    objId.append(value);
+                    value = 0;
+                }
+                else
+                {
+                    value <<= 7;
+                }
+            }
+            else
+            {
+                if (bigValue == null)
+                {
+                    bigValue = BigInteger.valueOf(value);
+                }
+                bigValue = bigValue.or(BigInteger.valueOf(b & 0x7F));
+                if ((b & 0x80) == 0)
+                {
+                    if (first)
+                    {
+                        first = false;
+                    }
+                    else
+                    {
+                        objId.append('.');
+                    }
+
+                    objId.append(bigValue);
+                    bigValue = null;
+                    value = 0;
+                }
+                else
+                {
+                    bigValue = bigValue.shiftLeft(7);
+                }
+            }
+        }
+
+        return objId.toString();
+    }
+
+    static byte[] parseIdentifier(String identifier)
+    {
+        int contentsLimit = (identifier.length() + 1) / 2;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream(contentsLimit);
+
+        int i = 0, j = 0;
+        while (++j < identifier.length())
+        {
+            if (identifier.charAt(j) == '.')
+            {
+                writeField(buf, identifier, i, j);
+                i = j + 1;
+                j = i;
+            }
+        }
+        writeField(buf, identifier, i, j);
+
+        return buf.toByteArray();
+    }
+
+    static void writeField(ByteArrayOutputStream buf, String identifier, int from, int to)
+    {
+        String token = identifier.substring(from, to);
+        if (token.length() <= 18)
+        {
+            writeField(buf, Long.parseLong(token));
+        }
+        else
+        {
+            writeField(buf, new BigInteger(token));
+        }
+    }
+
+    static void writeField(ByteArrayOutputStream buf, long fieldValue)
+    {
+        byte[] result = new byte[9];
+        int pos = result.length - 1;
+        result[pos] = (byte)((int)fieldValue & 0x7F);
+        while (fieldValue >= (1L << 7))
+        {
+            fieldValue >>= 7;
+            result[--pos] = (byte)((int)fieldValue | 0x80);
+        }
+        buf.write(result, pos, result.length - pos);
+    }
+
+    static void writeField(ByteArrayOutputStream buf, BigInteger fieldValue)
+    {
+//        assert fieldValue.signum() > 0;
+        int byteCount = (fieldValue.bitLength() + 6) / 7;
+        byte[] tmp = new byte[byteCount];
+        for (int i = byteCount - 1; i >= 0; i--)
+        {
+            tmp[i] = (byte)(fieldValue.intValue() | 0x80);
+            fieldValue = fieldValue.shiftRight(7);
+        }
+        tmp[byteCount - 1] &= 0x7F;
+        buf.write(tmp, 0, tmp.length);
+    }
+}

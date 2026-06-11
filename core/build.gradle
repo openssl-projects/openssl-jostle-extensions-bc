@@ -1,0 +1,8 @@
+// bc-jostle-libs core: minimal compatibility module (asn.1 + util + math +
+// supporting crypto types + jcajce support). All shared configuration — the
+// java/maven-publish plugins, release-8 compilation, jar/sourcesJar naming and
+// manifest — is applied by the root build.gradle `subprojects` block.
+//
+// Unlike bc-java's core, this module carries no jmh benchmarks, no `application`
+// entry point and no SQIsign multi-release (jdk1.9) overlay: crypto is delegated
+// to OpenSSL through the JSL provider, so those software paths are not built here.

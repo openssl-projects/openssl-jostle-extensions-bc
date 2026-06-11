@@ -1,0 +1,58 @@
+package org.bouncycastle.asn1.cmc.test;
+
+import java.math.BigInteger;
+
+import org.bouncycastle.asn1.ASN1Integer;
+import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.cmc.PublishTrustAnchors;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.util.test.SimpleTest;
+
+
+public class PublishTrustAnchorsTest
+    extends SimpleTest
+{
+    public static void main(String[] args)
+    {
+        runTest(new PublishTrustAnchorsTest());
+    }
+
+    @org.junit.Test
+    public void test() throws Exception {
+        org.bouncycastle.util.test.TestResult result = perform();
+        if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
+    }
+
+    public String getName()
+    {
+        return "PublishTrustAnchorsTest";
+    }
+
+    public void performTest()
+        throws Exception
+    {
+        PublishTrustAnchors publishTrustAnchors = new PublishTrustAnchors(
+            BigInteger.valueOf(10),
+            new AlgorithmIdentifier(PKCSObjectIdentifiers.crlTypes, ASN1Integer.FIVE),
+            new byte[][]{"cats".getBytes()});
+
+        byte[] b = publishTrustAnchors.getEncoded();
+
+        PublishTrustAnchors publishTrustAnchorsResult = PublishTrustAnchors.getInstance(b);
+
+        isEquals("seqNumber", publishTrustAnchors.getSeqNumber(), publishTrustAnchorsResult.getSeqNumber());
+        isEquals("hashAlgorithm", publishTrustAnchors.getHashAlgorithm(), publishTrustAnchorsResult.getHashAlgorithm());
+        isTrue("anchorHashes", areEqual(publishTrustAnchors.getAnchorHashes(), publishTrustAnchorsResult.getAnchorHashes()));
+
+        try
+        {
+            PublishTrustAnchors.getInstance(new DERSequence());
+            fail("Sequence must be 3");
+        }
+        catch (Throwable t)
+        {
+            isEquals("Expect IllegalArgumentException", t.getClass(), IllegalArgumentException.class);
+        }
+    }
+}

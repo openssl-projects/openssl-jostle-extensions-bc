@@ -1,0 +1,8 @@
+rootProject.name = 'bc-jostle-libs'
+
+include "core"
+include "util"
+include "pkix"
+include "mail"
+include "pg"
+include "tls"

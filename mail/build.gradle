@@ -1,0 +1,10 @@
+dependencies {
+    implementation project(':core')
+    implementation project(':util')
+    implementation project(':pkix')
+    implementation files(rootProject.jostleProviderJar())
+    implementation files(
+        rootProject.file("libs/mail.jar"),
+        rootProject.file("libs/activation.jar")
+    )
+}
