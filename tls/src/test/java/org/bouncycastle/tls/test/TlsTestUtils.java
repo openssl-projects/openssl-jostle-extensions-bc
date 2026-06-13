@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
+import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Security;
@@ -31,6 +32,7 @@ import org.bouncycastle.tls.AlertDescription;
 import org.bouncycastle.tls.BasicTlsPSKIdentity;
 import org.bouncycastle.tls.Certificate;
 import org.bouncycastle.tls.CertificateEntry;
+import org.bouncycastle.tls.CertificateType;
 import org.bouncycastle.tls.ProtocolVersion;
 import org.bouncycastle.tls.SignatureAlgorithm;
 import org.bouncycastle.tls.SignatureAndHashAlgorithm;
@@ -44,6 +46,7 @@ import org.bouncycastle.tls.TlsPSKIdentity;
 import org.bouncycastle.tls.TlsUtils;
 import org.bouncycastle.tls.crypto.TlsCertificate;
 import org.bouncycastle.tls.crypto.TlsCrypto;
+import org.bouncycastle.tls.crypto.TlsCryptoException;
 import org.bouncycastle.tls.crypto.TlsCryptoParameters;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaDefaultTlsCredentialedSigner;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCrypto;
@@ -68,6 +71,34 @@ public class TlsTestUtils
     public static JcaTlsCrypto createTestCrypto()
     {
         return new JcaTlsCryptoProvider().setProvider(new JostleProvider()).create(new java.security.SecureRandom());
+    }
+
+    /**
+     * Build a fresh Ed25519 raw public key (RFC 7250) signer credential for the connection's crypto
+     * backend. Jca-only variant (this build has no BcTlsCrypto) — exercises {@code JcaTlsRawKeyCertificate}.
+     */
+    static TlsCredentialedSigner createRawKeyEd25519Credentials(TlsContext context) throws IOException
+    {
+        JcaTlsCrypto jcaCrypto = (JcaTlsCrypto)context.getCrypto();
+        byte[] certificateRequestContext = TlsUtils.isTLSv13(context) ? TlsUtils.EMPTY_BYTES : null;
+
+        KeyPair keyPair;
+        try
+        {
+            keyPair = jcaCrypto.getHelper().createKeyPairGenerator("Ed25519").generateKeyPair();
+        }
+        catch (GeneralSecurityException e)
+        {
+            throw new TlsCryptoException("unable to generate Ed25519 key pair", e);
+        }
+
+        TlsCertificate rawKeyCert = jcaCrypto.createCertificate(CertificateType.RawPublicKey,
+            keyPair.getPublic().getEncoded());
+        Certificate certificate = new Certificate(CertificateType.RawPublicKey, certificateRequestContext,
+            new CertificateEntry[]{ new CertificateEntry(rawKeyCert, null) });
+
+        return new JcaDefaultTlsCredentialedSigner(new TlsCryptoParameters(context), jcaCrypto,
+            keyPair.getPrivate(), certificate, SignatureAndHashAlgorithm.ed25519);
     }
 
     static final byte[] rsaCertData = Base64

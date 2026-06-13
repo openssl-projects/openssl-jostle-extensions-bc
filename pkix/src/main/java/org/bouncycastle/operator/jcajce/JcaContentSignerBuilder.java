@@ -9,6 +9,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PSSParameterSpec;
@@ -19,11 +20,14 @@ import java.util.Set;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1Integer;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
+import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.pkcs.RSASSAPSSparams;
@@ -39,6 +43,7 @@ import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.ExtendedContentSigner;
+import org.bouncycastle.operator.FixedLengthContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.RuntimeOperatorException;
 import org.bouncycastle.operator.SignatureAlgorithmIdentifierFinder;
@@ -261,6 +266,33 @@ public class JcaContentSignerBuilder
             }
             else
             {
+                final int fixedLength = getFixedSignatureLength(signatureAlgId, privateKey);
+                if (fixedLength > 0)
+                {
+                    return new FixedLengthContentSigner()
+                    {
+                        public int getSignatureLength()
+                        {
+                            return fixedLength;
+                        }
+
+                        public AlgorithmIdentifier getAlgorithmIdentifier()
+                        {
+                            return contentSigner.getAlgorithmIdentifier();
+                        }
+
+                        public OutputStream getOutputStream()
+                        {
+                            return contentSigner.getOutputStream();
+                        }
+
+                        public byte[] getSignature()
+                        {
+                            return contentSigner.getSignature();
+                        }
+                    };
+                }
+
                 return contentSigner;
             }
         }
@@ -268,6 +300,44 @@ public class JcaContentSignerBuilder
         {
             throw new OperatorCreationException("cannot create signer: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Return the fixed signature length in octets for the passed in algorithm
+     * and key, or -1 when the length varies (e.g. DER-encoded ECDSA/DSA) or
+     * cannot be determined. RSA (PKCS#1 v1.5 and PSS) signatures are the
+     * modulus size; Ed25519/Ed448 and ML-DSA are constants.
+     */
+    private static int getFixedSignatureLength(AlgorithmIdentifier sigAlgId, PrivateKey privateKey)
+    {
+        if (privateKey instanceof RSAPrivateKey)
+        {
+            return (((RSAPrivateKey)privateKey).getModulus().bitLength() + 7) / 8;
+        }
+
+        ASN1ObjectIdentifier algorithm = sigAlgId.getAlgorithm();
+        if (EdECObjectIdentifiers.id_Ed25519.equals(algorithm))
+        {
+            return 64;
+        }
+        if (EdECObjectIdentifiers.id_Ed448.equals(algorithm))
+        {
+            return 114;
+        }
+        if (NISTObjectIdentifiers.id_ml_dsa_44.equals(algorithm))
+        {
+            return 2420;
+        }
+        if (NISTObjectIdentifiers.id_ml_dsa_65.equals(algorithm))
+        {
+            return 3309;
+        }
+        if (NISTObjectIdentifiers.id_ml_dsa_87.equals(algorithm))
+        {
+            return 4627;
+        }
+
+        return -1;
     }
 
     private AlgorithmIdentifier getSigAlgId(PrivateKey privateKey)
