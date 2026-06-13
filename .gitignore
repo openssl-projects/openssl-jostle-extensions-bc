@@ -1,0 +1,54 @@
+.classpath
+.gradle
+.project
+
+*.class
+*.gen
+*/*.gen
+*.swp
+*.iml
+*/*.iml
+*.ipr
+*.iws
+
+bin/
+build/
+*/build/
+dist/
+libs/*.jar
+out/
+*/out/
+.settings/
+
+pg/*.asc
+pg/*.bak
+pg/*.bpg
+pg/*.txt
+
+.idea/
+.claude/
+
+.DS_Store
+
+mail/*.message
+mail/id.p12
+
+codesigning.jks
+
+/prov/src/main/core/
+
+bc-build.user.properties
+
+# macOS Finder metadata
+.DS_Store
+
+# Local Claude Code tooling state (skills, settings, etc.)
+.claude/
+.claude 2/
+
+# Stray test-run output left at the top of modules
+/example.p12
+/mail/*.p12
+/mail/*.message
+/prov/ells
+/tls/ells
