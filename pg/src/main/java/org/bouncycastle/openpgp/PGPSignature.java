@@ -26,8 +26,6 @@ import org.bouncycastle.bcpg.sig.IssuerFingerprint;
 import org.bouncycastle.bcpg.sig.IssuerKeyID;
 import org.bouncycastle.bcpg.sig.RevocationReason;
 import org.bouncycastle.bcpg.sig.RevocationReasonTags;
-import org.bouncycastle.math.ec.rfc8032.Ed25519;
-import org.bouncycastle.math.ec.rfc8032.Ed448;
 import org.bouncycastle.openpgp.operator.PGPContentVerifier;
 import org.bouncycastle.openpgp.operator.PGPContentVerifierBuilder;
 import org.bouncycastle.openpgp.operator.PGPContentVerifierBuilderProvider;
@@ -41,6 +39,11 @@ import org.bouncycastle.util.Strings;
 public class PGPSignature
     extends PGPDefaultSignatureGenerator
 {
+    private static final int ED25519_PUBLIC_KEY_SIZE = 32;  // RFC 8032 Ed25519 public key length in octets
+    private static final int ED448_PUBLIC_KEY_SIZE = 57;    // RFC 8032 Ed448 public key length in octets
+    private static final int ED25519_SIGNATURE_SIZE = 64;  // RFC 8032 Ed25519 signature length in octets
+    private static final int ED448_SIGNATURE_SIZE = 114;   // RFC 8032 Ed448 signature length in octets
+
     /**
      * The signature is made over some binary data.
      * No preprocessing is applied.
@@ -802,25 +805,25 @@ public class PGPSignature
             {
                 byte[] a = BigIntegers.asUnsignedByteArray(sigValues[0].getValue());
                 byte[] b = BigIntegers.asUnsignedByteArray(sigValues[1].getValue());
-                if (a.length + b.length > Ed25519.SIGNATURE_SIZE)
+                if (a.length + b.length > ED25519_SIGNATURE_SIZE)
                 {
-                    if (a.length > Ed448.PUBLIC_KEY_SIZE || b.length > Ed448.SIGNATURE_SIZE)
+                    if (a.length > ED448_PUBLIC_KEY_SIZE || b.length > ED448_SIGNATURE_SIZE)
                     {
                         throw new PGPException("Malformed Ed448 signature encoding (too long).");
                     }
-                    signature = new byte[Ed448.SIGNATURE_SIZE];
-                    System.arraycopy(a, 0, signature, Ed448.PUBLIC_KEY_SIZE - a.length, a.length);
-                    System.arraycopy(b, 0, signature, Ed448.SIGNATURE_SIZE - b.length, b.length);
+                    signature = new byte[ED448_SIGNATURE_SIZE];
+                    System.arraycopy(a, 0, signature, ED448_PUBLIC_KEY_SIZE - a.length, a.length);
+                    System.arraycopy(b, 0, signature, ED448_SIGNATURE_SIZE - b.length, b.length);
                 }
                 else
                 {
-                    if (a.length > Ed25519.PUBLIC_KEY_SIZE || b.length > Ed25519.SIGNATURE_SIZE)
+                    if (a.length > ED25519_PUBLIC_KEY_SIZE || b.length > ED25519_SIGNATURE_SIZE)
                     {
                         throw new PGPException("Malformed Ed25519 signature encoding (too long).");
                     }
-                    signature = new byte[Ed25519.SIGNATURE_SIZE];
-                    System.arraycopy(a, 0, signature, Ed25519.PUBLIC_KEY_SIZE - a.length, a.length);
-                    System.arraycopy(b, 0, signature, Ed25519.SIGNATURE_SIZE - b.length, b.length);
+                    signature = new byte[ED25519_SIGNATURE_SIZE];
+                    System.arraycopy(a, 0, signature, ED25519_PUBLIC_KEY_SIZE - a.length, a.length);
+                    System.arraycopy(b, 0, signature, ED25519_SIGNATURE_SIZE - b.length, b.length);
                 }
             }
             else

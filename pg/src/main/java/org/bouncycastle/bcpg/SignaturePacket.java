@@ -21,6 +21,9 @@ public class SignaturePacket
 {
     public static final int MAX_SUBPACKET_LEN = 2 * 1024 * 1024; // 2mb, allows for embedded McEliece keys for example.
 
+    private static final int ED25519_SIGNATURE_SIZE = 64;  // RFC 8032 Ed25519 signature length in octets
+    private static final int ED448_SIGNATURE_SIZE = 114;   // RFC 8032 Ed448 signature length in octets
+
     public static final int VERSION_2 = 2;
     public static final int VERSION_3 = 3;
     public static final int VERSION_4 = 4;  // https://datatracker.ietf.org/doc/rfc4880/
@@ -318,11 +321,11 @@ public class SignaturePacket
                 signature[1] = s;
                 break;
             case Ed448:
-                signatureEncoding = new byte[org.bouncycastle.math.ec.rfc8032.Ed448.SIGNATURE_SIZE];
+                signatureEncoding = new byte[ED448_SIGNATURE_SIZE];
                 in.readFully(signatureEncoding);
                 break;
             case Ed25519:
-                signatureEncoding = new byte[org.bouncycastle.math.ec.rfc8032.Ed25519.SIGNATURE_SIZE];
+                signatureEncoding = new byte[ED25519_SIGNATURE_SIZE];
                 in.readFully(signatureEncoding);
                 break;
             case ECDSA:

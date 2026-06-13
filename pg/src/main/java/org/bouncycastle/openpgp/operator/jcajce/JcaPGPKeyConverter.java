@@ -80,10 +80,6 @@ import org.bouncycastle.jcajce.util.NamedJcaJceHelper;
 import org.bouncycastle.jcajce.util.ProviderJcaJceHelper;
 import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
-import org.bouncycastle.math.ec.rfc7748.X25519;
-import org.bouncycastle.math.ec.rfc7748.X448;
-import org.bouncycastle.math.ec.rfc8032.Ed25519;
-import org.bouncycastle.math.ec.rfc8032.Ed448;
 import org.bouncycastle.openpgp.PGPAlgorithmParameters;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKdfParameters;
@@ -97,6 +93,13 @@ import org.bouncycastle.util.BigIntegers;
 public class JcaPGPKeyConverter
     extends PGPKeyConverter
 {
+    private static final int ED25519_PUBLIC_KEY_SIZE = 32;  // RFC 8032 Ed25519 public key length in octets
+    private static final int ED25519_SECRET_KEY_SIZE = 32;  // RFC 8032 Ed25519 secret key length in octets
+    private static final int ED448_PUBLIC_KEY_SIZE = 57;    // RFC 8032 Ed448 public key length in octets
+    private static final int ED448_SECRET_KEY_SIZE = 57;    // RFC 8032 Ed448 secret key length in octets
+    private static final int X25519_SCALAR_SIZE = 32;  // RFC 7748 X25519 scalar length in octets
+    private static final int X448_SCALAR_SIZE = 56;    // RFC 7748 X448 scalar length in octets
+
     private OperatorHelper helper = new OperatorHelper(new DefaultJcaJceHelper());
     private KeyFingerPrintCalculator fingerPrintCalculator = new JcaKeyFingerprintCalculator();
 
@@ -325,7 +328,7 @@ public class JcaPGPKeyConverter
                             throws IOException
                         {
                             return getPrivateKeyInfo(EdECObjectIdentifiers.id_Ed448,
-                                BigIntegers.asUnsignedByteArray(Ed448.SECRET_KEY_SIZE, ((EdSecretBCPGKey)privPk).getX()));
+                                BigIntegers.asUnsignedByteArray(ED448_SECRET_KEY_SIZE, ((EdSecretBCPGKey)privPk).getX()));
                         }
                     });
                 }
@@ -338,7 +341,7 @@ public class JcaPGPKeyConverter
                         throws IOException
                     {
                         return getPrivateKeyInfo(EdECObjectIdentifiers.id_Ed25519,
-                            BigIntegers.asUnsignedByteArray(Ed25519.SECRET_KEY_SIZE, ((EdSecretBCPGKey)privPk).getX()));
+                            BigIntegers.asUnsignedByteArray(ED25519_SECRET_KEY_SIZE, ((EdSecretBCPGKey)privPk).getX()));
                     }
                 });
             }
@@ -731,7 +734,7 @@ public class JcaPGPKeyConverter
             {
                 PGPKdfParameters kdfParams = implGetKdfParameters(CryptlibObjectIdentifiers.curvey25519, algorithmParameters);
 
-                return new ECDHPublicBCPGKey(CryptlibObjectIdentifiers.curvey25519, new BigInteger(1, getPointEncUncompressed(pubKey, X25519.SCALAR_SIZE)),
+                return new ECDHPublicBCPGKey(CryptlibObjectIdentifiers.curvey25519, new BigInteger(1, getPointEncUncompressed(pubKey, X25519_SCALAR_SIZE)),
                     kdfParams.getHashAlgorithm(), kdfParams.getSymmetricWrapAlgorithm());
             }
             // Legacy X448 (1.3.101.111)
@@ -740,7 +743,7 @@ public class JcaPGPKeyConverter
 
                 PGPKdfParameters kdfParams = implGetKdfParameters(EdECObjectIdentifiers.id_X448, algorithmParameters);
 
-                return new ECDHPublicBCPGKey(EdECObjectIdentifiers.id_X448, new BigInteger(1, getPointEncUncompressed(pubKey, X448.SCALAR_SIZE)),
+                return new ECDHPublicBCPGKey(EdECObjectIdentifiers.id_X448, new BigInteger(1, getPointEncUncompressed(pubKey, X448_SCALAR_SIZE)),
                     kdfParams.getHashAlgorithm(), kdfParams.getSymmetricWrapAlgorithm());
             }
             // sun.security.ec.XDHPublicKeyImpl returns "XDH" for getAlgorithm()
@@ -748,11 +751,11 @@ public class JcaPGPKeyConverter
             else if (pubKey.getAlgorithm().regionMatches(true, 0, "XDH", 0, 3))
             {
                 // Legacy X25519 (1.3.6.1.4.1.3029.1.5.1 & 1.3.101.110)
-                if (X25519.SCALAR_SIZE + 12 == pubKey.getEncoded().length) // + 12 for some reason
+                if (X25519_SCALAR_SIZE + 12 == pubKey.getEncoded().length) // + 12 for some reason
                 {
                     PGPKdfParameters kdfParams = implGetKdfParameters(CryptlibObjectIdentifiers.curvey25519, algorithmParameters);
 
-                    return new ECDHPublicBCPGKey(CryptlibObjectIdentifiers.curvey25519, new BigInteger(1, getPointEncUncompressed(pubKey, X25519.SCALAR_SIZE)),
+                    return new ECDHPublicBCPGKey(CryptlibObjectIdentifiers.curvey25519, new BigInteger(1, getPointEncUncompressed(pubKey, X25519_SCALAR_SIZE)),
                         kdfParams.getHashAlgorithm(), kdfParams.getSymmetricWrapAlgorithm());
                 }
                 // Legacy X448 (1.3.101.111)
@@ -760,7 +763,7 @@ public class JcaPGPKeyConverter
                 {
                     PGPKdfParameters kdfParams = implGetKdfParameters(EdECObjectIdentifiers.id_X448, algorithmParameters);
 
-                    return new ECDHPublicBCPGKey(EdECObjectIdentifiers.id_X448, new BigInteger(1, getPointEncUncompressed(pubKey, X448.SCALAR_SIZE)),
+                    return new ECDHPublicBCPGKey(EdECObjectIdentifiers.id_X448, new BigInteger(1, getPointEncUncompressed(pubKey, X448_SCALAR_SIZE)),
                         kdfParams.getHashAlgorithm(), kdfParams.getSymmetricWrapAlgorithm());
                 }
             }
@@ -789,27 +792,27 @@ public class JcaPGPKeyConverter
             // Legacy Ed25519 (1.3.6.1.4.1.11591.15.1 & 1.3.101.112)
             if (pubKey.getAlgorithm().regionMatches(true, 0, "ED2", 0, 3))
             {
-                return new EdDSAPublicBCPGKey(GNUObjectIdentifiers.Ed25519, new BigInteger(1, getPointEncUncompressed(pubKey, Ed25519.PUBLIC_KEY_SIZE)));
+                return new EdDSAPublicBCPGKey(GNUObjectIdentifiers.Ed25519, new BigInteger(1, getPointEncUncompressed(pubKey, ED25519_PUBLIC_KEY_SIZE)));
             }
             // Legacy Ed448 (1.3.101.113)
             if (pubKey.getAlgorithm().regionMatches(true, 0, "ED4", 0, 3))
             {
-                return new EdDSAPublicBCPGKey(EdECObjectIdentifiers.id_Ed448, new BigInteger(1, getPointEncUncompressed(pubKey, Ed448.PUBLIC_KEY_SIZE)));
+                return new EdDSAPublicBCPGKey(EdECObjectIdentifiers.id_Ed448, new BigInteger(1, getPointEncUncompressed(pubKey, ED448_PUBLIC_KEY_SIZE)));
             }
             // Manual matching on curve encoding length
             else
             {
                 // sun.security.ec.ed.EdDSAPublicKeyImpl returns "EdDSA" for getAlgorithm()
                 // if algorithm is just EdDSA, we need to detect the curve based on encoding length :/
-                if (pubKey.getEncoded().length == 12 + Ed25519.PUBLIC_KEY_SIZE) // +12 for some reason
+                if (pubKey.getEncoded().length == 12 + ED25519_PUBLIC_KEY_SIZE) // +12 for some reason
                 {
                     // Legacy Ed25519 (1.3.6.1.4.1.11591.15.1 & 1.3.101.112)
-                    return new EdDSAPublicBCPGKey(GNUObjectIdentifiers.Ed25519, new BigInteger(1, getPointEncUncompressed(pubKey, Ed25519.PUBLIC_KEY_SIZE)));
+                    return new EdDSAPublicBCPGKey(GNUObjectIdentifiers.Ed25519, new BigInteger(1, getPointEncUncompressed(pubKey, ED25519_PUBLIC_KEY_SIZE)));
                 }
                 else
                 {
                     // Legacy Ed448 (1.3.101.113)
-                    return new EdDSAPublicBCPGKey(EdECObjectIdentifiers.id_Ed448, new BigInteger(1, getPointEncUncompressed(pubKey, Ed448.PUBLIC_KEY_SIZE)));
+                    return new EdDSAPublicBCPGKey(EdECObjectIdentifiers.id_Ed448, new BigInteger(1, getPointEncUncompressed(pubKey, ED448_PUBLIC_KEY_SIZE)));
                 }
             }
         }
