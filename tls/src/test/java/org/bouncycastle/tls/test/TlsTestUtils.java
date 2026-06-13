@@ -7,6 +7,7 @@ import java.io.PipedInputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Security;
@@ -26,7 +27,6 @@ import org.bouncycastle.asn1.pkcs.RSAPrivateKey;
 import org.bouncycastle.asn1.sec.ECPrivateKey;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.test.TestResourceFinder;
 import org.bouncycastle.tls.AlertDescription;
 import org.bouncycastle.tls.BasicTlsPSKIdentity;
@@ -149,11 +149,14 @@ public class TlsTestUtils
 
     static byte[] sha256DigestOf(byte[] input)
     {
-        SHA256Digest d = new SHA256Digest();
-        d.update(input, 0, input.length);
-        byte[] result = new byte[d.getDigestSize()];
-        d.doFinal(result, 0);
-        return result;
+        try
+        {
+            return MessageDigest.getInstance("SHA256").digest(input);
+        }
+        catch (NoSuchAlgorithmException e)
+        {
+            throw new IllegalStateException("cannot create SHA256 digest: " + e.getMessage(), e);
+        }
     }
 
     static String getCACertResource(short signatureAlgorithm) throws IOException

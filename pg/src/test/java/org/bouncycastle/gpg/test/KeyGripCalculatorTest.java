@@ -2,12 +2,12 @@ package org.bouncycastle.gpg.test;
 
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.bouncycastle.bcpg.BCPGKey;
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.bcpg.RSAPublicBCPGKey;
-import org.bouncycastle.crypto.digests.SHA1Digest;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.gpg.KeyGripCalculator;
 import org.bouncycastle.openpgp.operator.PGPDigestCalculator;
 import org.bouncycastle.util.Arrays;
@@ -51,11 +51,10 @@ public class KeyGripCalculatorTest
 
         // Reference: SHA-1 over the unsigned big-endian encoding of n
         // (matches libgcrypt cipher/rsa.c::compute_keygrip).
-        SHA1Digest md = new SHA1Digest();
+        MessageDigest md = MessageDigest.getInstance("SHA1");
         byte[] nBytes = BigIntegers.asUnsignedByteArray(n);
         md.update(nBytes, 0, nBytes.length);
-        byte[] expected = new byte[md.getDigestSize()];
-        md.doFinal(expected, 0);
+        byte[] expected = md.digest();
 
         if (!Arrays.areEqual(expected, grip))
         {
@@ -109,25 +108,32 @@ public class KeyGripCalculatorTest
 
     private static PGPDigestCalculator sha1()
     {
-        return new SimpleDigestCalculator(HashAlgorithmTags.SHA1, new SHA1Digest());
+        return new SimpleDigestCalculator(HashAlgorithmTags.SHA1, "SHA1");
     }
 
     private static PGPDigestCalculator sha256()
     {
-        return new SimpleDigestCalculator(HashAlgorithmTags.SHA256, new SHA256Digest());
+        return new SimpleDigestCalculator(HashAlgorithmTags.SHA256, "SHA256");
     }
 
     private static class SimpleDigestCalculator
         implements PGPDigestCalculator
     {
         private final int algorithm;
-        private final org.bouncycastle.crypto.Digest digest;
+        private final MessageDigest digest;
         private final OutputStream stream;
 
-        SimpleDigestCalculator(int algorithm, final org.bouncycastle.crypto.Digest digest)
+        SimpleDigestCalculator(int algorithm, String digestName)
         {
             this.algorithm = algorithm;
-            this.digest = digest;
+            try
+            {
+                this.digest = MessageDigest.getInstance(digestName);
+            }
+            catch (NoSuchAlgorithmException e)
+            {
+                throw new IllegalStateException("cannot create " + digestName + " digest: " + e.getMessage(), e);
+            }
             this.stream = new OutputStream()
             {
                 public void write(int b)
@@ -154,9 +160,7 @@ public class KeyGripCalculatorTest
 
         public byte[] getDigest()
         {
-            byte[] out = new byte[digest.getDigestSize()];
-            digest.doFinal(out, 0);
-            return out;
+            return digest.digest();
         }
 
         public void reset()

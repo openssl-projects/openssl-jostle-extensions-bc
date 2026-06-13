@@ -88,12 +88,12 @@ public abstract class TlsRawKeysProtocolTest
                 server.receivedClientExtensions.containsKey(TlsExtensionsUtils.EXT_server_certificate_type));
     }
 
-    public void DISABLED_testBothSidesUseRawKey() throws Exception
+    public void testBothSidesUseRawKey() throws Exception
     {
         testBothSidesUseRawKey(ProtocolVersion.TLSv12);
     }
 
-    public void DISABLED_testBothSidesUseRawKey_13() throws Exception
+    public void testBothSidesUseRawKey_13() throws Exception
     {
         testBothSidesUseRawKey(ProtocolVersion.TLSv13);
     }
@@ -116,12 +116,12 @@ public abstract class TlsRawKeysProtocolTest
         pumpData(client, server);
     }
 
-    public void DISABLED_testServerUsesRawKeyAndClientIsAnonymous() throws Exception
+    public void testServerUsesRawKeyAndClientIsAnonymous() throws Exception
     {
         testServerUsesRawKeyAndClientIsAnonymous(ProtocolVersion.TLSv12);
     }
 
-    public void DISABLED_testServerUsesRawKeyAndClientIsAnonymous_13() throws Exception
+    public void testServerUsesRawKeyAndClientIsAnonymous_13() throws Exception
     {
         testServerUsesRawKeyAndClientIsAnonymous(ProtocolVersion.TLSv13);
     }
@@ -144,12 +144,12 @@ public abstract class TlsRawKeysProtocolTest
         pumpData(client, server);
     }
 
-    public void DISABLED_testServerUsesRawKeyAndClientUsesX509() throws Exception
+    public void testServerUsesRawKeyAndClientUsesX509() throws Exception
     {
         testServerUsesRawKeyAndClientUsesX509(ProtocolVersion.TLSv12);
     }
 
-    public void DISABLED_testServerUsesRawKeyAndClientUsesX509_13() throws Exception
+    public void testServerUsesRawKeyAndClientUsesX509_13() throws Exception
     {
         testServerUsesRawKeyAndClientUsesX509(ProtocolVersion.TLSv13);
     }
@@ -172,12 +172,12 @@ public abstract class TlsRawKeysProtocolTest
         pumpData(client, server);
     }
 
-    public void DISABLED_testServerUsesX509AndClientUsesRawKey() throws Exception
+    public void testServerUsesX509AndClientUsesRawKey() throws Exception
     {
         testServerUsesX509AndClientUsesRawKey(ProtocolVersion.TLSv12);
     }
 
-    public void DISABLED_testServerUsesX509AndClientUsesRawKey_13() throws Exception
+    public void testServerUsesX509AndClientUsesRawKey_13() throws Exception
     {
         testServerUsesX509AndClientUsesRawKey(ProtocolVersion.TLSv13);
     }

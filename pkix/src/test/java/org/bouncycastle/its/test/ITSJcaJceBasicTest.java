@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.Security;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
@@ -12,8 +13,6 @@ import java.util.Date;
 
 import junit.framework.TestCase;
 import org.bouncycastle.asn1.ASN1Object;
-import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.its.ITSCertificate;
 import org.bouncycastle.its.ITSExplicitCertificateBuilder;
 import org.bouncycastle.its.ITSImplicitCertificateBuilder;
@@ -97,12 +96,11 @@ public class ITSJcaJceBasicTest
 
 
         byte[] parentData = caCert.getEncoded();
-        Digest digest = SHA256Digest.newInstance();
-        byte[] parentDigest = new byte[digest.getDigestSize()];
+        MessageDigest digest = MessageDigest.getInstance("SHA256");
 
         digest.update(parentData, 0, parentData.length);
 
-        digest.doFinal(parentDigest, 0);
+        byte[] parentDigest = digest.digest();
 
 
         ToBeSignedCertificate.Builder tbsBuilder = new ToBeSignedCertificate.Builder();

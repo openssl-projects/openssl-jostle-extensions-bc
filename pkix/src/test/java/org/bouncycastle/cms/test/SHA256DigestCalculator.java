@@ -2,11 +2,11 @@ package org.bouncycastle.cms.test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.operator.DigestCalculator;
 
 
@@ -31,14 +31,15 @@ class SHA256DigestCalculator
 
         bOut.reset();
 
-        Digest sha256 = SHA256Digest.newInstance();
+        try
+        {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA256");
 
-        sha256.update(bytes, 0, bytes.length);
-
-        byte[] digest = new byte[sha256.getDigestSize()];
-
-        sha256.doFinal(digest, 0);
-
-        return digest;
+            return sha256.digest(bytes);
+        }
+        catch (NoSuchAlgorithmException e)
+        {
+            throw new IllegalStateException("cannot create SHA256 digest: " + e.getMessage(), e);
+        }
     }
 }

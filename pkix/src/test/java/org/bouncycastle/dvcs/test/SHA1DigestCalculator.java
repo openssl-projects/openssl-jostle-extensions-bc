@@ -2,11 +2,11 @@ package org.bouncycastle.dvcs.test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.operator.DigestCalculator;
 
 
@@ -31,14 +31,15 @@ class SHA1DigestCalculator
 
         bOut.reset();
 
-        Digest sha1 = new SHA1Digest();
+        try
+        {
+            MessageDigest sha1 = MessageDigest.getInstance("SHA1");
 
-        sha1.update(bytes, 0, bytes.length);
-
-        byte[] digest = new byte[sha1.getDigestSize()];
-
-        sha1.doFinal(digest, 0);
-
-        return digest;
+            return sha1.digest(bytes);
+        }
+        catch (NoSuchAlgorithmException e)
+        {
+            throw new IllegalStateException("cannot create SHA1 digest: " + e.getMessage(), e);
+        }
     }
 }
