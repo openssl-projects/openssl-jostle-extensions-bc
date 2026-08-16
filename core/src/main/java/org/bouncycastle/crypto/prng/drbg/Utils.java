@@ -3,7 +3,6 @@ package org.bouncycastle.crypto.prng.drbg;
 import java.util.Hashtable;
 
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.Mac;
 import org.bouncycastle.util.Integers;
 
 class Utils
@@ -26,13 +25,6 @@ class Utils
     static int getMaxSecurityStrength(Digest d)
     {
         return ((Integer)maxSecurityStrengths.get(d.getAlgorithmName())).intValue();
-    }
-
-    static int getMaxSecurityStrength(Mac m)
-    {
-        String name = m.getAlgorithmName();
-
-        return ((Integer)maxSecurityStrengths.get(name.substring(0, name.indexOf("/")))).intValue();
     }
 
     /**

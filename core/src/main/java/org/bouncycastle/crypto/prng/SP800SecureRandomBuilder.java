@@ -4,9 +4,6 @@ import java.security.SecureRandom;
 
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.Mac;
-import org.bouncycastle.crypto.macs.HMac;
-import org.bouncycastle.crypto.prng.drbg.HMacSP800DRBG;
 import org.bouncycastle.crypto.prng.drbg.HashSP800DRBG;
 import org.bouncycastle.crypto.prng.drbg.SP80090DRBG;
 import org.bouncycastle.util.Arrays;
@@ -116,19 +113,6 @@ public class SP800SecureRandomBuilder
         return new SP800SecureRandom(random, entropySourceProvider.get(entropyBitsRequired), new HashDRBGProvider(digest, nonce, personalizationString, securityStrength), predictionResistant);
     }
 
-    /**
-     * Build a SecureRandom based on a SP 800-90A HMAC DRBG.
-     *
-     * @param hMac HMAC algorithm to use in the DRBG underneath the SecureRandom.
-     * @param nonce  nonce value to use in DRBG construction.
-     * @param predictionResistant specify whether the underlying DRBG in the resulting SecureRandom should reseed on each request for bytes.
-     * @return a SecureRandom supported by a HMAC DRBG.
-     */
-    public SP800SecureRandom buildHMAC(Mac hMac, byte[] nonce, boolean predictionResistant)
-    {
-        return new SP800SecureRandom(random, entropySourceProvider.get(entropyBitsRequired), new HMacDRBGProvider(hMac, nonce, personalizationString, securityStrength), predictionResistant);
-    }
-
     private static class HashDRBGProvider
         implements DRBGProvider
     {
@@ -153,38 +137,6 @@ public class SP800SecureRandomBuilder
         public SP80090DRBG get(EntropySource entropySource)
         {
             return new HashSP800DRBG(digest, securityStrength, entropySource, personalizationString, nonce);
-        }
-    }
-
-    private static class HMacDRBGProvider
-        implements DRBGProvider
-    {
-        private final Mac hMac;
-        private final byte[] nonce;
-        private final byte[] personalizationString;
-        private final int securityStrength;
-
-        HMacDRBGProvider(Mac hMac, byte[] nonce, byte[] personalizationString, int securityStrength)
-        {
-            this.hMac = hMac;
-            this.nonce = nonce;
-            this.personalizationString = personalizationString;
-            this.securityStrength = securityStrength;
-        }
-
-        public String getAlgorithm()
-        {
-            if (hMac instanceof HMac)
-            {
-                return "HMAC-DRBG-" + getSimplifiedName(((HMac)hMac).getUnderlyingDigest());
-            }
-
-            return "HMAC-DRBG-" + hMac.getAlgorithmName();
-        }
-
-        public SP80090DRBG get(EntropySource entropySource)
-        {
-            return new HMacSP800DRBG(hMac, securityStrength, entropySource, personalizationString, nonce);
         }
     }
 
