@@ -2,13 +2,10 @@ package org.bouncycastle.crypto.prng;
 
 import java.security.SecureRandom;
 
-import org.bouncycastle.crypto.BlockCipher;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.Mac;
-import org.bouncycastle.crypto.engines.DESedeEngine;
 import org.bouncycastle.crypto.macs.HMac;
-import org.bouncycastle.crypto.prng.drbg.CTRSP800DRBG;
 import org.bouncycastle.crypto.prng.drbg.HMacSP800DRBG;
 import org.bouncycastle.crypto.prng.drbg.HashSP800DRBG;
 import org.bouncycastle.crypto.prng.drbg.SP80090DRBG;
@@ -120,20 +117,6 @@ public class SP800SecureRandomBuilder
     }
 
     /**
-     * Build a SecureRandom based on a SP 800-90A CTR DRBG.
-     *
-     * @param cipher the block cipher to base the DRBG on.
-     * @param keySizeInBits key size in bits to be used with the block cipher.
-     * @param nonce nonce value to use in DRBG construction.
-     * @param predictionResistant  specify whether the underlying DRBG in the resulting SecureRandom should reseed on each request for bytes.
-     * @return  a SecureRandom supported by a CTR DRBG.
-     */
-    public SP800SecureRandom buildCTR(BlockCipher cipher, int keySizeInBits, byte[] nonce, boolean predictionResistant)
-    {
-        return new SP800SecureRandom(random, entropySourceProvider.get(entropyBitsRequired), new CTRDRBGProvider(cipher, keySizeInBits, nonce, personalizationString, securityStrength), predictionResistant);
-    }
-
-    /**
      * Build a SecureRandom based on a SP 800-90A HMAC DRBG.
      *
      * @param hMac HMAC algorithm to use in the DRBG underneath the SecureRandom.
@@ -202,39 +185,6 @@ public class SP800SecureRandomBuilder
         public SP80090DRBG get(EntropySource entropySource)
         {
             return new HMacSP800DRBG(hMac, securityStrength, entropySource, personalizationString, nonce);
-        }
-    }
-
-    private static class CTRDRBGProvider
-        implements DRBGProvider
-    {
-        private final BlockCipher blockCipher;
-        private final int keySizeInBits;
-        private final byte[] nonce;
-        private final byte[] personalizationString;
-        private final int securityStrength;
-
-        CTRDRBGProvider(BlockCipher blockCipher, int keySizeInBits, byte[] nonce, byte[] personalizationString, int securityStrength)
-        {
-            this.blockCipher = blockCipher;
-            this.keySizeInBits = keySizeInBits;
-            this.nonce = nonce;
-            this.personalizationString = personalizationString;
-            this.securityStrength = securityStrength;
-        }
-
-        public String getAlgorithm()
-        {
-            if (blockCipher instanceof DESedeEngine)
-            {
-                return "CTR-DRBG-3KEY-TDES";
-            }
-            return "CTR-DRBG-" + blockCipher.getAlgorithmName() + keySizeInBits;
-        }
-
-        public SP80090DRBG get(EntropySource entropySource)
-        {
-            return new CTRSP800DRBG(blockCipher, keySizeInBits, securityStrength, entropySource, personalizationString, nonce);
         }
     }
 
