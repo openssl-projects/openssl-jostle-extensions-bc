@@ -43,3 +43,5 @@ ML-DSA, SLH-DSA, ML-KEM, EC, RSA, AES (incl. GCM + RFC 3394/5649 key-wrap) work 
 ## More context
 
 The `memory/` directory holds detailed project notes (build recipe, core-closure analysis, ML-KEM/ML-DSA design, test migration, conventions). `build-analysis/` was a one-time jdeps scratch dir and has been deleted — regenerate via the jdeps step in `jostle-libs-core-closure` if needed.
+
+Porting anything from `../bc-java` (source, refactor or test)? Use the **`port-from-bc-java`** skill (`.claude/skills/port-from-bc-java/SKILL.md`) — it covers diff-then-classify, which dependencies do not exist here, the local JSL adaptations a resync must not revert, and the verification order.

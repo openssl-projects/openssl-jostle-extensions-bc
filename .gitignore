@@ -26,7 +26,6 @@ pg/*.bpg
 pg/*.txt
 
 .idea/
-.claude/
 
 .DS_Store
 
@@ -42,8 +41,12 @@ bc-build.user.properties
 # macOS Finder metadata
 .DS_Store
 
-# Local Claude Code tooling state (skills, settings, etc.)
-.claude/
+# Local Claude Code tooling state (settings, session state, etc.) - but the
+# shared skills under .claude/skills/ ARE tracked. Note the contents of .claude
+# must be excluded rather than the directory itself: git cannot re-include a
+# path whose parent directory is excluded.
+.claude/*
+!.claude/skills/
 .claude 2/
 
 # Stray test-run output left at the top of modules
