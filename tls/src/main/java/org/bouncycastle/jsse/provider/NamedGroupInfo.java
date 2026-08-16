@@ -159,7 +159,16 @@ class NamedGroupInfo
         NamedGroup.ffdhe2048,
         NamedGroup.ffdhe3072,
         NamedGroup.ffdhe4096,
+        NamedGroup.SecP256r1MLKEM768,
+        NamedGroup.SecP384r1MLKEM1024,
         NamedGroup.X25519MLKEM768,
+        /*
+         * NOTE: The pure ML-KEM groups (MLKEM512, MLKEM768, MLKEM1024) are deliberately not
+         * offered by default, following TLS working group feedback that a key exchange should
+         * retain a classical component. They remain available - FipsUtils.isFipsNamedGroup
+         * accepts them, so a caller can name one through the "jdk.tls.namedGroups" property or
+         * BCSSLParameters.setNamedGroups, in FIPS mode as well - just not without asking.
+         */
     };
 
     static class PerConnection

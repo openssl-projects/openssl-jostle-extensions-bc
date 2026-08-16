@@ -1,8 +1,6 @@
 package org.bouncycastle.jsse.provider;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyStore;
@@ -52,7 +50,7 @@ class ProvTrustManagerFactorySpi
         }
         else if (null != tsPathProp)
         {
-            if (new File(tsPathProp).exists())
+            if (FileUtils.exists(tsPathProp))
             {
                 tsPath = tsPathProp;
             }
@@ -63,7 +61,7 @@ class ProvTrustManagerFactorySpi
             if (null != javaHome)
             {
                 String jsseCacertsPath = javaHome + "/lib/security/jssecacerts".replace("/", File.separator);
-                if (new File(jsseCacertsPath).exists())
+                if (FileUtils.exists(jsseCacertsPath))
                 {
                     if (defaultCacertsToJKS)
                     {
@@ -74,7 +72,7 @@ class ProvTrustManagerFactorySpi
                 else
                 {
                     String cacertsPath = javaHome + "/lib/security/cacerts".replace("/", File.separator);
-                    if (new File(cacertsPath).exists())
+                    if (FileUtils.exists(cacertsPath))
                     {
                         if (defaultCacertsToJKS)
                         {
@@ -104,7 +102,7 @@ class ProvTrustManagerFactorySpi
             else
             {
                 LOG.config("Initializing default trust store from path: " + tsPath);
-                tsInput = new BufferedInputStream(new FileInputStream(tsPath));
+                tsInput = FileUtils.openBufferedInputStream(tsPath);
             }
 
             try
@@ -122,7 +120,7 @@ class ProvTrustManagerFactorySpi
         {
             if (null != tsInput)
             {
-                tsInput.close();
+                FileUtils.closeInputStream(tsInput);
             }
         }
 

@@ -943,16 +943,19 @@ public class TlsUtils
         {
             return EMPTY_BYTES;
         }
-        byte[] buf = new byte[length];
-        int read = Streams.readFully(input, buf);
-        if (read == 0)
+
+        // one byte read on its own tells "stream is empty" (null) from "stream truncated" (EOF)
+        int first = input.read();
+        if (first < 0)
         {
             return null;
         }
-        if (read != length)
-        {
-            throw new EOFException();
-        }
+
+        byte[] rest = Streams.readLenBytesFully(input, length - 1);
+
+        byte[] buf = new byte[length];
+        buf[0] = (byte)first;
+        System.arraycopy(rest, 0, buf, 1, rest.length);
         return buf;
     }
 
@@ -963,12 +966,9 @@ public class TlsUtils
         {
             return EMPTY_BYTES;
         }
-        byte[] buf = new byte[length];
-        if (length != Streams.readFully(input, buf))
-        {
-            throw new EOFException();
-        }
-        return buf;
+
+        // length comes from the wire: grow the buffer as bytes arrive rather than sizing it up front
+        return Streams.readLenBytesFully(input, length);
     }
 
     public static void readFully(byte[] buf, InputStream input)
@@ -1912,10 +1912,14 @@ public class TlsUtils
         securityParameters.trafficSecretClient = deriveSecret(securityParameters, phaseSecret, clientLabel,
             transcriptHash);
 
+        KeyLog.log13Secret(context, clientLabel, securityParameters.trafficSecretClient);
+
         if (null != serverLabel)
         {
             securityParameters.trafficSecretServer = deriveSecret(securityParameters, phaseSecret, serverLabel,
                 transcriptHash);
+
+            KeyLog.log13Secret(context, serverLabel, securityParameters.trafficSecretServer);
         }
 
         // TODO[tls13] Early data (client->server only)
@@ -1934,6 +1938,8 @@ public class TlsUtils
 
         securityParameters.exporterMasterSecret = deriveSecret(securityParameters, phaseSecret, "exp master",
             serverFinishedTranscriptHash);
+
+        KeyLog.log13Secret(context, "exp master", securityParameters.exporterMasterSecret);
     }
 
     static void establish13PhaseEarly(TlsContext context, byte[] clientHelloTranscriptHash, RecordStream recordStream)
@@ -1953,6 +1959,8 @@ public class TlsUtils
 
         securityParameters.earlyExporterMasterSecret = deriveSecret(securityParameters, phaseSecret, "e exp master",
             clientHelloTranscriptHash);
+
+        KeyLog.log13Secret(context, "e exp master", securityParameters.earlyExporterMasterSecret);
     }
 
     static void establish13PhaseHandshake(TlsContext context, byte[] serverHelloTranscriptHash,
@@ -4686,6 +4694,13 @@ public class TlsUtils
             throw new TlsFatalAlert(AlertDescription.internal_error);
         }
 
+        /*
+         * Every (D)TLS 1.2-and-earlier handshake, full or resumed, passes through here exactly once
+         * with the master secret established, which is what RFC 9850 2.2 reports. TLS 1.3 arrives
+         * here too, from establish13TrafficSecrets, and is discarded on the other side.
+         */
+        KeyLog.logMasterSecret(context);
+
         return context.getCrypto().createCipher(new TlsCryptoParameters(context), encryptionAlgorithm, macAlgorithm);
     }
 
@@ -4830,7 +4845,14 @@ public class TlsUtils
         if (tlsFeatures != null)
         {
             // TODO[tls] Proper ASN.1 type class for this extension?
-            ASN1Sequence tlsFeaturesSeq = (ASN1Sequence)readASN1Object(tlsFeatures);
+            ASN1Primitive tlsFeaturesObj = readASN1Object(tlsFeatures);
+            if (!(tlsFeaturesObj instanceof ASN1Sequence))
+            {
+                throw new TlsFatalAlert(AlertDescription.bad_certificate,
+                    "Server certificate has invalid TLS Features extension");
+            }
+
+            ASN1Sequence tlsFeaturesSeq = (ASN1Sequence)tlsFeaturesObj;
             for (int i = 0; i < tlsFeaturesSeq.size(); ++i)
             {
                 if (!(tlsFeaturesSeq.getObjectAt(i) instanceof ASN1Integer))
@@ -6395,5 +6417,10 @@ public class TlsUtils
         }
 
         return certificateType;
+    }
+
+    static int getMaxHandshakeMessageSize(TlsPeer tlsPeer)
+    {
+        return Math.max(1024, tlsPeer.getMaxHandshakeMessageSize());
     }
 }
