@@ -32,6 +32,7 @@ public class JcePBEKeyEncryptionMethodGenerator
     extends PBEKeyEncryptionMethodGenerator
 {
     private OperatorHelper helper = new OperatorHelper(new DefaultJcaJceHelper());
+    private JcePGPS2KCalculator argon2Calculator;
 
     /**
      * Create a PBE encryption method generator using the provided digest and the default S2K count
@@ -83,7 +84,15 @@ public class JcePBEKeyEncryptionMethodGenerator
 
     public JcePBEKeyEncryptionMethodGenerator(char[] passPhrase, S2K.Argon2Params params)
     {
-        super(passPhrase, params);
+        this(passPhrase, params, new JcePGPS2KCalculator());
+    }
+
+    private JcePBEKeyEncryptionMethodGenerator(char[] passPhrase, S2K.Argon2Params params, JcePGPS2KCalculator s2kCalculator)
+    {
+        super(passPhrase, params, s2kCalculator);
+
+        // retained so a later setProvider() propagates to the Argon2 SecretKeyFactory the parent holds
+        this.argon2Calculator = s2kCalculator;
     }
 
     /**
@@ -95,6 +104,11 @@ public class JcePBEKeyEncryptionMethodGenerator
     public JcePBEKeyEncryptionMethodGenerator setProvider(Provider provider)
     {
         this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+
+        if (argon2Calculator != null)
+        {
+            argon2Calculator.setProvider(provider);
+        }
 
         return this;
     }
@@ -108,6 +122,11 @@ public class JcePBEKeyEncryptionMethodGenerator
     public JcePBEKeyEncryptionMethodGenerator setProvider(String providerName)
     {
         this.helper = new OperatorHelper(new NamedJcaJceHelper(providerName));
+
+        if (argon2Calculator != null)
+        {
+            argon2Calculator.setProvider(providerName);
+        }
 
         return this;
     }

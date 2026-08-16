@@ -78,7 +78,7 @@ public class JcePBEProtectionRemoverFactory
 
         if (protection.indexOf("ocb") >= 0)
         {
-            return new PGPSecretKeyDecryptorWithAAD(passPhrase, calculatorProvider)
+            return new PGPSecretKeyDecryptorWithAAD(passPhrase, calculatorProvider, new JcePGPS2KCalculator(helper))
             {
                 public byte[] recoverKeyData(int encAlgorithm, byte[] key, byte[] iv, byte[] aad, byte[] keyData,  int keyOff, int keyLen)
                     throws PGPException
@@ -121,7 +121,7 @@ public class JcePBEProtectionRemoverFactory
         }
         else
         {
-            return new PBESecretKeyDecryptor(passPhrase, calculatorProvider)
+            return new PBESecretKeyDecryptor(passPhrase, calculatorProvider, new JcePGPS2KCalculator(helper))
             {
                 public byte[] recoverKeyData(int encAlgorithm, byte[] key, byte[] iv, byte[] keyData, int keyOff, int keyLen)
                     throws PGPException
