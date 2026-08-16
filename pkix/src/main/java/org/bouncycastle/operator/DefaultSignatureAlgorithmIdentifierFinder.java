@@ -117,6 +117,9 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         addAlgorithm("SHA512(224)WITHRSA", PKCSObjectIdentifiers.sha512_224WithRSAEncryption);
         addAlgorithm("SHA512(256)WITHRSAENCRYPTION", PKCSObjectIdentifiers.sha512_256WithRSAEncryption);
         addAlgorithm("SHA512(256)WITHRSA", PKCSObjectIdentifiers.sha512_256WithRSAEncryption);
+        addAlgorithm("RIPEMD128WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
+        addAlgorithm("RIPEMD160WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
+        addAlgorithm("RIPEMD256WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
         addAlgorithm("SHA1WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
         addAlgorithm("SHA224WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
         addAlgorithm("SHA256WITHRSAANDMGF1", PKCSObjectIdentifiers.id_RSASSA_PSS);
@@ -279,9 +282,6 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         addAlgorithm("DILITHIUM2", NISTObjectIdentifiers.id_ml_dsa_44);
         addAlgorithm("DILITHIUM3", NISTObjectIdentifiers.id_ml_dsa_65);
         addAlgorithm("DILITHIUM5", NISTObjectIdentifiers.id_ml_dsa_87);
-        addAlgorithm("DILITHIUM2-AES", BCObjectIdentifiers.dilithium2_aes);
-        addAlgorithm("DILITHIUM3-AES", BCObjectIdentifiers.dilithium3_aes);
-        addAlgorithm("DILITHIUM5-AES", BCObjectIdentifiers.dilithium5_aes);
 
         addAlgorithm("ML-DSA-44", NISTObjectIdentifiers.id_ml_dsa_44);
         addAlgorithm("ML-DSA-65", NISTObjectIdentifiers.id_ml_dsa_65);
@@ -480,9 +480,6 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         // Dilithium
         //
         noParams.add(BCObjectIdentifiers.dilithium);
-        noParams.add(BCObjectIdentifiers.dilithium2_aes);
-        noParams.add(BCObjectIdentifiers.dilithium3_aes);
-        noParams.add(BCObjectIdentifiers.dilithium5_aes);
 
         noParams.add(PKCSObjectIdentifiers.id_alg_hss_lms_hashsig);
         noParams.add(NISTObjectIdentifiers.id_ml_dsa_44);
@@ -557,7 +554,7 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         noParams.add(EdECObjectIdentifiers.id_Ed25519);
         noParams.add(EdECObjectIdentifiers.id_Ed448);
 
-        // RFC 8692
+        // RFC 8692 (X.509) / RFC 8702 (CMS) - parameters MUST be absent
         noParams.add(X509ObjectIdentifiers.id_rsassa_pss_shake128);
         noParams.add(X509ObjectIdentifiers.id_rsassa_pss_shake256);
         noParams.add(X509ObjectIdentifiers.id_ecdsa_with_shake128);
@@ -613,6 +610,15 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         //
         // explicit params
         //
+        AlgorithmIdentifier ripemd128AlgId = new AlgorithmIdentifier(TeleTrusTObjectIdentifiers.ripemd128, DERNull.INSTANCE);
+        addParameters("RIPEMD128WITHRSAANDMGF1", createPSSParams(ripemd128AlgId, 16));
+
+        AlgorithmIdentifier ripemd160AlgId = new AlgorithmIdentifier(TeleTrusTObjectIdentifiers.ripemd160, DERNull.INSTANCE);
+        addParameters("RIPEMD160WITHRSAANDMGF1", createPSSParams(ripemd160AlgId, 20));
+
+        AlgorithmIdentifier ripemd256AlgId = new AlgorithmIdentifier(TeleTrusTObjectIdentifiers.ripemd256, DERNull.INSTANCE);
+        addParameters("RIPEMD256WITHRSAANDMGF1", createPSSParams(ripemd256AlgId, 32));
+
         AlgorithmIdentifier sha1AlgId = new AlgorithmIdentifier(OIWObjectIdentifiers.idSHA1, DERNull.INSTANCE);
         addParameters("SHA1WITHRSAANDMGF1", createPSSParams(sha1AlgId, 20));
 
@@ -640,6 +646,23 @@ public class DefaultSignatureAlgorithmIdentifierFinder
         AlgorithmIdentifier sha3_512AlgId = new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha3_512, DERNull.INSTANCE);
         addParameters("SHA3-512WITHRSAANDMGF1", createPSSParams(sha3_512AlgId, 64));
 
+    }
+
+    /**
+     * Return true if a signature algorithm of the passed in name is recognised, false otherwise.
+     * Where this returns true {@link #find(String)} returns an identifier; where it returns false
+     * {@code find} throws, so this is the way to test for support without catching.
+     * <p>
+     * Declared here rather than on {@link SignatureAlgorithmIdentifierFinder}, which is long
+     * published - adding a method there would break every implementation outside this library.
+     * </p>
+     *
+     * @param sigAlgName the name of the signature algorithm of interest.
+     * @return true if the name is recognised, false otherwise.
+     */
+    public boolean hasAlgorithm(String sigAlgName)
+    {
+        return algorithms.containsKey(Strings.toUpperCase(sigAlgName));
     }
 
     public AlgorithmIdentifier find(String sigAlgName)

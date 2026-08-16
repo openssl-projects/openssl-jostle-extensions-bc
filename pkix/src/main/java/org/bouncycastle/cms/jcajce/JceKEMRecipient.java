@@ -6,20 +6,24 @@ import java.security.Provider;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cms.KEMRecipientInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.cms.AbstractRecipient;
+import org.bouncycastle.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.KEMRecipient;
 import org.bouncycastle.operator.OperatorException;
 
 public abstract class JceKEMRecipient
+    extends AbstractRecipient
     implements KEMRecipient
 {
     private PrivateKey recipientKey;
 
-    protected EnvelopedDataHelper helper = new EnvelopedDataHelper(new DefaultJcaJceExtHelper());
+    protected EnvelopedDataHelper helper = CMSUtils.createDefaultHelper();
     protected EnvelopedDataHelper contentHelper = helper;
     protected Map extraMappings = new HashMap();
     protected boolean validateKeySize = false;
@@ -38,7 +42,7 @@ public abstract class JceKEMRecipient
      */
     public JceKEMRecipient setProvider(Provider provider)
     {
-        this.helper = new EnvelopedDataHelper(new ProviderJcaJceExtHelper(provider));
+        this.helper = CMSUtils.createProviderHelper(provider);
         this.contentHelper = helper;
 
         return this;
@@ -52,7 +56,7 @@ public abstract class JceKEMRecipient
      */
     public JceKEMRecipient setProvider(String providerName)
     {
-        this.helper = new EnvelopedDataHelper(new NamedJcaJceExtHelper(providerName));
+        this.helper = CMSUtils.createNamedHelper(providerName);
         this.contentHelper = helper;
 
         return this;
@@ -139,9 +143,46 @@ public abstract class JceKEMRecipient
         return this;
     }
 
+    /**
+     * Set the content-encryption algorithms this recipient is willing to unwrap a key for. When set, an
+     * attempt to recover content protected under any other algorithm is rejected, mitigating an attacker
+     * substituting a weaker content-encryption algorithm into the recipient info.
+     *
+     * @param allowedContentAlgorithms the set of permitted content-encryption algorithm OIDs.
+     * @return this recipient.
+     */
+    public JceKEMRecipient setAllowedContentAlgorithms(Set<ASN1ObjectIdentifier> allowedContentAlgorithms)
+    {
+        setAllowedContentAlgorithmSet(allowedContentAlgorithms);
+
+        return this;
+    }
+
+    /**
+     * Set the minimum AEAD authentication tag size (in bits) this recipient will accept. When set, an
+     * attempt to recover AuthEnvelopedData whose content algorithm carries a shorter tag is rejected,
+     * mitigating an attacker downgrading the tag to a weaker length.
+     *
+     * @param tagSizeInBits the minimum acceptable AEAD tag size, in bits.
+     * @return this recipient.
+     */
+    public JceKEMRecipient setMinimumTagSize(int tagSizeInBits)
+    {
+        setMinimumTagSizeInBits(tagSizeInBits);
+
+        return this;
+    }
+
     protected Key extractSecretKey(AlgorithmIdentifier keyEncryptionAlgorithm, AlgorithmIdentifier encryptedKeyAlgorithm, byte[] encryptedEncryptionKey)
         throws CMSException
     {
+        if (!isContentAlgorithmAllowed(encryptedKeyAlgorithm.getAlgorithm()))
+        {
+            throw new CMSAlgorithmNotAllowedException("content-encryption algorithm not in recipient's allowed set: " + encryptedKeyAlgorithm.getAlgorithm());
+        }
+
+        checkTagSize(encryptedKeyAlgorithm);
+
         // TODO: note there is a move to change the type for KEMs from KeyTrans, expect this to change
         KEMRecipientInfo gktParams = KEMRecipientInfo.getInstance(keyEncryptionAlgorithm.getParameters());
 

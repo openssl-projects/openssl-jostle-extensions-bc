@@ -16,6 +16,7 @@ import java.util.Set;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Set;
@@ -87,6 +88,15 @@ public class CMSSignedData
         this.signerInfoStore = signerInfoStore;
     }
 
+    /**
+     * Create a CMSSignedData object from its encoding, the SignedData carrying its encapsulated
+     * (attached) content.
+     *
+     * @param sigBlock the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                 array must hold the entire encoding and nothing extra - trailing bytes beyond
+     *                 the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
     public CMSSignedData(
         byte[] sigBlock)
         throws CMSException
@@ -94,6 +104,16 @@ public class CMSSignedData
         this(CMSUtils.readContentInfo(sigBlock));
     }
 
+    /**
+     * Create a CMSSignedData object for a detached signature, supplying the previously detached
+     * content separately.
+     *
+     * @param signedContent the content that was detached from the signature.
+     * @param sigBlock      the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                      array must hold the entire encoding and nothing extra - trailing bytes
+     *                      beyond the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
     public CMSSignedData(
         CMSProcessable signedContent,
         byte[] sigBlock)
@@ -103,10 +123,13 @@ public class CMSSignedData
     }
 
     /**
-     * Content with detached signature, digests precomputed
+     * Create a CMSSignedData object for a detached signature, with the content digests precomputed.
      *
-     * @param hashes   a map of precomputed digests for content indexed by name of hash.
-     * @param sigBlock the signature object.
+     * @param hashes   a map of precomputed digests for the content, indexed by digest algorithm.
+     * @param sigBlock the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                 array must hold the entire encoding and nothing extra - trailing bytes beyond
+     *                 the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
      */
     public CMSSignedData(
         Map hashes,
@@ -117,10 +140,12 @@ public class CMSSignedData
     }
 
     /**
-     * base constructor - content with detached signature.
+     * Create a CMSSignedData object for a detached signature, reading the signature from a stream
+     * and supplying the previously detached content separately.
      *
-     * @param signedContent the content that was signed.
-     * @param sigData       the signature object.
+     * @param signedContent the content that was detached from the signature.
+     * @param sigData       a stream positioned at the start of the SignedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
      */
     public CMSSignedData(
         CMSProcessable signedContent,
@@ -131,7 +156,11 @@ public class CMSSignedData
     }
 
     /**
-     * base constructor - with encapsulated content
+     * Create a CMSSignedData object from a stream, the SignedData carrying its encapsulated
+     * (attached) content.
+     *
+     * @param sigData a stream positioned at the start of the SignedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
      */
     public CMSSignedData(
         InputStream sigData)
@@ -140,6 +169,14 @@ public class CMSSignedData
         this(CMSUtils.readContentInfo(sigData));
     }
 
+    /**
+     * Create a CMSSignedData object for a detached signature from an already-parsed ContentInfo,
+     * supplying the previously detached content separately.
+     *
+     * @param signedContent the content that was detached from the signature.
+     * @param sigData        the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
     public CMSSignedData(
         final CMSProcessable signedContent,
         ContentInfo sigData)
@@ -176,6 +213,14 @@ public class CMSSignedData
         this.hashes = null;
     }
 
+    /**
+     * Create a CMSSignedData object for a detached signature from an already-parsed ContentInfo,
+     * with the content digests precomputed.
+     *
+     * @param hashes  a map of precomputed digests for the content, indexed by digest algorithm.
+     * @param sigData the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
     public CMSSignedData(
         Map hashes,
         ContentInfo sigData)
@@ -187,6 +232,13 @@ public class CMSSignedData
         this.signedContent = null;
     }
 
+    /**
+     * Create a CMSSignedData object from an already-parsed ContentInfo, the SignedData carrying its
+     * encapsulated content (if any).
+     *
+     * @param sigData the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
     public CMSSignedData(
         ContentInfo sigData)
         throws CMSException
@@ -221,9 +273,15 @@ public class CMSSignedData
     private SignedData getSignedData()
         throws CMSException
     {
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
         try
         {
-            return SignedData.getInstance(contentInfo.getContent());
+            return SignedData.getInstance(content);
         }
         catch (ClassCastException e)
         {
@@ -241,6 +299,29 @@ public class CMSSignedData
     public int getVersion()
     {
         return signedData.getVersion().intValueExact();
+    }
+
+    /**
+     * Return a copy of this CMSSignedData with the SignedData version field forced to the given
+     * value, leaving every other field unchanged.
+     * <p>
+     * The version is normally recomputed from the content per RFC 5652 sec. 5.1 (for example, a
+     * non-id-data eContentType implies version 3), including by {@link #replaceSigners} and
+     * {@link #addDigestAlgorithm}. This method lets a producer pin a specific version for interop
+     * with profiles that require one - notably Microsoft Authenticode, whose signatures must carry
+     * version 1 even though their SPC_INDIRECT_DATA eContentType would otherwise compute to 3.
+     *
+     * @param version the CMSVersion value to set.
+     * @return a new CMSSignedData carrying the supplied version.
+     */
+    public CMSSignedData asVersion(int version)
+    {
+        SignedData current = this.signedData;
+        SignedData newContent = new SignedData(new ASN1Integer(version), current.getDigestAlgorithms(),
+            current.getEncapContentInfo(), current.getCertificates(), current.getCRLs(), current.getSignerInfos());
+
+        return new CMSSignedData(this.contentInfo.getContentType(), newContent, this.signedContent,
+            this.signerInfoStore);
     }
 
     /**
@@ -439,6 +520,16 @@ public class CMSSignedData
         throws CMSException
     {
         Collection signers = this.getSignerInfos().getSigners();
+
+        // Fail closed on a degenerate SignedData with no SignerInfos (RFC 5652 permits an empty
+        // signerInfos SET, e.g. a certs-only structure). Falling through the loop to "return true"
+        // would report vacuous success, so a caller using this as its authenticity check would accept
+        // unsigned, attacker-supplied content. Callers expecting a certs-only structure should use
+        // getCertificates() instead.
+        if (signers.isEmpty())
+        {
+            throw new CMSException("no signers present in SignedData");
+        }
 
         for (Iterator it = signers.iterator(); it.hasNext(); )
         {

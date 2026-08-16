@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Set;
@@ -31,24 +32,62 @@ public class CMSAuthEnvelopedData
     private byte[] mac;
     private ASN1Set unauthAttrs;
 
+    /**
+     * Create a CMSAuthEnvelopedData object from its encoding.
+     *
+     * @param authEnvData the complete encoding of the AuthEnvelopedData structure (a CMS ContentInfo).
+     *                    The array must hold the entire encoding and nothing extra - trailing bytes
+     *                    beyond the AuthEnvelopedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as an AuthEnvelopedData.
+     */
     public CMSAuthEnvelopedData(byte[] authEnvData)
         throws CMSException
     {
         this(CMSUtils.readContentInfo(authEnvData));
     }
 
+    /**
+     * Create a CMSAuthEnvelopedData object from a stream.
+     *
+     * @param authEnvData a stream positioned at the start of the AuthEnvelopedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as an AuthEnvelopedData.
+     */
     public CMSAuthEnvelopedData(InputStream authEnvData)
         throws CMSException
     {
         this(CMSUtils.readContentInfo(authEnvData));
     }
 
+    /**
+     * Create a CMSAuthEnvelopedData object from an already-parsed ContentInfo.
+     *
+     * @param contentInfo the ContentInfo carrying the AuthEnvelopedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed AuthEnvelopedData.
+     */
     public CMSAuthEnvelopedData(ContentInfo contentInfo)
         throws CMSException
     {
         this.contentInfo = contentInfo;
 
-        AuthEnvelopedData authEnvData = AuthEnvelopedData.getInstance(contentInfo.getContent());
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
+        AuthEnvelopedData authEnvData;
+        try
+        {
+            authEnvData = AuthEnvelopedData.getInstance(content);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
 
         if (authEnvData.getOriginatorInfo() != null)
         {

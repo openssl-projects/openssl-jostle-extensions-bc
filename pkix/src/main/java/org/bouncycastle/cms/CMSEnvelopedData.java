@@ -3,6 +3,7 @@ package org.bouncycastle.cms;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.ContentInfo;
@@ -43,6 +44,14 @@ public class CMSEnvelopedData
     private ASN1Set                unprotectedAttributes;
     private OriginatorInformation  originatorInfo;
 
+    /**
+     * Create a CMSEnvelopedData object from its encoding.
+     *
+     * @param envelopedData the complete encoding of the EnvelopedData structure (a CMS ContentInfo).
+     *                      The array must hold the entire encoding and nothing extra - trailing bytes
+     *                      beyond the EnvelopedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as an EnvelopedData.
+     */
     public CMSEnvelopedData(
         byte[]    envelopedData)
         throws CMSException
@@ -50,6 +59,12 @@ public class CMSEnvelopedData
         this(CMSUtils.readContentInfo(envelopedData));
     }
 
+    /**
+     * Create a CMSEnvelopedData object from a stream.
+     *
+     * @param envelopedData a stream positioned at the start of the EnvelopedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as an EnvelopedData.
+     */
     public CMSEnvelopedData(
         InputStream    envelopedData)
         throws CMSException
@@ -69,9 +84,15 @@ public class CMSEnvelopedData
     {
         this.contentInfo = contentInfo;
 
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
         try
         {
-            EnvelopedData  envData = EnvelopedData.getInstance(contentInfo.getContent());
+            EnvelopedData  envData = EnvelopedData.getInstance(content);
 
             if (envData.getOriginatorInfo() != null)
             {
@@ -88,7 +109,16 @@ public class CMSEnvelopedData
             //
             EncryptedContentInfo encInfo = envData.getEncryptedContentInfo();
             this.encAlg = encInfo.getContentEncryptionAlgorithm();
-            CMSReadable readable = new CMSProcessableByteArray(encInfo.getEncryptedContent().getOctets());
+            // encryptedContent is [0] IMPLICIT OCTET STRING OPTIONAL; a message that omits it would
+            // otherwise NPE on getOctets() below - and the NPE would escape this ctor's declared
+            // throws CMSException (the catches only cover ClassCast/IllegalArgument). Report it as
+            // missing content, matching the CMS encapsulated-content "Missing content." handling.
+            if (encInfo.getEncryptedContent() == null)
+            {
+                throw new CMSException("Missing content.");
+            }
+            CMSReadable readable = new CMSProcessableByteArray(encInfo.getContentType(),
+                encInfo.getEncryptedContent().getOctets());
             CMSSecureReadable secureReadable = new CMSEnvelopedHelper.CMSAuthEnveSecureReadable(
                 this.encAlg, encInfo.getContentType(), readable);
 

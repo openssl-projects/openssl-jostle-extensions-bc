@@ -25,7 +25,9 @@ import org.bouncycastle.operator.GenericKey;
 import org.bouncycastle.operator.MacAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.MacCalculator;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.pkcs.util.PKCS12Util;
 import org.bouncycastle.util.BigIntegers;
+import org.bouncycastle.util.Properties;
 
 /**
  * A builder for RFC 8018 PBE based MAC calculators.
@@ -85,7 +87,7 @@ public class JcePBMac1CalculatorBuilder
     }
 
     /**
-     * Base constructor from an ASN.1 parameter set. See RFC 8108 for details.
+     * Base constructor from an ASN.1 parameter set. See RFC 8018 §7.1 for details.
      *
      * @param pbeMacParams the ASN.1 parameters for the MAC calculator we want to create.
      */
@@ -125,9 +127,11 @@ public class JcePBMac1CalculatorBuilder
     }
 
     /**
-     * Set the length of the salt in bytes.
-     * @param saltLength
-     * @return
+     * Set the length, in bytes, of the salt used by the PBKDF2 key derivation. Defaults to the
+     * MAC output size.
+     *
+     * @param saltLength the salt length in bytes.
+     * @return this builder.
      */
     public JcePBMac1CalculatorBuilder setSaltLength(int saltLength)
     {
@@ -186,7 +190,12 @@ public class JcePBMac1CalculatorBuilder
             {
                 salt = pbeParams.getSalt();
                 iterationCount = BigIntegers.intValueExact(pbeParams.getIterationCount());
-                keySize = BigIntegers.intValueExact(pbeParams.getKeyLength()) * 8;
+                int maxIT = Properties.asInteger(Properties.PBE_MAX_ITERATION_COUNT, 10000000);
+                if (iterationCount > maxIT)
+                {
+                    throw new OperatorCreationException("iteration count (" + iterationCount + ") greater than " + maxIT);
+                }
+                keySize = PKCS12Util.validateKeyLength(pbeParams.getKeyLength()) * 8;
                 prf = pbeParams.getPrf();
             }
             

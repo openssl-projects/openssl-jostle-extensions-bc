@@ -244,7 +244,7 @@ public class CMSEnvelopedDataStreamGenerator
         byte[] originatorEnc = (originatorInfo != null)
             ? new DLTaggedObject(false, 0, originatorInfo).getEncoded(enc)
             : null;
-        ASN1Set riSet = der ? new DERSet(recipientInfos) : new DLSet(recipientInfos);
+        ASN1Set riSet = der ? (ASN1Set)new DERSet(recipientInfos) : new DLSet(recipientInfos);
         byte[] riSetEnc = riSet.getEncoded(enc);
         byte[] dataTypeEnc = dataType.getEncoded(enc);
         byte[] algIdEnc = encryptor.getAlgorithmIdentifier().getEncoded(enc);
@@ -254,7 +254,7 @@ public class CMSEnvelopedDataStreamGenerator
             // note: generated at open() time in definite-length mode.
             AttributeTable attrTable = unprotectedAttributeGenerator.getAttributes(CMSUtils.getEmptyParameters());
             ASN1Set attrSet = der
-                ? new DERSet(attrTable.toASN1EncodableVector())
+                ? (ASN1Set)new DERSet(attrTable.toASN1EncodableVector())
                 : new DLSet(attrTable.toASN1EncodableVector());
             unprotEnc = new DLTaggedObject(false, 1, attrSet).getEncoded(enc);
         }

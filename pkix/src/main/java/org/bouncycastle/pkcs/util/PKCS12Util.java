@@ -11,6 +11,7 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.PBEParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.security.auth.DestroyFailedException;
+import javax.security.auth.Destroyable;
 
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Encoding;
@@ -148,6 +149,13 @@ public class PKCS12Util
         return pfx.getEncoded(ASN1Encoding.DER);
     }
 
+    /**
+     * Return the content of a ContentInfo, raising {@link ASN1ParsingException} if absent.
+     *
+     * @param contentInfo the ContentInfo to inspect.
+     * @return the carried content.
+     * @throws IOException on ASN.1 parsing errors.
+     */
     public static ASN1Encodable getContent(ContentInfo contentInfo) throws IOException
     {
         ASN1Encodable content = contentInfo.getContent();
@@ -159,11 +167,27 @@ public class PKCS12Util
         return content;
     }
 
+    /**
+     * Return the octets carried by a ContentInfo, raising {@link ASN1ParsingException} if the
+     * content is absent or not an {@code OCTET STRING}.
+     *
+     * @param contentInfo the ContentInfo to inspect.
+     * @return the content octets.
+     * @throws IOException on ASN.1 parsing errors.
+     */
     public static byte[] getContentOctets(ContentInfo contentInfo) throws IOException
     {
         return ASN1OctetString.getInstance(getContent(contentInfo)).getOctets();
     }
 
+    /**
+     * Return the ciphertext octets of an {@link EncryptedData}, raising
+     * {@link ASN1ParsingException} if absent.
+     *
+     * @param encryptedData the EncryptedData to inspect.
+     * @return the encrypted-content octet string.
+     * @throws IOException on ASN.1 parsing errors.
+     */
     public static ASN1OctetString getEncryptedContent(EncryptedData encryptedData) throws IOException
     {
         ASN1OctetString content = encryptedData.getContent();
@@ -175,6 +199,46 @@ public class PKCS12Util
         return content;
     }
 
+    // A PBMAC1 MAC key is 20-64 bytes; anything beyond this is rejected as abusive.
+    private static final BigInteger MAX_KEY_LENGTH = BigInteger.valueOf(1024);
+
+    /**
+     * Validate a PBKDF2 keyLength from a PFX. As with the iteration count, the value arrives in a
+     * PFX whose MAC has not been checked yet and sizes the derivation output, so it has to be
+     * bounded before deriving; it is also multiplied by 8 at the call sites, which overflows to a
+     * negative bit count for a large enough value.
+     *
+     * @param keyLength the keyLength from the wire.
+     * @return the validated keyLength in bytes.
+     * @throws IllegalStateException if the keyLength is absent, not positive, or larger than the
+     *         maximum supported.
+     */
+    public static int validateKeyLength(BigInteger keyLength)
+    {
+        if (keyLength == null || keyLength.signum() <= 0)
+        {
+            throw new IllegalStateException("keyLength must be positive");
+        }
+
+        if (keyLength.compareTo(MAX_KEY_LENGTH) > 0)
+        {
+            throw new IllegalStateException("keyLength " + keyLength + " greater than " + MAX_KEY_LENGTH);
+        }
+
+        return BigIntegers.intValueExact(keyLength);
+    }
+
+    /**
+     * Validate an iteration count from a PFX, enforcing the cap configured via the
+     * {@link org.bouncycastle.util.Properties#PKCS12_MAX_IT_COUNT} security property (default
+     * 5,000,000). Negative values and values that do not fit in a signed 32-bit integer are
+     * also rejected.
+     *
+     * @param ic the iteration count from the wire.
+     * @return the validated iteration count as an {@code int}.
+     * @throws IllegalStateException if the iteration count is negative, larger than the
+     *         configured maximum, or does not fit in a signed 32-bit integer.
+     */
     public static int validateIterationCount(BigInteger ic)
     {
         if (ic.signum() < 0)
@@ -234,9 +298,11 @@ public class PKCS12Util
         {
             try
             {
-                if (key != null)
+                // SecretKey only extends Destroyable from JDK 1.8; guard via the
+                // Destroyable interface (JDK 1.4) so this is a no-op on older JREs.
+                if (key instanceof Destroyable)
                 {
-                    key.destroy();
+                    ((Destroyable)key).destroy();
                 }
             }
             catch (DestroyFailedException e)

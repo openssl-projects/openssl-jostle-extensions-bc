@@ -2,8 +2,6 @@ package org.bouncycastle.operator.jcajce;
 
 import java.io.InputStream;
 import java.security.Provider;
-import java.util.HashSet;
-import java.util.Set;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -25,6 +23,7 @@ import org.bouncycastle.jcajce.util.NamedJcaJceHelper;
 import org.bouncycastle.jcajce.util.ProviderJcaJceHelper;
 import org.bouncycastle.operator.InputDecryptor;
 import org.bouncycastle.operator.InputDecryptorProvider;
+import org.bouncycastle.operator.OidCatalogue;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.util.Arrays;
 
@@ -33,20 +32,6 @@ import org.bouncycastle.util.Arrays;
  */
 public class JceInputDecryptorProviderBuilder
 {
-    private static final Set<ASN1ObjectIdentifier> AES_GCM_OIDS = new HashSet<ASN1ObjectIdentifier>();
-    private static final Set<ASN1ObjectIdentifier> AES_CCM_OIDS = new HashSet<ASN1ObjectIdentifier>();
-
-    static
-    {
-        AES_GCM_OIDS.add(NISTObjectIdentifiers.id_aes128_GCM);
-        AES_GCM_OIDS.add(NISTObjectIdentifiers.id_aes192_GCM);
-        AES_GCM_OIDS.add(NISTObjectIdentifiers.id_aes256_GCM);
-
-        AES_CCM_OIDS.add(NISTObjectIdentifiers.id_aes128_CCM);
-        AES_CCM_OIDS.add(NISTObjectIdentifiers.id_aes192_CCM);
-        AES_CCM_OIDS.add(NISTObjectIdentifiers.id_aes256_CCM);
-    }
-
     private JcaJceHelper helper = new DefaultJcaJceHelper();
 
     public JceInputDecryptorProviderBuilder()
@@ -96,14 +81,14 @@ public class JceInputDecryptorProviderBuilder
                     
                     ASN1Encodable encParams = algorithmIdentifier.getParameters();
 
-                    if (AES_GCM_OIDS.contains(algorithm))
+                    if (OidCatalogue.isGCM(algorithm))
                     {
                         // RFC 5084 / RFC 3565 GCMParameters: nonce + icvLen (bytes).
                         GCMParameters gcm = GCMParameters.getInstance(encParams);
                         cipher.init(Cipher.DECRYPT_MODE, key,
                             new GCMParameterSpec(gcm.getIcvLen() * 8, gcm.getNonce()));
                     }
-                    else if (AES_CCM_OIDS.contains(algorithm))
+                    else if (OidCatalogue.isCCM(algorithm))
                     {
                         // RFC 5084 CCMParameters share the GCMParameters shape
                         // (nonce + icvLen); BC's CCM JCE init accepts a

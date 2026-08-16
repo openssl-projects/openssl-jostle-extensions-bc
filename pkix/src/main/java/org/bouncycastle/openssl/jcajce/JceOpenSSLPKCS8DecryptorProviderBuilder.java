@@ -2,6 +2,7 @@ package org.bouncycastle.openssl.jcajce;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.security.AlgorithmParameters;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
@@ -33,6 +34,7 @@ import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.operator.InputDecryptor;
 import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.Strings;
 
 /**
@@ -91,6 +93,11 @@ public class JceOpenSSLPKCS8DecryptorProviderBuilder
                             // OpenSSL's raw-bytes treatment (github #400). Re-wrap the raw bytes
                             // under the cipher's algorithm name for cipher.init.
                             ScryptParams scrypt = ScryptParams.getInstance(func.getParameters());
+
+                            // The KDF cost travels in the unauthenticated container, so bound it
+                            // before deriving the key to cap the memory-exhaustion vector.
+                            checkScryptCost(scrypt);
+
                             int keySizeBits = PEMUtilities.getKeySize(oid);
                             SecretKeyFactory scryptFact = helper.createSecretKeyFactory("SCRYPT");
                             SecretKey derived = scryptFact.generateSecret(new ScryptKeySpec(password,
@@ -105,7 +112,8 @@ public class JceOpenSSLPKCS8DecryptorProviderBuilder
                         {
                             PBKDF2Params defParams = (PBKDF2Params)func.getParameters();
 
-                            int iterationCount = defParams.getIterationCount().intValue();
+                            // Bound the unauthenticated iteration count before deriving the key.
+                            int iterationCount = checkIterationCount(defParams.getIterationCount());
                             byte[] salt = defParams.getSalt();
 
                             if (PEMUtilities.isHmacSHA1(defParams.getPrf()))
@@ -131,7 +139,7 @@ public class JceOpenSSLPKCS8DecryptorProviderBuilder
 
                         cipher = helper.createCipher(PEMUtilities.getCipherName(algorithm.getAlgorithm()));
 
-                        cipher.init(Cipher.DECRYPT_MODE, new PKCS12KeyWithParameters(password, params.getIV(), params.getIterations().intValue()));
+                        cipher.init(Cipher.DECRYPT_MODE, new PKCS12KeyWithParameters(password, params.getIV(), checkIterationCount(params.getIterations())));
                     }
                     else if (PEMUtilities.isPKCS5Scheme1(algorithm.getAlgorithm()))
                     {
@@ -150,7 +158,7 @@ public class JceOpenSSLPKCS8DecryptorProviderBuilder
                             {
                                 return Strings.toByteArray(password);     // just drop hi-order byte.
                             }
-                        }, params.getSalt(), params.getIterationCount().intValue()));
+                        }, params.getSalt(), checkIterationCount(params.getIterationCount())));
                     }
                     else
                     {
@@ -180,5 +188,59 @@ public class JceOpenSSLPKCS8DecryptorProviderBuilder
                 }
             };
         };
+    }
+
+    // The KDF cost parameters of a PBES2-protected key arrive in an unauthenticated container, so
+    // they are bounded before the (memory/CPU intensive) derivation to cap a decryption-time DoS.
+    private static final int MAX_SCRYPT_BLOCK_SIZE = 1024;
+
+    private static void checkScryptCost(ScryptParams params)
+        throws IOException
+    {
+        BigInteger n = params.getCostParameter();
+        BigInteger r = params.getBlockSize();
+        BigInteger p = params.getParallelizationParameter();
+
+        if (n == null || r == null || p == null
+            || n.signum() <= 0 || r.signum() <= 0 || p.signum() <= 0
+            || n.bitLength() > 31 || r.bitLength() > 31 || p.bitLength() > 31)
+        {
+            throw new IOException("invalid scrypt parameters");
+        }
+
+        long blockSize = r.longValue();
+        if (blockSize > MAX_SCRYPT_BLOCK_SIZE)
+        {
+            throw new IOException("scrypt block size (" + blockSize + ") greater than " + MAX_SCRYPT_BLOCK_SIZE);
+        }
+
+        long maxMemory = Properties.asInteger(Properties.PBE_MAX_SCRYPT_MEMORY, 1 << 30);
+        // scrypt allocates ~128*r*N bytes (the V array) and ~128*r*p bytes (the B array), RFC 7914.
+        // The parallelization parameter p was previously unbounded, so a crafted key with small N
+        // and p near the engine's overflow ceiling (~2e6) allocated hundreds of MB past this budget.
+        // Bound N and p separately against the budget rather than their sum, so the original N-only
+        // limit is preserved exactly (a key with N at the boundary still loads) while p is bounded.
+        long maxCost = maxMemory / (128L * blockSize);
+        if (n.longValue() > maxCost || p.longValue() > maxCost)
+        {
+            throw new IOException("scrypt cost parameters require more than " + maxMemory + " bytes");
+        }
+    }
+
+    private static int checkIterationCount(BigInteger ic)
+        throws IOException
+    {
+        if (ic == null || ic.signum() < 0 || ic.bitLength() > 31)
+        {
+            throw new IOException("invalid iteration count");
+        }
+
+        long max = Properties.asInteger(Properties.PBE_MAX_ITERATION_COUNT, 10000000);
+        if (ic.longValue() > max)
+        {
+            throw new IOException("iteration count (" + ic + ") greater than " + max);
+        }
+
+        return ic.intValue();
     }
 }

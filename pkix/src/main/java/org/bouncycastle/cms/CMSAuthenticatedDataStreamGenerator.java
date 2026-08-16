@@ -333,7 +333,7 @@ public class CMSAuthenticatedDataStreamGenerator
         byte[] originatorEnc = (originatorInfo != null)
             ? new DLTaggedObject(false, 0, originatorInfo).getEncoded(enc)
             : null;
-        ASN1Set riSet = der ? new DERSet(recipientInfos) : new DLSet(recipientInfos);
+        ASN1Set riSet = der ? (ASN1Set)new DERSet(recipientInfos) : new DLSet(recipientInfos);
         byte[] riSetEnc = riSet.getEncoded(enc);
         byte[] macAlgEnc = macCalculator.getAlgorithmIdentifier().getEncoded(enc);
         byte[] digAlgEnc = null;

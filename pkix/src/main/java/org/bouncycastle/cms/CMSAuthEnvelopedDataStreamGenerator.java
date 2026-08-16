@@ -227,7 +227,7 @@ public class CMSAuthEnvelopedDataStreamGenerator
         byte[] originatorEnc = (originatorInfo != null)
             ? new DLTaggedObject(false, 0, originatorInfo).getEncoded(enc)
             : null;
-        ASN1Set riSet = der ? new DERSet(recipientInfos) : new DLSet(recipientInfos);
+        ASN1Set riSet = der ? (ASN1Set)new DERSet(recipientInfos) : new DLSet(recipientInfos);
         byte[] riSetEnc = riSet.getEncoded(enc);
         byte[] dataTypeEnc = dataType.getEncoded(enc);
         byte[] algIdEnc = encryptor.getAlgorithmIdentifier().getEncoded(enc);
@@ -238,9 +238,17 @@ public class CMSAuthEnvelopedDataStreamGenerator
         byte[] authAttrsEnc = null;
         if (authAttrsGenerator != null)
         {
+            OutputStream aadStream = encryptor.getAADStream();
+            if (aadStream == null)
+            {
+                // getAADStream() is null when the JCE provider has no AEAD AAD support
+                // (java.crypto.Cipher.updateAAD is JDK 1.7+); authenticated attributes
+                // cannot be fed as AAD on this runtime.
+                throw new CMSException("authenticated attributes require AEAD AAD support (JDK 1.7+)");
+            }
             AttributeTable attrTable = authAttrsGenerator.getAttributes(CMSUtils.getEmptyParameters());
             ASN1Set authSet = new DERSet(attrTable.toASN1EncodableVector());
-            encryptor.getAADStream().write(authSet.getEncoded(ASN1Encoding.DER));
+            aadStream.write(authSet.getEncoded(ASN1Encoding.DER));
             authAttrsEnc = new DLTaggedObject(false, 1, authSet).getEncoded(enc);
         }
         byte[] unauthAttrsEnc = null;
@@ -248,7 +256,7 @@ public class CMSAuthEnvelopedDataStreamGenerator
         {
             AttributeTable attrTable = unauthAttrsGenerator.getAttributes(CMSUtils.getEmptyParameters());
             ASN1Set unauthSet = der
-                ? new DERSet(attrTable.toASN1EncodableVector())
+                ? (ASN1Set)new DERSet(attrTable.toASN1EncodableVector())
                 : new DLSet(attrTable.toASN1EncodableVector());
             unauthAttrsEnc = new DLTaggedObject(false, 2, unauthSet).getEncoded(enc);
         }

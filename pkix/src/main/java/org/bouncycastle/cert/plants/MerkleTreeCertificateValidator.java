@@ -27,6 +27,7 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.TBSCertificate;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.BigIntegers;
 
 /**
  * Validates a Merkle Tree Certificate (MTC) per Section 7.2 of
@@ -54,7 +55,8 @@ public class MerkleTreeCertificateValidator
      * to the CA's published {@code MTCCertificationAuthority} extension and
      * enforces:</p>
      * <ul>
-     *   <li>The cert's serial number is at least {@code authorityInfo.getMinSerial()}
+     *   <li>The cert's serial number lies within the CA's authorized range
+     *       {@code [authorityInfo.getMinSerial(), authorityInfo.getMaxSerial()]}
      *       (Section 5.5 / 7.2).</li>
      *   <li>The {@code hashFunction} OID matches {@code authorityInfo.getLogHash()}
      *       (Section 7.1).</li>
@@ -409,6 +411,11 @@ public class MerkleTreeCertificateValidator
             throw new SecurityException(
                 "Serial number " + serialBig + " is below CA minSerial " + authorityInfo.getMinSerial());
         }
+        if (authorityInfo != null && serialBig.compareTo(authorityInfo.getMaxSerial()) > 0)
+        {
+            throw new SecurityException(
+                "Serial number " + serialBig + " is above CA maxSerial " + authorityInfo.getMaxSerial());
+        }
         for (RevokedRange range : params.revokedRanges)
         {
             if (range.contains(serialBig))
@@ -420,7 +427,7 @@ public class MerkleTreeCertificateValidator
         // Step 5: decompose the serial number per Section 6.1 of the draft:
         //   serial = (log_number << 48) | index
         long index = serialBig.and(BigInteger.valueOf(0xFFFFFFFFFFFFL)).longValue();
-        long logNumber = serialBig.shiftRight(48).longValueExact();
+        long logNumber = BigIntegers.longValueExact(serialBig.shiftRight(48));
         if (logNumber < 1 || logNumber > 0xFFFF)
         {
             throw new SecurityException("Invalid log_number " + logNumber + " in serial");

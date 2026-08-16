@@ -3,7 +3,9 @@ package org.bouncycastle.cms;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.cms.Attribute;
@@ -12,11 +14,13 @@ import org.bouncycastle.asn1.cms.AuthenticatedData;
 import org.bouncycastle.asn1.cms.CMSAlgorithmProtection;
 import org.bouncycastle.asn1.cms.CMSAttributes;
 import org.bouncycastle.asn1.cms.ContentInfo;
+import org.bouncycastle.asn1.cms.OriginatorInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Encodable;
+import org.bouncycastle.util.Exceptions;
 
 /**
  * containing class for an CMS Authenticated Data object
@@ -24,15 +28,23 @@ import org.bouncycastle.util.Encodable;
 public class CMSAuthenticatedData
     implements Encodable
 {
-    RecipientInformationStore   recipientInfoStore;
-    ContentInfo                 contentInfo;
+    private final ContentInfo contentInfo;
+    private final AuthenticatedData authenticatedData;
+    private final OriginatorInformation originatorInformation;
+    private final RecipientInformationStore recipientInfoStore;
 
-    private AlgorithmIdentifier macAlg;
-    private ASN1Set authAttrs;
-    private ASN1Set unauthAttrs;
-    private byte[] mac;
-    private OriginatorInformation originatorInfo;
+    // Derived
+    private AttributeTable authAttributeTable;
+    private AttributeTable unauthAttributeTable;
 
+    /**
+     * Create a CMSAuthenticatedData object from its encoding.
+     *
+     * @param authData the complete encoding of the AuthenticatedData structure (a CMS ContentInfo).
+     *                 The array must hold the entire encoding and nothing extra - trailing bytes
+     *                 beyond the AuthenticatedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as an AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         byte[]    authData)
         throws CMSException
@@ -40,6 +52,15 @@ public class CMSAuthenticatedData
         this(CMSUtils.readContentInfo(authData));
     }
 
+    /**
+     * Create a CMSAuthenticatedData object from its encoding.
+     *
+     * @param authData the complete encoding of the AuthenticatedData structure (a CMS ContentInfo).
+     *                 The array must hold the entire encoding and nothing extra - trailing bytes
+     *                 beyond the AuthenticatedData are not permitted.
+     * @param digestCalculatorProvider provider for the digest calculators needed to verify the MAC.
+     * @throws CMSException if the encoding cannot be parsed as an AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         byte[]    authData,
         DigestCalculatorProvider digestCalculatorProvider)
@@ -48,6 +69,12 @@ public class CMSAuthenticatedData
         this(CMSUtils.readContentInfo(authData), digestCalculatorProvider);
     }
 
+    /**
+     * Create a CMSAuthenticatedData object from a stream.
+     *
+     * @param authData a stream positioned at the start of the AuthenticatedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as an AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         InputStream    authData)
         throws CMSException
@@ -55,6 +82,13 @@ public class CMSAuthenticatedData
         this(CMSUtils.readContentInfo(authData));
     }
 
+    /**
+     * Create a CMSAuthenticatedData object from a stream.
+     *
+     * @param authData a stream positioned at the start of the AuthenticatedData encoding (a CMS ContentInfo).
+     * @param digestCalculatorProvider provider for the digest calculators needed to verify the MAC.
+     * @throws CMSException if the encoding cannot be parsed as an AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         InputStream    authData,
         DigestCalculatorProvider digestCalculatorProvider)
@@ -63,6 +97,12 @@ public class CMSAuthenticatedData
         this(CMSUtils.readContentInfo(authData), digestCalculatorProvider);
     }
 
+    /**
+     * Create a CMSAuthenticatedData object from an already-parsed ContentInfo.
+     *
+     * @param contentInfo the ContentInfo carrying the AuthenticatedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         ContentInfo contentInfo)
         throws CMSException
@@ -70,92 +110,112 @@ public class CMSAuthenticatedData
         this(contentInfo, null);
     }
 
+    /**
+     * Create a CMSAuthenticatedData object from an already-parsed ContentInfo.
+     *
+     * @param contentInfo the ContentInfo carrying the AuthenticatedData.
+     * @param digestCalculatorProvider provider for the digest calculators needed to verify the MAC.
+     * @throws CMSException if the ContentInfo does not hold a well-formed AuthenticatedData.
+     */
     public CMSAuthenticatedData(
         ContentInfo contentInfo,
         DigestCalculatorProvider digestCalculatorProvider)
         throws CMSException
     {
         this.contentInfo = contentInfo;
+        this.authenticatedData = getAuthenticatedData();
 
-        AuthenticatedData authData = AuthenticatedData.getInstance(contentInfo.getContent());
-
-        if (authData.getOriginatorInfo() != null)
-        {
-            this.originatorInfo = new OriginatorInformation(authData.getOriginatorInfo());
-        }
+        OriginatorInfo originatorInfo = authenticatedData.getOriginatorInfo();
+        this.originatorInformation = originatorInfo == null ? null : new OriginatorInformation(originatorInfo);
 
         //
         // read the recipients
         //
+        AuthenticatedData authData = authenticatedData;
         ASN1Set recipientInfos = authData.getRecipientInfos();
 
-        this.macAlg = authData.getMacAlgorithm();
-
-        this.authAttrs = authData.getAuthAttrs();
-        this.mac = authData.getMac().getOctets();
-        this.unauthAttrs = authData.getUnauthAttrs();
+        AlgorithmIdentifier macAlg = authData.getMacAlgorithm();
 
         //
         // read the authenticated content info
         //
         ContentInfo encInfo = authData.getEncapsulatedContentInfo();
+        ASN1Encodable eContent = encInfo.getContent();
+        if (eContent == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+        ASN1OctetString encContent;
+        try
+        {
+            encContent = ASN1OctetString.getInstance(eContent);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
         CMSReadable readable = new CMSProcessableByteArray(
             encInfo.getContentType(),
-            ASN1OctetString.getInstance(encInfo.getContent()).getOctets());
+            encContent.getOctets());
+
+        // RFC 6211 Validate Algorithm Protection attribute if present
+        verifyAlgorithmProtectionAttribute();
+
+        // TODO Verify other attributes; for message-digest need the calculated content-digest (if any) to compare
 
         //
         // build the RecipientInformationStore
         //
-        if (authAttrs != null)
+        ASN1Set authAttrs = authData.getAuthAttrs();
+        if (authAttrs == null)
         {
-            if (digestCalculatorProvider == null)
-            {
-                throw new CMSException("a digest calculator provider is required if authenticated attributes are present");
-            }
-
-            AttributeTable table = new AttributeTable(authAttrs);
-
-            ASN1EncodableVector protectionAttributes = table.getAll(CMSAttributes.cmsAlgorithmProtect);
-            if (protectionAttributes.size() > 1)
-            {
-                throw new CMSException("Only one instance of a cmsAlgorithmProtect attribute can be present");
-            }
-
-            if (protectionAttributes.size() > 0)
-            {
-                Attribute attr = Attribute.getInstance(protectionAttributes.get(0));
-                if (attr.getAttrValues().size() != 1)
-                {
-                    throw new CMSException("A cmsAlgorithmProtect attribute MUST contain exactly one value");
-                }
-
-                CMSAlgorithmProtection algorithmProtection = CMSAlgorithmProtection.getInstance(attr.getAttributeValues()[0]);
-
-                if (!CMSUtils.isEquivalent(algorithmProtection.getDigestAlgorithm(), authData.getDigestAlgorithm()))
-                {
-                    throw new CMSException("CMS Algorithm Identifier Protection check failed for digestAlgorithm");
-                }
-
-                if (!CMSUtils.isEquivalent(algorithmProtection.getMacAlgorithm(), macAlg))
-                {
-                    throw new CMSException("CMS Algorithm Identifier Protection check failed for macAlgorithm");
-                }
-            }
-            try
-            {
-                CMSSecureReadable secureReadable = new CMSEnvelopedHelper.CMSDigestAuthenticatedSecureReadable(digestCalculatorProvider.get(authData.getDigestAlgorithm()), encInfo.getContentType(), readable);
-                secureReadable.setAuthAttrSet(authAttrs);
-                this.recipientInfoStore = CMSEnvelopedHelper.buildRecipientInformationStore(recipientInfos, this.macAlg, secureReadable);
-            }
-            catch (OperatorCreationException e)
-            {
-                throw new CMSException("unable to create digest calculator: " + e.getMessage(), e);
-            }
+            CMSSecureReadable secureReadable = new CMSEnvelopedHelper.CMSAuthEnveSecureReadable(macAlg, encInfo.getContentType(), readable);
+            this.recipientInfoStore = CMSEnvelopedHelper.buildRecipientInformationStore(recipientInfos, macAlg, secureReadable);
+            return;
         }
-        else
+
+        if (digestCalculatorProvider == null)
         {
-            CMSSecureReadable secureReadable = new CMSEnvelopedHelper.CMSAuthEnveSecureReadable(this.macAlg, encInfo.getContentType(), readable);
-            this.recipientInfoStore = CMSEnvelopedHelper.buildRecipientInformationStore(recipientInfos, this.macAlg, secureReadable);
+            throw new CMSException("a digest calculator provider is required if authenticated attributes are present");
+        }
+
+        try
+        {
+            CMSSecureReadable secureReadable = new CMSEnvelopedHelper.CMSDigestAuthenticatedSecureReadable(
+                digestCalculatorProvider.get(authData.getDigestAlgorithm()), encInfo.getContentType(), readable);
+            secureReadable.setAuthAttrSet(authAttrs);
+            this.recipientInfoStore = CMSEnvelopedHelper.buildRecipientInformationStore(recipientInfos, macAlg, secureReadable);
+        }
+        catch (OperatorCreationException e)
+        {
+            throw new CMSException("unable to create digest calculator: " + e.getMessage(), e);
+        }
+    }
+
+    private AuthenticatedData getAuthenticatedData()
+        throws CMSException
+    {
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
+        try
+        {
+            return AuthenticatedData.getInstance(content);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
         }
     }
 
@@ -166,12 +226,12 @@ public class CMSAuthenticatedData
      */
     public OriginatorInformation getOriginatorInfo()
     {
-        return originatorInfo;
+        return originatorInformation;
     }
 
     public byte[] getMac()
     {
-        return Arrays.clone(mac);
+        return Arrays.clone(authenticatedData.getMac().getOctets());
     }
 
     /**
@@ -181,7 +241,7 @@ public class CMSAuthenticatedData
      */
     public AlgorithmIdentifier getMacAlgorithm()
     {
-        return macAlg;
+        return authenticatedData.getMacAlgorithm();
     }
 
     /**
@@ -189,7 +249,7 @@ public class CMSAuthenticatedData
      */
     public String getMacAlgOID()
     {
-        return macAlg.getAlgorithm().getId();
+        return getMacAlgorithm().getAlgorithm().getId();
     }
 
     /**
@@ -200,7 +260,7 @@ public class CMSAuthenticatedData
     {
         try
         {
-            return CMSUtils.encodeObj(macAlg.getParameters());
+            return CMSUtils.encodeObj(getMacAlgorithm().getParameters());
         }
         catch (Exception e)
         {
@@ -234,31 +294,47 @@ public class CMSAuthenticatedData
     }
 
     /**
-     * return a table of the digested attributes indexed by
-     * the OID of the attribute.
+     * return a table of the digested attributes indexed by the OID of the attribute.
+     * @deprecated Use {@link #getAuthAttributes} instead.
      */
     public AttributeTable getAuthAttrs()
     {
-        if (authAttrs == null)
-        {
-            return null;
-        }
-
-        return new AttributeTable(authAttrs);
+        return getAuthAttributes();
     }
 
     /**
-     * return a table of the undigested attributes indexed by
-     * the OID of the attribute.
+     * return a table of the authenticated attributes - indexed by the OID of the attribute.
+     */
+    public AttributeTable getAuthAttributes()
+    {
+        ASN1Set authAttrs = authenticatedData.getAuthAttrs();
+        if (authAttrs != null && this.authAttributeTable == null)
+        {
+            this.authAttributeTable = new AttributeTable(authAttrs);
+        }
+        return this.authAttributeTable;
+    }
+
+    /**
+     * return a table of the undigested attributes indexed by the OID of the attribute.
+     * @deprecated Use {@link #getUnauthAttributes} instead.
      */
     public AttributeTable getUnauthAttrs()
     {
-        if (unauthAttrs == null)
-        {
-            return null;
-        }
+        return getUnauthAttributes();
+    }
 
-        return new AttributeTable(unauthAttrs);
+    /**
+     * return a table of the unauthenticated attributes - indexed by the OID of the attribute.
+     */
+    public AttributeTable getUnauthAttributes()
+    {
+        ASN1Set unauthAttrs = authenticatedData.getUnauthAttrs();
+        if (unauthAttrs != null && this.unauthAttributeTable == null)
+        {
+            this.unauthAttributeTable = new AttributeTable(unauthAttrs);
+        }
+        return this.unauthAttributeTable;
     }
 
     /**
@@ -272,11 +348,98 @@ public class CMSAuthenticatedData
 
     public byte[] getContentDigest()
     {
-        if (authAttrs != null)
+        try
         {
-            return ASN1OctetString.getInstance(getAuthAttrs().get(CMSAttributes.messageDigest).getAttrValues().getObjectAt(0)).getOctets();
+            // TODO Full validation; this is syntactic validation on access only; the actual digest is not checked 
+            ASN1Encodable validMessageDigest = getSingleValuedAuthAttribute(CMSAttributes.messageDigest, "message-digest");
+            if (validMessageDigest == null)
+            {
+                if (authenticatedData.getAuthAttrs() != null)
+                {
+                    throw new CMSException("the message-digest authenticated attribute type MUST be present when there are any authenticated attributes present");
+                }
+            }
+            else
+            {
+                if (!(validMessageDigest instanceof ASN1OctetString))
+                {
+                    throw new CMSException("message-digest attribute value not of ASN.1 type 'OCTET STRING'");
+                }
+
+                ASN1OctetString authMessageDigest = (ASN1OctetString)validMessageDigest;
+
+                return Arrays.clone(authMessageDigest.getOctets());
+            }            
+        }
+        catch (CMSException e)
+        {
+            // TODO CMSException could be declared, but if validation is moved to an earlier phase that may be unnecessary.
+            throw Exceptions.illegalStateException("Invalid content digest", e);
         }
 
         return null;
+    }
+
+    private ASN1Encodable getSingleValuedAuthAttribute(ASN1ObjectIdentifier attrOID, String printableName)
+        throws CMSException
+    {
+        AttributeTable unauthAttrTable = getUnauthAttributes();
+        if (unauthAttrTable != null && unauthAttrTable.hasAny(attrOID))
+        {
+            throw new CMSException("The " + printableName + " attribute MUST NOT be an unauthenticated attribute");
+        }
+
+        AttributeTable authAttrTable = getAuthAttributes();
+        if (authAttrTable == null)
+        {
+            return null;
+        }
+
+        ASN1EncodableVector v = authAttrTable.getAll(attrOID);
+        switch (v.size())
+        {
+        case 0:
+            return null;
+        case 1:
+        {
+            Attribute t = (Attribute)v.get(0);
+            ASN1Set attrValues = t.getAttrValues();
+            if (attrValues.size() != 1)
+            {
+                throw new CMSException("A " + printableName + " attribute MUST have a single attribute value");
+            }
+
+            return attrValues.getObjectAt(0);
+        }
+        default:
+            throw new CMSException("The AuthAttributes in an AuthenticatedData MUST NOT include multiple instances of "
+                + "the " + printableName + " attribute");
+        }
+    }
+
+    /**
+     * RFC 6211 Validate Algorithm Protection attribute if present
+     *
+     * @throws CMSException when cmsAlgorithmProtect attribute was rejected
+     */
+    private void verifyAlgorithmProtectionAttribute()
+        throws CMSException
+    {
+        ASN1Encodable validAlgorithmProtection = getSingleValuedAuthAttribute(CMSAttributes.cmsAlgorithmProtect,
+            "cmsAlgorithmProtect");
+        if (validAlgorithmProtection != null)
+        {
+            CMSAlgorithmProtection algorithmProtection = CMSAlgorithmProtection.getInstance(validAlgorithmProtection);
+
+            if (!CMSUtils.isEquivalent(algorithmProtection.getDigestAlgorithm(), authenticatedData.getDigestAlgorithm()))
+            {
+                throw new CMSException("CMS Algorithm Protection check failed for digestAlgorithm");
+            }
+
+            if (!CMSUtils.isEquivalent(algorithmProtection.getMacAlgorithm(), authenticatedData.getMacAlgorithm()))
+            {
+                throw new CMSException("CMS Algorithm Protection check failed for macAlgorithm");
+            }
+        }
     }
 }

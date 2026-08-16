@@ -16,8 +16,10 @@ import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1SequenceParser;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.ASN1SetParser;
@@ -53,6 +55,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.operator.DigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.GenericKey;
+import org.bouncycastle.operator.OidCatalogue;
 import org.bouncycastle.operator.OutputAEADEncryptor;
 import org.bouncycastle.operator.OutputEncryptor;
 import org.bouncycastle.util.Store;
@@ -155,16 +158,56 @@ class CMSUtils
         byte[] input)
         throws CMSException
     {
-        // enforce limit checking as from a byte array
-        return readContentInfo(new ASN1InputStream(input));
+        try
+        {
+            ContentInfo info = ContentInfo.getInstance(ASN1Primitive.fromByteArray(input));
+            if (info == null)
+            {
+                throw new CMSException("No content found.");
+            }
+
+            return info;
+        }
+        catch (IOException e)
+        {
+            throw new CMSException("IOException reading content.", e);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
     }
 
     static ContentInfo readContentInfo(
         InputStream input)
         throws CMSException
     {
-        // enforce some limit checking
-        return readContentInfo(new ASN1InputStream(input));
+        try
+        {
+            ContentInfo info = ContentInfo.getInstance(ASN1Primitive.fromStream(input));
+            if (info == null)
+            {
+                throw new CMSException("No content found.");
+            }
+
+            return info;
+        }
+        catch (IOException e)
+        {
+            throw new CMSException("IOException reading content.", e);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
     }
 
     static ASN1Set convertToDlSet(Set<AlgorithmIdentifier> digestAlgs)
@@ -303,7 +346,7 @@ class CMSUtils
         return others;
     }
 
-    static ASN1Set createBerSetFromList(List derObjects)
+    private static ASN1EncodableVector toVector(List derObjects)
     {
         ASN1EncodableVector v = new ASN1EncodableVector();
 
@@ -312,31 +355,22 @@ class CMSUtils
             v.add((ASN1Encodable)it.next());
         }
 
-        return new BERSet(v);
+        return v;
+    }
+
+    static ASN1Set createBerSetFromList(List derObjects)
+    {
+        return new BERSet(toVector(derObjects));
     }
 
     static ASN1Set createDlSetFromList(List derObjects)
     {
-        ASN1EncodableVector v = new ASN1EncodableVector();
-
-        for (Iterator it = derObjects.iterator(); it.hasNext(); )
-        {
-            v.add((ASN1Encodable)it.next());
-        }
-
-        return new DLSet(v);
+        return new DLSet(toVector(derObjects));
     }
 
     static ASN1Set createDerSetFromList(List derObjects)
     {
-        ASN1EncodableVector v = new ASN1EncodableVector();
-
-        for (Iterator it = derObjects.iterator(); it.hasNext(); )
-        {
-            v.add((ASN1Encodable)it.next());
-        }
-
-        return new DERSet(v);
+        return new DERSet(toVector(derObjects));
     }
 
     /**
@@ -350,36 +384,21 @@ class CMSUtils
     {
         ASN1ObjectIdentifier algorithm = encAlgId.getAlgorithm();
 
-        if (CMSAlgorithm.AES128_CBC.equals(algorithm)
-            || CMSAlgorithm.AES192_CBC.equals(algorithm)
-            || CMSAlgorithm.AES256_CBC.equals(algorithm)
-            || CMSAlgorithm.CAMELLIA128_CBC.equals(algorithm)
-            || CMSAlgorithm.CAMELLIA192_CBC.equals(algorithm)
-            || CMSAlgorithm.CAMELLIA256_CBC.equals(algorithm)
-            || CMSAlgorithm.SEED_CBC.equals(algorithm)
-            || CMSAlgorithm.SM4_CBC.equals(algorithm))
+        if (OidCatalogue.isCBC128(algorithm))
         {
             // CBC with PKCS#7 padding, 16 octet blocks: always at least one pad octet.
             return inputLength + (16 - (inputLength % 16));
         }
-        if (CMSAlgorithm.DES_CBC.equals(algorithm)
-            || CMSAlgorithm.DES_EDE3_CBC.equals(algorithm)
-            || CMSAlgorithm.RC2_CBC.equals(algorithm)
-            || CMSAlgorithm.CAST5_CBC.equals(algorithm)
-            || CMSAlgorithm.IDEA_CBC.equals(algorithm))
+        if (OidCatalogue.isCBC64(algorithm))
         {
             // CBC with PKCS#7 padding, 8 octet blocks.
             return inputLength + (8 - (inputLength % 8));
         }
-        if (CMSAlgorithm.AES128_GCM.equals(algorithm)
-            || CMSAlgorithm.AES192_GCM.equals(algorithm)
-            || CMSAlgorithm.AES256_GCM.equals(algorithm))
+        if (OidCatalogue.isGCM(algorithm))
         {
             return inputLength + GCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
         }
-        if (CMSAlgorithm.AES128_CCM.equals(algorithm)
-            || CMSAlgorithm.AES192_CCM.equals(algorithm)
-            || CMSAlgorithm.AES256_CCM.equals(algorithm))
+        if (OidCatalogue.isCCM(algorithm))
         {
             return inputLength + CCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
         }
@@ -457,6 +476,31 @@ class CMSUtils
         {
             return 64;
         }
+        if (NISTObjectIdentifiers.id_shake256_len.equals(algorithm))
+        {
+            // id-shake256-len carries its output length in bits as the algorithm parameter -
+            // the form RFC 8419 sec. 3.1 mandates for Ed448 SignedData with signed attributes
+            // (with the parameter containing 512).
+            ASN1Encodable params = digAlgId.getParameters();
+            if (params == null)
+            {
+                return -1;
+            }
+            try
+            {
+                int lengthInBits = ASN1Integer.getInstance(params).intValueExact();
+                if (lengthInBits <= 0 || (lengthInBits & 7) != 0)
+                {
+                    return -1;
+                }
+                return lengthInBits / 8;
+            }
+            catch (RuntimeException e)
+            {
+                // parameters not a positive integer in range - no prediction
+                return -1;
+            }
+        }
         if (NISTObjectIdentifiers.id_sha224.equals(algorithm)
             || NISTObjectIdentifiers.id_sha512_224.equals(algorithm)
             || NISTObjectIdentifiers.id_sha3_224.equals(algorithm))
@@ -485,12 +529,7 @@ class CMSUtils
     {
         ASN1ObjectIdentifier algorithm = encAlgId.getAlgorithm();
 
-        if (CMSAlgorithm.AES128_GCM.equals(algorithm)
-            || CMSAlgorithm.AES192_GCM.equals(algorithm)
-            || CMSAlgorithm.AES256_GCM.equals(algorithm)
-            || CMSAlgorithm.AES128_CCM.equals(algorithm)
-            || CMSAlgorithm.AES192_CCM.equals(algorithm)
-            || CMSAlgorithm.AES256_CCM.equals(algorithm))
+        if (OidCatalogue.isAEAD(algorithm))
         {
             return inputLength;
         }
@@ -506,17 +545,27 @@ class CMSUtils
     {
         ASN1ObjectIdentifier algorithm = encAlgId.getAlgorithm();
 
-        if (CMSAlgorithm.AES128_GCM.equals(algorithm)
-            || CMSAlgorithm.AES192_GCM.equals(algorithm)
-            || CMSAlgorithm.AES256_GCM.equals(algorithm))
+        try
         {
-            return GCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
+            if (OidCatalogue.isGCM(algorithm))
+            {
+                return GCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
+            }
+            if (OidCatalogue.isCCM(algorithm))
+            {
+                return CCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
+            }
         }
-        if (CMSAlgorithm.AES128_CCM.equals(algorithm)
-            || CMSAlgorithm.AES192_CCM.equals(algorithm)
-            || CMSAlgorithm.AES256_CCM.equals(algorithm))
+        catch (RuntimeException e)
         {
-            return CCMParameters.getInstance(encAlgId.getParameters()).getIcvLen();
+            // encAlgId.getParameters() is attacker-controlled on the decrypt path. Absent params
+            // (getInstance(null) -> null -> getIcvLen NPE) or a too-short ICV (rejected by
+            // GCMParameters/CCMParameters' own validateICVLen) would otherwise let an unchecked
+            // exception escape the CMSException contract. Report a zero-length MAC so a recipient
+            // with a minimum-tag-size floor rejects the message as a CMSTagLengthException
+            // (fail-closed). On the generation path the parameters are well-formed, so this branch
+            // is not reached there.
+            return 0;
         }
 
         return -1;
@@ -534,34 +583,6 @@ class CMSUtils
         }
 
         return octGen.getOctetOutputStream();
-    }
-
-    private static ContentInfo readContentInfo(
-        ASN1InputStream in)
-        throws CMSException
-    {
-        try
-        {
-            ContentInfo info = ContentInfo.getInstance(in.readObject());
-            if (info == null)
-            {
-                throw new CMSException("No content found.");
-            }
-
-            return info;
-        }
-        catch (IOException e)
-        {
-            throw new CMSException("IOException reading content.", e);
-        }
-        catch (ClassCastException e)
-        {
-            throw new CMSException("Malformed content.", e);
-        }
-        catch (IllegalArgumentException e)
-        {
-            throw new CMSException("Malformed content.", e);
-        }
     }
 
     public static byte[] streamToByteArray(
@@ -675,10 +696,18 @@ class CMSUtils
         ASN1Set authenticatedAttrSet = null;
         if (authAttrsGenerator != null)
         {
+            OutputStream aadStream = encryptor.getAADStream();
+            if (aadStream == null)
+            {
+                // getAADStream() is null when the JCE provider has no AEAD AAD support
+                // (java.crypto.Cipher.updateAAD is JDK 1.7+); authenticated attributes
+                // cannot be fed as AAD on this runtime.
+                throw new IOException("authenticated attributes require AEAD AAD support (JDK 1.7+)");
+            }
             AttributeTable attrTable = authAttrsGenerator.getAttributes(getEmptyParameters());
 
             authenticatedAttrSet = new DERSet(attrTable.toASN1EncodableVector());
-            encryptor.getAADStream().write(authenticatedAttrSet.getEncoded(ASN1Encoding.DER));
+            aadStream.write(authenticatedAttrSet.getEncoded(ASN1Encoding.DER));
         }
         return authenticatedAttrSet;
     }

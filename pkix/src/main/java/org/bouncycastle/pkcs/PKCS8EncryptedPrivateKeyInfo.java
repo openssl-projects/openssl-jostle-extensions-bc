@@ -12,7 +12,7 @@ import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.util.io.Streams;
 
 /**
- * Holding class for a PKCS#8 EncryptedPrivateKeyInfo structure.
+ * Holding class for a PKCS#8 EncryptedPrivateKeyInfo structure (RFC 5958, originally RFC 5208).
  */
 public class PKCS8EncryptedPrivateKeyInfo
 {
@@ -23,7 +23,16 @@ public class PKCS8EncryptedPrivateKeyInfo
     {
         try
         {
-            return EncryptedPrivateKeyInfo.getInstance(ASN1Primitive.fromByteArray(pkcs8Encoding));
+            // fromByteArray() returns null on empty input and getInstance(null) returns null; without
+            // this guard the byte[] constructor would wrap a null and every accessor
+            // (getEncryptionAlgorithm/getEncryptedData/getEncoded/decryptPrivateKeyInfo) would then throw
+            // a NullPointerException rather than this declared IOException.
+            EncryptedPrivateKeyInfo info = EncryptedPrivateKeyInfo.getInstance(ASN1Primitive.fromByteArray(pkcs8Encoding));
+            if (info == null)
+            {
+                throw new PKCSIOException("malformed data: no encrypted private key info found");
+            }
+            return info;
         }
         catch (ClassCastException e)
         {
@@ -35,38 +44,72 @@ public class PKCS8EncryptedPrivateKeyInfo
         }
     }
 
+    /**
+     * Wrap an existing parsed {@link EncryptedPrivateKeyInfo} structure.
+     *
+     * @param encryptedPrivateKeyInfo the ASN.1 structure to wrap.
+     */
     public PKCS8EncryptedPrivateKeyInfo(EncryptedPrivateKeyInfo encryptedPrivateKeyInfo)
     {
         this.encryptedPrivateKeyInfo = encryptedPrivateKeyInfo;
     }
 
+    /**
+     * Parse a BER/DER encoded EncryptedPrivateKeyInfo.
+     *
+     * @param encryptedPrivateKeyInfo the encoded bytes.
+     * @throws IOException if the data is not a valid EncryptedPrivateKeyInfo encoding.
+     */
     public PKCS8EncryptedPrivateKeyInfo(byte[] encryptedPrivateKeyInfo)
         throws IOException
     {
         this(parseBytes(encryptedPrivateKeyInfo));
     }
 
+    /**
+     * Return the algorithm identifier describing how the private key has been encrypted.
+     */
     public AlgorithmIdentifier getEncryptionAlgorithm()
     {
         return encryptedPrivateKeyInfo.getEncryptionAlgorithm();
     }
 
+    /**
+     * Return the raw ciphertext bytes of the encrypted private key.
+     */
     public byte[] getEncryptedData()
     {
         return encryptedPrivateKeyInfo.getEncryptedData();
     }
 
+    /**
+     * Return the underlying ASN.1 structure for this holder.
+     */
     public EncryptedPrivateKeyInfo toASN1Structure()
     {
          return encryptedPrivateKeyInfo;
     }
 
+    /**
+     * Return the default (DER) encoding of this EncryptedPrivateKeyInfo.
+     *
+     * @return the encoded bytes.
+     * @throws IOException if encoding fails.
+     */
     public byte[] getEncoded()
         throws IOException
     {
         return encryptedPrivateKeyInfo.getEncoded();
     }
 
+    /**
+     * Decrypt the wrapped private key.
+     *
+     * @param inputDecryptorProvider provider able to produce a decryptor matching the
+     *                               encryption algorithm carried by this object.
+     * @return the recovered {@link PrivateKeyInfo}.
+     * @throws PKCSException if a decryptor cannot be created or decryption / parsing fails.
+     */
     public PrivateKeyInfo decryptPrivateKeyInfo(InputDecryptorProvider inputDecryptorProvider)
         throws PKCSException
     {

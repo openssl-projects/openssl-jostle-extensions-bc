@@ -1411,11 +1411,11 @@ public class NewSignedDataTest
         // protection check then fires on the digestAlgorithm mismatch as intended.
         SignerInfo sInew = new SignerInfo(sI.getSID(), new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha512, DERNull.INSTANCE), sI.getAuthenticatedAttributes(), sI.getDigestEncryptionAlgorithm(), sI.getEncryptedDigest(), sI.getUnauthenticatedAttributes());
 
-        verifySignatures(getCorruptedSignedData(sd, sInew), false, "CMS Algorithm Identifier Protection check failed for digestAlgorithm");
+        verifySignatures(getCorruptedSignedData(sd, sInew), false, "CMS Algorithm Protection check failed for digestAlgorithm");
 
         sInew = new SignerInfo(sI.getSID(), sI.getDigestAlgorithm(), sI.getAuthenticatedAttributes(), new AlgorithmIdentifier(PKCSObjectIdentifiers.id_RSASSA_PSS), sI.getEncryptedDigest(), sI.getUnauthenticatedAttributes());
 
-        verifySignatures(getCorruptedSignedData(sd, sInew), false, "CMS Algorithm Identifier Protection check failed for signatureAlgorithm");
+        verifySignatures(getCorruptedSignedData(sd, sInew), false, "CMS Algorithm Protection check failed for signatureAlgorithm");
 
         // check equivalence
         AlgorithmIdentifier newAlgId = new AlgorithmIdentifier(sI.getDigestAlgorithm().getAlgorithm());

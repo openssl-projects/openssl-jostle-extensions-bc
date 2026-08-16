@@ -9,8 +9,10 @@ import org.bouncycastle.asn1.bc.BCObjectIdentifiers;
 import org.bouncycastle.asn1.bsi.BSIObjectIdentifiers;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.eac.EACObjectIdentifiers;
+import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.gnu.GNUObjectIdentifiers;
+import org.bouncycastle.asn1.iso.ISOIECObjectIdentifiers;
 import org.bouncycastle.asn1.kisa.KISAObjectIdentifiers;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
@@ -135,6 +137,49 @@ public class DefaultAlgorithmNameFinder
         addAlgorithm(BCObjectIdentifiers.sphincsPlus_shake_256f_r3_simple, "SPHINCS+");
         addAlgorithm(BCObjectIdentifiers.sphincsPlus_haraka_256s_r3_simple, "SPHINCS+");
         addAlgorithm(BCObjectIdentifiers.sphincsPlus_haraka_256f_r3_simple, "SPHINCS+");
+
+        // KEMs, restricted to the standardised assignments. BouncyCastle's own pre-standard arcs
+        // for these families - the round-3 Classic McEliece sets under BCObjectIdentifiers, which
+        // include a 348864 ISO never published, and the FrodoKEM sets there - are deliberately
+        // left unnamed, as those parameters are to be phased out.
+
+        // ML-KEM (FIPS 203); names as MLKEMParameters.getName() spells them
+        addAlgorithm(NISTObjectIdentifiers.id_alg_ml_kem_512, "ML-KEM-512");
+        addAlgorithm(NISTObjectIdentifiers.id_alg_ml_kem_768, "ML-KEM-768");
+        addAlgorithm(NISTObjectIdentifiers.id_alg_ml_kem_1024, "ML-KEM-1024");
+
+        // FrodoKEM, ISO/IEC 18033-2 arc; names as FrodoKEMParameters.getName() spells them
+        addAlgorithm(ISOIECObjectIdentifiers.frodokem976_shake, "frodokem976shake");
+        addAlgorithm(ISOIECObjectIdentifiers.frodokem1344_shake, "frodokem1344shake");
+        addAlgorithm(ISOIECObjectIdentifiers.efrodokem976_shake, "efrodokem976shake");
+        addAlgorithm(ISOIECObjectIdentifiers.efrodokem1344_shake, "efrodokem1344shake");
+        addAlgorithm(ISOIECObjectIdentifiers.frodokem976_aes, "frodokem976aes");
+        addAlgorithm(ISOIECObjectIdentifiers.frodokem1344_aes, "frodokem1344aes");
+        addAlgorithm(ISOIECObjectIdentifiers.efrodokem976_aes, "efrodokem976aes");
+        addAlgorithm(ISOIECObjectIdentifiers.efrodokem1344_aes, "efrodokem1344aes");
+
+        // Classic McEliece, ISO/IEC 18033-2 arc; names as CMCEParameters.getName() spells them
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece460896, "mceliece460896");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece460896f, "mceliece460896f");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece460896pc, "mceliece460896pc");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece460896pcf, "mceliece460896pcf");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6688128, "mceliece6688128");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6688128f, "mceliece6688128f");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6688128pc, "mceliece6688128pc");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6688128pcf, "mceliece6688128pcf");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6960119, "mceliece6960119");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6960119f, "mceliece6960119f");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6960119pc, "mceliece6960119pc");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece6960119pcf, "mceliece6960119pcf");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece8192128, "mceliece8192128");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece8192128f, "mceliece8192128f");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece8192128pc, "mceliece8192128pc");
+        addAlgorithm(ISOIECObjectIdentifiers.mceliece8192128pcf, "mceliece8192128pcf");
+
+
+        addAlgorithm(GMObjectIdentifiers.sm3, "SM3");
+        addAlgorithm(GMObjectIdentifiers.sm2sign_with_sm3, "SM3WITHSM2");
+        addAlgorithm(GMObjectIdentifiers.sm2sign_with_sha256, "SHA256WITHSM2");
 
         addAlgorithm(NISTObjectIdentifiers.id_sha224, "SHA224");
         addAlgorithm(NISTObjectIdentifiers.id_sha256, "SHA256");

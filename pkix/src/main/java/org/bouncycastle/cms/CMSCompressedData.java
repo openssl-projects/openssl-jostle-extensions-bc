@@ -3,6 +3,7 @@ package org.bouncycastle.cms;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.cms.CompressedData;
@@ -25,29 +26,55 @@ public class CMSCompressedData
     ContentInfo                 contentInfo;
     CompressedData              comData;
 
+    /**
+     * Create a CMSCompressedData object from its encoding.
+     *
+     * @param compressedData the complete encoding of the CompressedData structure (a CMS ContentInfo).
+     *                       The array must hold the entire encoding and nothing extra - trailing bytes
+     *                       beyond the CompressedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a CompressedData.
+     */
     public CMSCompressedData(
-        byte[]    compressedData) 
+        byte[]    compressedData)
         throws CMSException
     {
         this(CMSUtils.readContentInfo(compressedData));
     }
 
+    /**
+     * Create a CMSCompressedData object from a stream.
+     *
+     * @param compressedData a stream positioned at the start of the CompressedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as a CompressedData.
+     */
     public CMSCompressedData(
-        InputStream    compressedData) 
+        InputStream    compressedData)
         throws CMSException
     {
         this(CMSUtils.readContentInfo(compressedData));
     }
 
+    /**
+     * Create a CMSCompressedData object from an already-parsed ContentInfo.
+     *
+     * @param contentInfo the ContentInfo carrying the CompressedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed CompressedData.
+     */
     public CMSCompressedData(
         ContentInfo contentInfo)
         throws CMSException
     {
         this.contentInfo = contentInfo;
 
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
         try
         {
-            this.comData = CompressedData.getInstance(contentInfo.getContent());
+            this.comData = CompressedData.getInstance(content);
         }
         catch (ClassCastException e)
         {
@@ -70,10 +97,11 @@ public class CMSCompressedData
     }
 
     public CMSTypedStream getContentStream(InputExpanderProvider expanderProvider)
+        throws CMSException
     {
         ContentInfo     content = comData.getEncapContentInfo();
 
-        ASN1OctetString bytes = (ASN1OctetString)content.getContent();
+        ASN1OctetString bytes = getEncapsulatedContent(content);
         InputExpander   expander = expanderProvider.get(comData.getCompressionAlgorithmIdentifier());
         InputStream     zIn = expander.getInputStream(bytes.getOctetStream());
 
@@ -92,7 +120,7 @@ public class CMSCompressedData
     {
         ContentInfo     content = comData.getEncapContentInfo();
 
-        ASN1OctetString bytes = (ASN1OctetString)content.getContent();
+        ASN1OctetString bytes = getEncapsulatedContent(content);
         InputExpander   expander = expanderProvider.get(comData.getCompressionAlgorithmIdentifier());
         InputStream     zIn = expander.getInputStream(bytes.getOctetStream());
 
@@ -103,6 +131,29 @@ public class CMSCompressedData
         catch (IOException e)
         {
             throw new CMSException("exception reading compressed stream.", e);
+        }
+    }
+
+    private static ASN1OctetString getEncapsulatedContent(ContentInfo content)
+        throws CMSException
+    {
+        ASN1Encodable eContent = content.getContent();
+        if (eContent == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
+        try
+        {
+            return ASN1OctetString.getInstance(eContent);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
         }
     }
 

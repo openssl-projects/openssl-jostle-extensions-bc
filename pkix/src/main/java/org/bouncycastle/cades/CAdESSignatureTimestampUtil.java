@@ -5,7 +5,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -27,6 +26,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.tsp.TSPException;
 import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 
 /**
  * Helpers for upgrading a CAdES B-B signature to B-T by attaching an
@@ -121,6 +121,8 @@ public final class CAdESSignatureTimestampUtil
             throw new NullPointerException("token");
         }
 
+        final TimeStampToken finalToken = token;
+
         SignerInformationStore signers = signedData.getSignerInfos();
         Collection<SignerInformation> matched = signers.getSigners(signerId);
         if (matched.isEmpty())
@@ -128,21 +130,14 @@ public final class CAdESSignatureTimestampUtil
             throw new CAdESException("no signer matched in CMSSignedData");
         }
 
-        List<SignerInformation> rebuilt = new ArrayList<SignerInformation>(signers.size());
-        for (Iterator<SignerInformation> it = signers.getSigners().iterator(); it.hasNext(); )
+        return CAdESSigners.replaceMatched(signedData, signers, matched, new CAdESSigners.Upgrade()
         {
-            SignerInformation cur = it.next();
-            if (matched.contains(cur))
+            public SignerInformation apply(SignerInformation signer)
+                throws CAdESException
             {
-                rebuilt.add(addSignatureTimestamp(cur, token));
+                return addSignatureTimestamp(signer, finalToken);
             }
-            else
-            {
-                rebuilt.add(cur);
-            }
-        }
-
-        return CMSSignedData.replaceSigners(signedData, new SignerInformationStore(rebuilt));
+        });
     }
 
     /**
@@ -168,12 +163,12 @@ public final class CAdESSignatureTimestampUtil
         AttributeTable unsigned = signer.getUnsignedAttributes();
         if (unsigned == null)
         {
-            return Collections.emptyList();
+            return Collections.EMPTY_LIST;
         }
         Attribute attr = unsigned.get(PKCSObjectIdentifiers.id_aa_signatureTimeStampToken);
         if (attr == null)
         {
-            return Collections.emptyList();
+            return Collections.EMPTY_LIST;
         }
         ASN1Set vals = attr.getAttrValues();
         List<TimeStampToken> out = new ArrayList<TimeStampToken>(vals.size());
@@ -231,7 +226,7 @@ public final class CAdESSignatureTimestampUtil
         }
         for (int i = 0; i != tokens.size(); ++i)
         {
-            TimeStampToken token = tokens.get(i);
+            TimeStampToken token = (TimeStampToken)tokens.get(i);
             AlgorithmIdentifier alg = token.getTimeStampInfo().getHashAlgorithm();
             byte[] embedded = token.getTimeStampInfo().getMessageImprintDigest();
             byte[] recomputed = computeSignatureImprint(signer, alg, digCalcProv);
@@ -260,7 +255,7 @@ public final class CAdESSignatureTimestampUtil
         {
             // TimeStampToken came back from a successful TSA round-trip;
             // getEncoded should not realistically fail.
-            throw new IllegalStateException(
+            throw Exceptions.illegalStateException(
                 "unable to encode TimeStampToken: " + e.getMessage(), e);
         }
 

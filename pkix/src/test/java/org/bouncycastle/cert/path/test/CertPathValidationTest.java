@@ -279,14 +279,14 @@ public class CertPathValidationTest
 
         Store crls = new CollectionStore(crlList);
 
-        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new BasicConstraintsValidation(), new KeyUsageValidation(), new CRLValidation(rootCert.getSubject(), crls)});
+        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new BasicConstraintsValidation(), new KeyUsageValidation(), new CRLValidation(rootCert.getSubject(), rootCert.getSubjectPublicKeyInfo(), verifier, crls)});
 
         if (!result.isValid())
         {
             fail("basic validation (2) not working");
         }
 
-        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new KeyUsageValidation(), new CRLValidation(rootCert.getSubject(), crls)});
+        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new KeyUsageValidation(), new CRLValidation(rootCert.getSubject(), rootCert.getSubjectPublicKeyInfo(), verifier, crls)});
 
         if (result.isValid() || result.getUnhandledCriticalExtensionOIDs().size() != 1
             || !result.getUnhandledCriticalExtensionOIDs().contains(Extension.basicConstraints))
@@ -294,7 +294,7 @@ public class CertPathValidationTest
             fail("basic validation (3) not working");
         }
 
-        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new CRLValidation(rootCert.getSubject(), crls)});
+        result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new CRLValidation(rootCert.getSubject(), rootCert.getSubjectPublicKeyInfo(), verifier, crls)});
 
         if (result.isValid() || result.getUnhandledCriticalExtensionOIDs().size() != 2
             || !result.getUnhandledCriticalExtensionOIDs().contains(Extension.basicConstraints)
@@ -415,6 +415,9 @@ public class CertPathValidationTest
 
     @org.junit.Test
     public void test() throws Exception {
+        // the verifier below resolves through JSL, so register it here rather than relying on
+        // another test class in the run having done so first.
+        Security.addProvider(new JostleProvider());
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
     }
