@@ -49,6 +49,9 @@ bc-build.user.properties
 !.claude/skills/
 .claude 2/
 
+# Local review notes
+/reviews/
+
 # Stray test-run output left at the top of modules
 /example.p12
 /mail/*.p12

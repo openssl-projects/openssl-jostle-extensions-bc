@@ -19,7 +19,7 @@ minimized. **A verbatim copy is almost always wrong.** Work through the steps be
 | `bc-java/util` (asn1 satellites) | `util/` | |
 
 The provider itself is a **separate repo** (`../openssl-jostle`), consumed as the prebuilt jar
-`libs/openssl-jostle-1.0-SNAPSHOT.jar`. Do not try to fix provider bugs from this repo.
+`libs/openssl-jostle-0.1-SNAPSHOT.jar`. Do not try to fix provider bugs from this repo.
 
 ## 1. Diff before you copy — classify every hunk
 
@@ -89,7 +89,7 @@ imports `Argon2Parameters`).
    numbers in the memory notes; a suite that shrinks silently is a regression.
 5. **Probe changed runtime paths.** A green suite proves little when no test covers the path you
    touched. Write a throwaway `main()` in the scratchpad, compile it against
-   `*/build/libs/*.jar` + `libs/openssl-jostle-1.0-SNAPSHOT.jar`, and confirm the behaviour — in
+   `*/build/libs/*.jar` + `libs/openssl-jostle-0.1-SNAPSHOT.jar`, and confirm the behaviour — in
    particular that an unsupported path fails with a clean, explanatory exception rather than an NPE.
 
 **Gotcha:** `jostleVersion` in `gradle.properties` must match the `libs/openssl-jostle-*.jar`
