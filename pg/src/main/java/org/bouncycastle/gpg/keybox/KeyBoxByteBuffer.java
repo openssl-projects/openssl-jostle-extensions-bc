@@ -70,7 +70,10 @@ class KeyBoxByteBuffer
 
     public byte[] rangeOf(int start, int end)
     {
-        if (end - start < 0 || start < 0)
+        // end is checked on its own: end - start overflows to a positive value when end is
+        // sufficiently negative (start = 1, end = Integer.MIN_VALUE wraps to Integer.MAX_VALUE),
+        // which cleared this guard and the limit check below and reached new byte[end - start].
+        if (end < 0 || end - start < 0 || start < 0)
         {
             throw new IllegalArgumentException("invalid range " + start + ":" + end);
         }
@@ -115,7 +118,9 @@ class KeyBoxByteBuffer
 
     public long u32()
     {
-        return ((u8() << 24) | (u8() << 16) | (u8() << 8) | u8());
+        // mask to the unsigned 32-bit range: the value is assembled in int arithmetic, so without
+        // the mask a field with bit 31 set would be sign-extended to a negative long on widening.
+        return ((u8() << 24) | (u8() << 16) | (u8() << 8) | u8()) & 0xFFFFFFFFL;
     }
 
     public int u8()

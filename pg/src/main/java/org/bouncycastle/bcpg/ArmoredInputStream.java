@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.bouncycastle.util.StringList;
+import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.Strings;
 
 /**
@@ -22,6 +23,13 @@ import org.bouncycastle.util.Strings;
  *
  *     aIn.setDetectMissingCRC(true);
  * </pre>
+ * </p>
+ * <p>
+ * By default a cleartext-signed (CSF) message whose payload contains a malformed
+ * dash-prefixed line (a leading dash that is neither a "-----" armor header nor a
+ * "- " dash-escape, contrary to RFC 4880 7.1) is rejected with an
+ * {@link ArmoredInputException}. Use
+ * {@link Builder#setRejectPrefixedDashesInCSFMessages(boolean)} to relax this.
  * </p>
  */
 public class ArmoredInputStream
@@ -78,8 +86,8 @@ public class ArmoredInputStream
 
         if (in2 == '=')
         {
-            b1 = decodingTable[in0] & 0xff;
-            b2 = decodingTable[in1] & 0xff;
+            b1 = decodingTable[in0];
+            b2 = decodingTable[in1];
 
             if ((b1 | b2) < 0)
             {
@@ -146,10 +154,12 @@ public class ArmoredInputStream
     boolean restart = false;
     StringList headerList = Strings.newList();
     int lastC = 0;
+    int lookAhead = -1;
     boolean isEndOfStream;
 
-    private boolean validateAllowedHeaders = false;
-    private List<String> allowedHeaders = defaultAllowedHeaders();
+    private final boolean validateAllowedHeaders;
+    private final boolean csfRejectPrefixedDashes;
+    private final List<String> allowedHeaders;
 
     /**
      * Create a stream for reading a PGP armoured message, parsing up to a header
@@ -180,6 +190,9 @@ public class ArmoredInputStream
         this.in = in;
         this.hasHeaders = hasHeaders;
         this.crc = new FastCRC24();
+        this.validateAllowedHeaders = false;
+        this.csfRejectPrefixedDashes = true;
+        this.allowedHeaders = defaultAllowedHeaders();
 
         if (hasHeaders)
         {
@@ -199,6 +212,7 @@ public class ArmoredInputStream
         this.detectMissingChecksum = builder.detectMissingCRC;
         this.crc = builder.ignoreCRC ? null : new FastCRC24();
         this.validateAllowedHeaders = builder.validateAllowedHeaders;
+        this.csfRejectPrefixedDashes = builder.csfRejectPrefixedDashes;
         this.allowedHeaders = builder.allowedHeaders;
 
         if (hasHeaders)
@@ -226,25 +240,47 @@ public class ArmoredInputStream
             return;
         }
 
-        outerloop:
         while (headerLines.hasNext())
         {
             String headerLine = (String)headerLines.next();
-            for (Iterator it = allowedHeaders.iterator(); it.hasNext(); )
+            if (rejectHeaderLine(allowedHeaders, headerLine))
             {
-                if (headerLine.startsWith((String)it.next() + ": "))
-                {
-                    continue outerloop;
-                }
+                throw new ArmoredInputException(
+                    "Illegal ASCII armor header line in clearsigned message encountered: " + headerLine);
             }
-            throw new ArmoredInputException("Illegal ASCII armor header line in clearsigned message encountered: " + headerLine);
         }
+    }
+
+    private static boolean rejectHeaderLine(List<String> allowedHeaders, String headerLine)
+    {
+        for (Iterator it = allowedHeaders.iterator(); it.hasNext();)
+        {
+            if (headerLine.startsWith((String)it.next() + ": "))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public int available()
         throws IOException
     {
         return in.available();
+    }
+
+    private static final int DEFAULT_MAX_ARMOR_HEADER_LENGTH = 4096;
+    private static final int DEFAULT_MAX_ARMOR_HEADERS = 64;
+
+    /**
+     * A configured limit that cannot be one leaves the default in place, so a mistyped value
+     * cannot turn the limit off.
+     */
+    private static int armorLimit(String propertyName, int defaultValue)
+    {
+        int value = Properties.asInteger(propertyName, defaultValue);
+
+        return value > 0 ? value : defaultValue;
     }
 
     private boolean parseHeaders()
@@ -283,6 +319,15 @@ public class ArmoredInputStream
         {
             boolean eolReached = false;
             boolean crLf = false;
+
+            /*
+             * The headers are parsed as the stream is constructed, so these bound what wrapping an
+             * untrusted stream can allocate before the caller has read a byte: a "header line" that
+             * never reaches a terminator, and header lines that never stop arriving.
+             */
+            int maxHeaderLength = armorLimit(Properties.OPENPGP_MAX_ARMOR_HEADER_LENGTH,
+                DEFAULT_MAX_ARMOR_HEADER_LENGTH);
+            int maxHeaders = armorLimit(Properties.OPENPGP_MAX_ARMOR_HEADERS, DEFAULT_MAX_ARMOR_HEADERS);
 
             ByteArrayOutputStream buf = new ByteArrayOutputStream();
             buf.write('-');
@@ -326,12 +371,24 @@ public class ArmoredInputStream
                     {
                         throw new ArmoredInputException("invalid armor header");
                     }
+                    if (headerList.size() >= maxHeaders)
+                    {
+                        throw new ArmoredInputException("more than " + maxHeaders + " armor headers (see "
+                            + Properties.OPENPGP_MAX_ARMOR_HEADERS + ")");
+                    }
+
                     headerList.add(line);
                     buf.reset();
                 }
 
                 if (c != '\n' && c != '\r')
                 {
+                    if (buf.size() >= maxHeaderLength)
+                    {
+                        throw new ArmoredInputException("armor header line exceeds " + maxHeaderLength
+                            + " bytes (see " + Properties.OPENPGP_MAX_ARMOR_HEADER_LENGTH + ")");
+                    }
+
                     buf.write(c);
                     eolReached = false;
                 }
@@ -448,7 +505,20 @@ public class ArmoredInputStream
 
         if (clearText)
         {
-            c = in.read();
+            if (lookAhead != -1)
+            {
+                // Replay a byte read past while resolving a line-leading dash (see the
+                // malformed branch below). Fall through so it still updates newLineFound /
+                // lastC rather than being returned blind - otherwise a pushed-back '\n'
+                // would not be recognised as a line start and the next armor boundary
+                // would be consumed as clear text.
+                c = lookAhead;
+                lookAhead = -1;
+            }
+            else
+            {
+                c = in.read();
+            }
 
             if (c == '\r' || (c == '\n' && lastC != '\r'))
             {
@@ -456,16 +526,30 @@ public class ArmoredInputStream
             }
             else if (newLineFound && c == '-')
             {
-                c = in.read();
-                if (c == '-')            // a header, not dash escaped
+                int next = in.read();
+                if (next == '-')            // a header, not dash escaped
                 {
                     clearText = false;
                     start = true;
                     restart = true;
                 }
-                else                   // a space - must be a dash escape
+                else if (next == ' ')       // a space - drop the "- " dash escape
                 {
                     c = in.read();
+                }
+                else
+                {
+                    // RFC 4880 7.1: in dash-escaped text every line beginning with a dash
+                    // is prefixed with "- "; a leading dash that is neither a "--" header
+                    // nor a "- " escape means the message is malformed.
+                    if (csfRejectPrefixedDashes)
+                    {
+                        throw new ArmoredInputException("Prefixed dash without trailing space encountered. CSF-signed message malformed.");
+                    }
+                    // Lenient: surface the bytes verbatim rather than silently dropping the
+                    // dash. Return the dash now and replay 'next' on the following read() so
+                    // a signature check over the recovered text fails instead of passing.
+                    lookAhead = next;
                 }
                 newLineFound = false;
             }
@@ -502,6 +586,15 @@ public class ArmoredInputStream
 
                 if (c == '=')            // crc reached
                 {
+                    // RFC 9580 6.2: the checksum appears once, immediately before the armor tail.
+                    // A second one is malformed, and because the running crc is not reset between
+                    // lines the same four characters keep matching - and each match recursed into
+                    // read() below, so repeating one line drove the stack down until it overflowed.
+                    if (crcFound)
+                    {
+                        throw new ArmoredInputException("multiple crc values found in armored message");
+                    }
+
                     bufPtr = decode(readIgnoreSpace(), readIgnoreSpace(), readIgnoreSpace(), readIgnoreSpace(), outBuf);
                     if (bufPtr != 0)
                     {
@@ -683,6 +776,7 @@ public class ArmoredInputStream
         private boolean detectMissingCRC = false;
         private boolean ignoreCRC = false;
         private boolean validateAllowedHeaders = false;
+        private boolean csfRejectPrefixedDashes = true;
         private List<String> allowedHeaders = defaultAllowedHeaders();
 
         private Builder()
@@ -706,6 +800,32 @@ public class ArmoredInputStream
         public Builder setValidateClearsignedMessageHeaders(boolean validateHeaders)
         {
             this.validateAllowedHeaders = validateHeaders;
+            return this;
+        }
+
+        /**
+         * Configure how a cleartext-signed (CSF) message is handled when a payload line
+         * begins with a dash that is neither a "-----" armor header nor a "- " dash-escape.
+         * RFC 4880 7.1 requires every cleartext line beginning with a dash to be prefixed
+         * with "- " (dash, space), so a leading dash not followed by a space signals a
+         * malformed message. Historically the two leading characters were dropped
+         * unconditionally, so a signature over "payload" also verified against a tampered
+         * "-Xpayload" line.
+         * <p>
+         * Defaults to {@code true} (reject with an {@link ArmoredInputException}).
+         * RFC-conformant messages - including everything written by
+         * {@link ArmoredOutputStream} - never trigger this. When set to {@code false} the
+         * offending bytes are returned verbatim instead of being dropped, so a signature
+         * check over the recovered text fails rather than silently succeeding.
+         * </p>
+         *
+         * @param rejectDashes true to reject malformed dash-prefixed CSF messages,
+         *                     false to surface their bytes verbatim.
+         * @return the current builder instance.
+         */
+        public Builder setRejectPrefixedDashesInCSFMessages(boolean rejectDashes)
+        {
+            this.csfRejectPrefixedDashes = rejectDashes;
             return this;
         }
 

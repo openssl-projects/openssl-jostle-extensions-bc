@@ -31,7 +31,7 @@ import org.bouncycastle.openpgp.operator.PGPDigestCalculator;
 public class JcePBEKeyEncryptionMethodGenerator
     extends PBEKeyEncryptionMethodGenerator
 {
-    private OperatorHelper helper = new OperatorHelper(new DefaultJcaJceHelper());
+    private OperatorHelper helper = OperatorUtils.createDefaultHelper();
     private JcePGPS2KCalculator argon2Calculator;
 
     /**
@@ -103,7 +103,7 @@ public class JcePBEKeyEncryptionMethodGenerator
      */
     public JcePBEKeyEncryptionMethodGenerator setProvider(Provider provider)
     {
-        this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+        this.helper = OperatorUtils.createProviderHelper(provider);
 
         if (argon2Calculator != null)
         {
@@ -121,7 +121,7 @@ public class JcePBEKeyEncryptionMethodGenerator
      */
     public JcePBEKeyEncryptionMethodGenerator setProvider(String providerName)
     {
-        this.helper = new OperatorHelper(new NamedJcaJceHelper(providerName));
+        this.helper = OperatorUtils.createNamedHelper(providerName);
 
         if (argon2Calculator != null)
         {
