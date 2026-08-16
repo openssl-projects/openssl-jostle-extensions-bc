@@ -37,6 +37,8 @@ public class OERInputStream
     private static final int[] bitsR = new int[]{128, 64, 32, 16, 8, 4, 2, 1};
     protected PrintWriter debugOutput = null;
     private int maxByteAllocation = 1024 * 1024;
+    private int maxNestingDepth = 256;
+    private int decodeDepth = 0;
     protected PrintWriter debugStream = null;
 
 
@@ -94,8 +96,29 @@ public class OERInputStream
     public ASN1Object parse(Element element)
         throws IOException
     {
+        // Hard cap on recursion depth. The IEEE 1609.2 OER schema is cyclic (an Ieee1609Dot2Data can
+        // nest inside its own SignedData payload) and the CHOICE tag / optional-present bits are
+        // attacker-controlled, so without a bound a few KB of crafted input drives unbounded
+        // recursive-descent parsing into a StackOverflowError before any signature check. The depth
+        // is threaded into open-type sub-streams (parseOpenType) so the cycle through them counts too.
+        if (++decodeDepth > maxNestingDepth)
+        {
+            decodeDepth--;
+            throw new IOException("OER decoder exceeded maximum nesting depth of " + maxNestingDepth);
+        }
+        try
+        {
+            return parseInternal(element);
+        }
+        finally
+        {
+            decodeDepth--;
+        }
+    }
 
-
+    private ASN1Object parseInternal(Element element)
+        throws IOException
+    {
         switch (element.getBaseType())
         {
 
@@ -126,6 +149,14 @@ public class OERInputStream
             //
             int j = BigIntegers.fromUnsignedByteArray(lenEnc).intValue();
 
+            // Every OER seq-of element occupies at least one byte, so a declared count larger than the
+            // bytes left in the input is truncated or hostile. Bound it before the parse loop so a few
+            // count bytes (e.g. a long-form 7F FF FF FF) cannot drive ~2^31 parse iterations and object
+            // allocations before the per-element reads run out of input.
+            if (j < 0 || j > available())
+            {
+                throw new IOException("SEQUENCE OF length " + j + " out of range");
+            }
 
             debugPrint(element + ("(len = " + j + ")"));
 
@@ -235,8 +266,22 @@ public class OERInputStream
                     throw new IOException("did not fully read presence list.");
                 }
 
+                // the first octet is the count of unused bits in the last one, so it must be there and
+                // must be 0..7: absent, it indexed an empty array; sign-extended from 0x80..0xFF it
+                // made stop overshoot and the bitmap reads below run off the end
+                if (rawPresenceList.length < 1)
+                {
+                    throw new IOException("presence list is empty");
+                }
+
+                int unusedBits = rawPresenceList[0] & 0xFF;
+                if (unusedBits > 7)
+                {
+                    throw new IOException("presence list declares " + unusedBits + " unused bits");
+                }
+
                 int presenceIndex = 8;
-                int stop = rawPresenceList.length * 8 - rawPresenceList[0];
+                int stop = rawPresenceList.length * 8 - unusedBits;
 
 
                 for (; t < children.size() || presenceIndex < stop; t++)
@@ -249,14 +294,7 @@ public class OERInputStream
                         // have a definition for need to be consumed and discarded.
                         if ((rawPresenceList[presenceIndex / 8] & bitsR[presenceIndex % 8]) != 0)
                         {
-                            // skip.
-                            int len = readLength().intLength();
-                            while (--len >= 0)
-                            {
-                                in.read();
-                            }
-
-
+                            skipUnknownExtension(readLength().intLength());
                         }
                     }
                     else
@@ -291,6 +329,14 @@ public class OERInputStream
             debugPrint(choice.toString() + " " + choice.tag);
             if (choice.isContextSpecific())
             {
+                // the tag comes from the wire and indexes the schema's alternatives; X.696 sec. 8.7
+                // makes an unknown alternative a decode error, not an IndexOutOfBoundsException
+                if (choice.getTag() >= element.getChildren().size())
+                {
+                    throw new IOException("CHOICE tag " + choice.getTag() + " is not one of the "
+                        + element.getChildren().size() + " alternatives");
+                }
+
                 Element choiceDef = Element.expandDeferredDefinition(element.getChildren().get(choice.getTag()), element);
 
                 if (choiceDef.getBlock() > 0)
@@ -304,27 +350,26 @@ public class OERInputStream
                     return new DERTaggedObject(choice.tag, parse(choiceDef));
                 }
             }
-            else if (choice.isApplicationTagClass())
-            {
-                throw new IllegalStateException("Unimplemented tag type");
-            }
-            else if (choice.isPrivateTagClass())
-            {
-                throw new IllegalStateException("Unimplemented tag type");
-            }
-            else if (choice.isUniversalTagClass())
-            {
-                throw new IllegalStateException("Unimplemented tag type");
-            }
             else
             {
-                throw new IllegalStateException("Unimplemented tag type");
+                // the tag class is two bits off the wire, so an unimplemented one is malformed input
+                // rather than an inconsistent decoder state
+                throw new IOException("Unimplemented tag type");
             }
         }
         case ENUM:
         {
             BigInteger bi = enumeration();
-            debugPrint(element + ("ENUM(" + bi + ") = " + element.getChildren().get(bi.intValue()).getLabel()));
+            if (debugOutput != null)
+            {
+                // the label lookup treats the wire value as a child index, so it can be out of range;
+                // the other five debugPrint sites are already guarded, this one was building its
+                // argument - and throwing IndexOutOfBoundsException - on the production path
+                String label = bi.bitLength() < 32 && bi.intValue() < element.getChildren().size()
+                    ? element.getChildren().get(bi.intValue()).getLabel()
+                    : "<no such enumerand>";
+                debugPrint(element + ("ENUM(" + bi + ") = " + label));
+            }
             return new ASN1Enumerated(bi);
         }
         case INT:
@@ -341,7 +386,10 @@ public class OERInputStream
             if (bytesToRead != 0) // Fixed width
             {
                 data = allocateArray(Math.abs(bytesToRead));
-                Streams.readFully(this, data);
+                if (Streams.readFully(this, data) != data.length)
+                {
+                    throw new EOFException("could not read all of fixed-width integer");
+                }
 
                 if (bytesToRead < 0)
                 {
@@ -516,7 +564,11 @@ public class OERInputStream
         case EXTENSION:
 
             LengthInfo li = readLength();
-            byte[] value = new byte[li.intLength()];
+            // Route through allocateArray so the attacker-controlled open-type length is bounded by
+            // maxByteAllocation, like every other length-driven allocation in this decoder; a raw
+            // new byte[li.intLength()] here let a long-form length (e.g. 84 7F FF FF FF) drive an
+            // immediate OutOfMemoryError.
+            byte[] value = allocateArray(li.intLength());
             if (Streams.readFully(this, value) != li.intLength())
             {
                 throw new IOException("could not read all of count of open value in choice (...) ");
@@ -526,11 +578,14 @@ public class OERInputStream
             debugPrint("ext " + li.intLength() + " " + Hex.toHexString(value));
             return new DEROctetString(value);
         case BOOLEAN:
-            if (read() == 0)
+        {
+            int b = read();
+            if (b < 0)
             {
-                return ASN1Boolean.FALSE;
+                throw new EOFException("expecting boolean value");
             }
-            return ASN1Boolean.TRUE;
+            return b == 0 ? ASN1Boolean.FALSE : ASN1Boolean.TRUE;
+        }
         }
 
 
@@ -541,6 +596,41 @@ public class OERInputStream
     {
         debugPrint(child + ("Absent"));
         return OEROptional.ABSENT;
+    }
+
+    /**
+     * Discard the body of an extension this decoder has no definition for.
+     * <p>
+     * The length is taken from the encoding and bounded only by 2^31-1. Consuming it one
+     * {@code in.read()} at a time discarded the -1 that signals end of stream, so a declared
+     * length with nothing behind it spun for as long as the length said - and with a single
+     * presence bit set the parse then <em>returned normally</em>, so nothing recorded that it had
+     * happened. Each known extension is parsed from its own bounded stream, so the slots are
+     * independently exhaustible and the cost scales with the number of them.
+     * <p>
+     * Consume in bounded chunks and fail at the real end of input instead. The length itself is
+     * not capped at {@code maxByteAllocation}: nothing is allocated from it, and an unknown
+     * extension may legitimately be larger than the decoder's allocation ceiling - it just has to
+     * actually be present in the stream.
+     */
+    private void skipUnknownExtension(int len)
+        throws IOException
+    {
+        if (len < 0)
+        {
+            throw new IOException("unknown extension length is negative: " + len);
+        }
+
+        byte[] buf = new byte[Math.min(len, 4096)];
+        while (len > 0)
+        {
+            int read = in.read(buf, 0, Math.min(len, buf.length));
+            if (read < 0)
+            {
+                throw new EOFException("unknown extension truncated, " + len + " bytes not delivered");
+            }
+            len -= read;
+        }
     }
 
     private byte[] allocateArray(int requiredSize)
@@ -702,6 +792,10 @@ public class OERInputStream
         {
             ByteArrayInputStream bin = new ByteArrayInputStream(openTypeRaw);
             oerIn = new OERInputStream(bin);
+            // Carry the nesting budget across the open-type boundary so the Ieee1609Dot2Data/SignedData
+            // cycle (which recurses through parseOpenType) cannot reset the depth guard each level.
+            oerIn.maxNestingDepth = maxNestingDepth;
+            oerIn.decodeDepth = decodeDepth;
             return oerIn.parse(e);
         }
         finally
@@ -792,6 +886,12 @@ public class OERInputStream
                     if (part < 0)
                     {
                         throw new EOFException("expecting further tag bytes");
+                    }
+                    // the continuation is only terminated by a clear bit 7, so without this the shift
+                    // silently overflows and yields a negative tag
+                    if (tag > (Integer.MAX_VALUE >> 7))
+                    {
+                        throw new IOException("CHOICE tag out of range");
                     }
                     tag <<= 7;
                     tag |= part & 0x7f;
@@ -995,8 +1095,17 @@ public class OERInputStream
         }
 
         private int intLength()
+            throws IOException
         {
-            return BigIntegers.intValueExact(length);
+            // the determinant is read as an unsigned big-endian value of up to 127 octets, so it can
+            // exceed an int; intValueExact would leave an ArithmeticException to escape a decode API
+            // that declares only IOException
+            if (length.bitLength() > 31)
+            {
+                throw new IOException("length determinant out of range: " + length.bitLength() + " bits");
+            }
+
+            return length.intValue();
         }
     }
 
