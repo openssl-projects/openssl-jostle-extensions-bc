@@ -12,7 +12,7 @@ The JSL provider itself lives in a **separate repo**, `../openssl-jostle` (`org.
 
 ```bash
 ./gradlew assemble          # build all *-jsl jars (release 8, default JDK 17)
-./gradlew test              # run tests (pkix/tls/pg/mail have migrated tests; core/util have none)
+./gradlew test              # run tests (412 currently; pkix 252, util 69, tls 58, pg 32, mail 1; core has none)
 ./gradlew :pkix:test --tests "org.bouncycastle.jsl.test.*" --rerun-tasks
 ```
 
@@ -24,8 +24,8 @@ JDK toolchains come from `BC_JDK8/11/17/21/25` env vars (`gradle.properties`). T
 
 - **This repo is now a git checkout** (`.git` present, default branch `main`), so deletes/overwrites are tracked and recoverable. Still never `rm -rf` with `..` traversal, and commit/push only when asked.
 - **Minimized core.** `core` was reduced to what the satellites + JSL actually reach. Absent: `org.bouncycastle.jce.provider.*` (so **no `BouncyCastleProvider`**), `pqc.*`, most `crypto.engines`/`digests` (no DSA/DH/GOST/3DES/RC2/CAST5/SEED/IDEA software impls), the `BcXXX` (`*.bc.*`) operator/cert builders. JSL supplies AES(+GCM/KW)/RSA/EC/Ed/ML-DSA/SLH-DSA/ML-KEM/SHA/HMAC etc. How core is sized + the closure-prune recipe: memory `jostle-libs-core-closure`, `jostle-libs-core-recipe`.
-- **Editing the JSL provider means editing `../openssl-jostle`** and rebuilding its jar. A full `:jostle:jar` there **requires JDK 25** (the multi-release `java25` FFI source set); only JDK ≤21 is installed here, so the full build fails. Workaround: recompile just the changed class(es) with JDK 17 (`--release 9`) against the existing jar and **hot-patch** them into `libs/openssl-jostle-0.1-SNAPSHOT.jar` at BOTH the base path and `META-INF/versions/9/...` (the running JVM 17 loads the versioned entry). Such hot-patches are stopgaps — the durable artifact needs a real JDK-25 rebuild.
-- **`jostleVersion` (gradle.properties) must match the libs jar filename.** The provider is consumed as `libs/openssl-jostle-${jostleVersion}.jar`; the actual artifact (and the openssl-jostle repo) is `0.1-SNAPSHOT`, so `jostleVersion=0.1-SNAPSHOT` even though the libraries' own `version` is `1.85.0-SNAPSHOT`. A mismatch makes `jostleProviderJar()` resolve to a missing file → the provider drops off the classpath and test compiles fail with "package org.openssl.jostle... does not exist" (often hidden until a `clean` forces real recompilation).
+- **Editing the JSL provider means editing `../openssl-jostle`** and rebuilding its jar. A full `:jostle:jar` there **requires JDK 25** (the multi-release `java25` FFI source set); `BC_JDK25` is now installed, so a real rebuild is possible and is the right way to ship a provider change. (Historically only JDK ≤21 was present and changed classes had to be hot-patched into the jar at both the base path and `META-INF/versions/9/...`; the current `0.1-SNAPSHOT` jar is a genuine JDK-25 build, not a hot-patch.)
+- **`jostleVersion` (gradle.properties) must match the libs jar filename.** The provider is consumed as `libs/openssl-jostle-${jostleVersion}.jar`; the actual artifact (and the openssl-jostle repo) is `0.1-SNAPSHOT`, so `jostleVersion=0.1-SNAPSHOT` even though the libraries' own `version` is `1.86.0-SNAPSHOT`. A mismatch makes `jostleProviderJar()` resolve to a missing file → the provider drops off the classpath and test compiles fail with "package org.openssl.jostle... does not exist" (often hidden until a `clean` forces real recompilation).
 
 ## Conventions
 

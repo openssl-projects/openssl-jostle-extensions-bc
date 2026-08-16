@@ -11,3 +11,5 @@
 - [Jostle TLS key-exchange coverage](jostle-tls-xdh-coverage.md) — TLS tests for X25519/X448, NIST ECDHE, ML-KEM + all 3 ML-KEM hybrids (PSK psk_dhe_ke); in-repo fixes: JcaTlsHash clone, KemUtil→JSL KEM API, EC curve-name/named-curve shim; open gaps: server-cert auth (NoneWithRSA, Ed25519 key-type)
 - [Jostle pg Argon2 provider gap](jostle-pg-argon2-provider-gap.md) — Argon2 S2K now goes through SecretKeyFactory ARGON2; JSL lacks it, so v6 Argon2 keys/messages fail until OpenSSL argon2id is exposed
 - [No Co-Authored-By trailer](no-co-authored-by-trailer.md) — never append AI-attribution trailers to commit messages or PR bodies
+- [bc-java resync method](bc-java-resync-blob-history-method.md) — classify files by whether their bytes exist in upstream history; only hand-merge the rest, and never bulk-resolve with merge-file --ours
+- [Jostle EAX mode gap](jostle-provider-eax-mode-gap.md) — JSL has no EAX cipher mode; OpenPGP v6 AEAD/EAX unusable (OCB and GCM fine)
