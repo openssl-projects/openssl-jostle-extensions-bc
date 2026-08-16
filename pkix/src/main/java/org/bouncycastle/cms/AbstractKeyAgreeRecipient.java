@@ -19,9 +19,4 @@ public abstract class AbstractKeyAgreeRecipient
     {
         return CMSUtils.isRFC2631(algorithmOID);
     }
-
-    protected boolean isGOST(ASN1ObjectIdentifier algorithmOID)
-    {
-        return CMSUtils.isGOST(algorithmOID);
-    }
 }

@@ -36,14 +36,12 @@ import org.bouncycastle.asn1.cms.ContentInfo;
 import org.bouncycastle.asn1.cms.EncryptedContentInfo;
 import org.bouncycastle.asn1.cms.OriginatorInfo;
 import org.bouncycastle.asn1.cms.OtherRevocationInfoFormat;
-import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.ocsp.OCSPResponse;
 import org.bouncycastle.asn1.ocsp.OCSPResponseStatus;
 import org.bouncycastle.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.asn1.rosstandart.RosstandartObjectIdentifiers;
 import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.asn1.cms.CCMParameters;
 import org.bouncycastle.asn1.cms.GCMParameters;
@@ -67,7 +65,6 @@ class CMSUtils
     private static final Set desAlgs = new HashSet();
     private static final Set mqvAlgs = new HashSet();
     private static final Set ecAlgs = new HashSet();
-    private static final Set gostAlgs = new HashSet();
 
     static
     {
@@ -109,12 +106,6 @@ class CMSUtils
         ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA512);
         ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_RIPEMD160);
 
-        gostAlgs.add(CryptoProObjectIdentifiers.gostR3410_2001_CryptoPro_ESDH);
-        gostAlgs.add(CryptoProObjectIdentifiers.gostR3410_2001);
-        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_agreement_gost_3410_12_256);
-        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_agreement_gost_3410_12_512);
-        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_gost_3410_12_256);
-        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_gost_3410_12_512);
     }
 
     static boolean isMQV(ASN1ObjectIdentifier algorithm)
@@ -125,11 +116,6 @@ class CMSUtils
     static boolean isEC(ASN1ObjectIdentifier algorithm)
     {
         return ecAlgs.contains(algorithm);
-    }
-
-    static boolean isGOST(ASN1ObjectIdentifier algorithm)
-    {
-        return gostAlgs.contains(algorithm);
     }
 
     static boolean isRFC2631(ASN1ObjectIdentifier algorithm)

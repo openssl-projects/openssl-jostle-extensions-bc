@@ -16,7 +16,6 @@ import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.cryptopro.GOST28147Parameters;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.asn1.misc.ScryptParams;
 import org.bouncycastle.asn1.pkcs.PBEParameter;
@@ -29,7 +28,6 @@ import org.bouncycastle.crypto.PasswordConverter;
 import org.bouncycastle.jcajce.PBKDF1Key;
 import org.bouncycastle.jcajce.PKCS12KeyWithParameters;
 import org.bouncycastle.jcajce.io.CipherInputStream;
-import org.bouncycastle.jcajce.spec.GOST28147ParameterSpec;
 import org.bouncycastle.jcajce.spec.PBKDF2KeySpec;
 import org.bouncycastle.jcajce.spec.ScryptKeySpec;
 import org.bouncycastle.jcajce.util.DefaultJcaJceHelper;
@@ -167,10 +165,7 @@ public class JcePKCSPBEInputDecryptorProviderBuilder
                         }
                         else
                         {
-                            // TODO: at the moment it's just GOST, but...
-                            GOST28147Parameters gParams = GOST28147Parameters.getInstance(encParams);
-
-                            cipher.init(Cipher.DECRYPT_MODE, key, new GOST28147ParameterSpec(gParams.getEncryptionParamSet(), gParams.getIV()));
+                            throw new OperatorCreationException("unrecognised encryption parameters for " + alg.getEncryptionScheme().getAlgorithm());
                         }
                     }
                     else if (algorithm.equals(PKCSObjectIdentifiers.pbeWithMD5AndDES_CBC)

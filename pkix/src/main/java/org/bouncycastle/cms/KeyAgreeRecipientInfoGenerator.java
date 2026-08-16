@@ -10,8 +10,6 @@ import org.bouncycastle.asn1.cms.KeyAgreeRecipientInfo;
 import org.bouncycastle.asn1.cms.OriginatorIdentifierOrKey;
 import org.bouncycastle.asn1.cms.OriginatorPublicKey;
 import org.bouncycastle.asn1.cms.RecipientInfo;
-import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
-import org.bouncycastle.asn1.cryptopro.Gost2814789KeyWrapParameters;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -42,10 +40,6 @@ public abstract class KeyAgreeRecipientInfoGenerator
         {
             keyEncAlgParams = DERNull.INSTANCE;
         }
-        else if (CMSUtils.isGOST(keyAgreementOID))
-        {
-            keyEncAlgParams = new Gost2814789KeyWrapParameters(CryptoProObjectIdentifiers.id_Gost28147_89_CryptoPro_A_ParamSet);
-        }
 
         AlgorithmIdentifier keyEncAlgorithm = new AlgorithmIdentifier(keyEncryptionOID, keyEncAlgParams);
         AlgorithmIdentifier keyAgreeAlgorithm = new AlgorithmIdentifier(keyAgreementOID, keyEncAlgorithm);
@@ -75,11 +69,6 @@ public abstract class KeyAgreeRecipientInfoGenerator
     protected boolean isRFC2631(ASN1ObjectIdentifier algorithmOID)
     {
         return CMSUtils.isRFC2631(algorithmOID);
-    }
-
-    protected boolean isGOST(ASN1ObjectIdentifier algorithmOID)
-    {
-        return CMSUtils.isGOST(algorithmOID);
     }
 
     protected abstract ASN1Sequence generateRecipientEncryptedKeys(AlgorithmIdentifier keyAgreeAlgorithm,

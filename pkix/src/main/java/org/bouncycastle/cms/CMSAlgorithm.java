@@ -44,7 +44,6 @@ public class CMSAlgorithm
     public static final ASN1ObjectIdentifier  CAMELLIA128_CBC = NTTObjectIdentifiers.id_camellia128_cbc.intern();
     public static final ASN1ObjectIdentifier  CAMELLIA192_CBC = NTTObjectIdentifiers.id_camellia192_cbc.intern();
     public static final ASN1ObjectIdentifier  CAMELLIA256_CBC = NTTObjectIdentifiers.id_camellia256_cbc.intern();
-    public static final ASN1ObjectIdentifier  GOST28147_GCFB  = CryptoProObjectIdentifiers.gostR28147_gcfb.intern();
     public static final ASN1ObjectIdentifier  SEED_CBC        = KISAObjectIdentifiers.id_seedCBC.intern();
     public static final ASN1ObjectIdentifier  SM4_CBC         = GMObjectIdentifiers.sms4_cbc.intern();
 
@@ -60,8 +59,6 @@ public class CMSAlgorithm
     public static final ASN1ObjectIdentifier  CAMELLIA256_WRAP = NTTObjectIdentifiers.id_camellia256_wrap.intern();
     public static final ASN1ObjectIdentifier  SEED_WRAP       = KISAObjectIdentifiers.id_npki_app_cmsSeed_wrap.intern();
 
-    public static final ASN1ObjectIdentifier  GOST28147_WRAP  = CryptoProObjectIdentifiers.id_Gost28147_89_None_KeyWrap.intern();
-    public static final ASN1ObjectIdentifier  GOST28147_CRYPTOPRO_WRAP  = CryptoProObjectIdentifiers.id_Gost28147_89_CryptoPro_KeyWrap.intern();
 
     public static final ASN1ObjectIdentifier  ECDH_SHA1KDF    = X9ObjectIdentifiers.dhSinglePass_stdDH_sha1kdf_scheme.intern();
     public static final ASN1ObjectIdentifier  ECCDH_SHA1KDF    = X9ObjectIdentifiers.dhSinglePass_cofactorDH_sha1kdf_scheme.intern();

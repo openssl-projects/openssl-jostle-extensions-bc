@@ -16,11 +16,9 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.cms.CCMParameters;
 import org.bouncycastle.asn1.cms.GCMParameters;
-import org.bouncycastle.asn1.cryptopro.GOST28147Parameters;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jcajce.io.CipherInputStream;
-import org.bouncycastle.jcajce.spec.GOST28147ParameterSpec;
 import org.bouncycastle.jcajce.util.DefaultJcaJceHelper;
 import org.bouncycastle.jcajce.util.JcaJceHelper;
 import org.bouncycastle.jcajce.util.NamedJcaJceHelper;
@@ -120,10 +118,7 @@ public class JceInputDecryptorProviderBuilder
                     }
                     else
                     {
-                        // Last resort: GOST 28147 parameters.
-                        GOST28147Parameters gParams = GOST28147Parameters.getInstance(encParams);
-
-                        cipher.init(Cipher.DECRYPT_MODE, key, new GOST28147ParameterSpec(gParams.getEncryptionParamSet(), gParams.getIV()));
+                        throw new OperatorCreationException("unrecognised encryption parameters for " + algorithm);
                     }
                 }
                 catch (Exception e)

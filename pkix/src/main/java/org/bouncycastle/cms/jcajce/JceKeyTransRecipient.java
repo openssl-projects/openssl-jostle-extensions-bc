@@ -1,34 +1,21 @@
 package org.bouncycastle.cms.jcajce;
 
 import java.security.Key;
-import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.Provider;
-import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyAgreement;
-import javax.crypto.SecretKey;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.KEMRecipientInfo;
-import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
-import org.bouncycastle.asn1.cryptopro.Gost2814789EncryptedKey;
-import org.bouncycastle.asn1.cryptopro.GostR3410KeyTransport;
-import org.bouncycastle.asn1.cryptopro.GostR3410TransportParameters;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.cms.AbstractKeyTransRecipient;
 import org.bouncycastle.cms.CMSException;
-import org.bouncycastle.jcajce.spec.GOST28147WrapParameterSpec;
-import org.bouncycastle.jcajce.spec.UserKeyingMaterialSpec;
 import org.bouncycastle.operator.OperatorException;
 import org.bouncycastle.operator.jcajce.JceAsymmetricKeyUnwrapper;
-import org.bouncycastle.util.Arrays;
 
 public abstract class JceKeyTransRecipient
     extends AbstractKeyTransRecipient
@@ -158,40 +145,7 @@ public abstract class JceKeyTransRecipient
     protected Key extractSecretKey(AlgorithmIdentifier keyEncryptionAlgorithm, AlgorithmIdentifier encryptedKeyAlgorithm, byte[] encryptedEncryptionKey)
         throws CMSException
     {
-        if (isGOST(keyEncryptionAlgorithm.getAlgorithm()))
-        {
-            try
-            {
-                GostR3410KeyTransport transport = GostR3410KeyTransport.getInstance(encryptedEncryptionKey);
-
-                GostR3410TransportParameters transParams = transport.getTransportParameters();
-
-                KeyFactory keyFactory = helper.createKeyFactory(keyEncryptionAlgorithm.getAlgorithm());
-
-                PublicKey pubKey = keyFactory.generatePublic(new X509EncodedKeySpec(transParams.getEphemeralPublicKey().getEncoded()));
-
-                KeyAgreement agreement = helper.createKeyAgreement(keyEncryptionAlgorithm.getAlgorithm());
-
-                agreement.init(recipientKey, new UserKeyingMaterialSpec(transParams.getUkm()));
-
-                agreement.doPhase(pubKey, true);
-
-                SecretKey key = agreement.generateSecret(CryptoProObjectIdentifiers.id_Gost28147_89_CryptoPro_KeyWrap.getId());
-
-                Cipher keyCipher = helper.createCipher(CryptoProObjectIdentifiers.id_Gost28147_89_CryptoPro_KeyWrap);
-
-                keyCipher.init(Cipher.UNWRAP_MODE, key, new GOST28147WrapParameterSpec(transParams.getEncryptionParamSet(), transParams.getUkm()));
-
-                Gost2814789EncryptedKey encKey = transport.getSessionEncryptedKey();
-
-                return keyCipher.unwrap(Arrays.concatenate(encKey.getEncryptedKey(), encKey.getMacKey()), helper.getBaseCipherName(encryptedKeyAlgorithm.getAlgorithm()), Cipher.SECRET_KEY);
-            }
-            catch (Exception e)
-            {
-                throw new CMSException("exception unwrapping key: " + e.getMessage(), e);
-            }
-        }
-        else if (CMSObjectIdentifiers.id_ori_kem.equals(keyEncryptionAlgorithm.getAlgorithm()))
+        if (CMSObjectIdentifiers.id_ori_kem.equals(keyEncryptionAlgorithm.getAlgorithm()))
         {
             // TODO: note there is a move to change the type for KEMs from KeyTrans, expect this to change
             KEMRecipientInfo gktParams = KEMRecipientInfo.getInstance(keyEncryptionAlgorithm.getParameters());
