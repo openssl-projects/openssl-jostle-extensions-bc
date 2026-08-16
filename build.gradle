@@ -31,7 +31,7 @@ ext.bundle_version = deriveOSGIVersion(version.toString())
 // exports packages physically present in that jar, so these can be broad.
 ext.osgiExports = [
     core: 'org.bouncycastle.*',
-    util: 'org.bouncycastle.asn1.{bsi|cmc|cmp|cms|crmf|cryptlib|dvcs|eac|edec|esf|ess|est|gnu|iana|icao|isara|isismtt|iso|kisa|microsoft|misc|mozilla|nsri|ntt|oiw|rosstandart|smime|tsp}.*,org.bouncycastle.oer.*',
+    util: 'org.bouncycastle.asn1.{bsi|cmc|cmp|cms|crmf|cryptlib|dvcs|eac|edec|esf|ess|est|gnu|icao|isara|isismtt|iso|kisa|microsoft|misc|mozilla|nsri|ntt|oiw|rosstandart|smime|tsp}.*,org.bouncycastle.cbor.*,org.bouncycastle.oer.*',
     pkix: 'org.bouncycastle.{cert|cmc|cms|dvcs|eac|est|its|mime|mozilla|voms|operator|pkix|openssl|pkcs|tsp}.*',
     pg  : 'org.bouncycastle.{apache|bcpg|gpg|openpgp}.*',
     tls : 'org.bouncycastle.{jsse|tls}.*',

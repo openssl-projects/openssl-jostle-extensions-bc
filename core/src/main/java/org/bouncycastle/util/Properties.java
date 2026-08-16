@@ -56,6 +56,50 @@ public class Properties
     public static final String X509_ENABLE_CRLDP = "org.bouncycastle.x509.enableCRLDP";
 
     /**
+     * Optional comma separated list of the protocols a CRL Distribution Point may name, applied
+     * by the internal CrlCache used by the CertPath validator and X509RevocationChecker before
+     * any connection is opened. Protocol names are matched without regard to case, so
+     * "http,https,ldap" refuses a distribution point naming ftp, file, jar or anything else the
+     * JVM happens to have a URL handler for. Default (unset or empty) leaves the protocol
+     * unrestricted: RFC 5280 sec. 4.2.1.13 requires a distribution point URI to name a protocol
+     * but does not limit which, and BC supports http, https, ftp and ldap here, so this is an
+     * operator policy for deployments that want a narrower set rather than a default.
+     * <p/>
+     * Note the CRL fetch this governs only happens at all when {@link #X509_ENABLE_CRLDP} is set.
+     */
+    public static final String X509_CRLDP_PROTOCOLS = "org.bouncycastle.x509.CRLDP_protocols";
+
+    /**
+     * The largest OCSP response, in bytes, the CertPath validator will read from a responder.
+     * A responder's Content-Length can narrow this but never widen it, so a responder declaring
+     * (and sending) hundreds of megabytes is cut off rather than read into the heap. Default is
+     * 64K, which is far above any real response; a value of zero or less is ignored and the
+     * default used, so a mistyped value cannot turn the limit off. Exceeding the limit fails the
+     * OCSP check the same way an unreachable responder does, so a caller with CRLs configured
+     * falls back to those.
+     */
+    public static final String OCSP_MAX_RESPONSE_SIZE = "org.bouncycastle.ocsp.max_response_size";
+
+    /**
+     * The longest OpenPGP ASCII armor header line, in bytes, ArmoredInputStream will accumulate.
+     * The headers are parsed when the stream is constructed, so this bounds what merely wrapping
+     * an untrusted stream can allocate: a "header line" that never reaches a line terminator is
+     * refused rather than read until the heap is gone. Default is 4096, far above the short
+     * Version / Comment lines RFC 9580 sec. 6.2 describes; a value of zero or less is ignored and
+     * the default used.
+     */
+    public static final String OPENPGP_MAX_ARMOR_HEADER_LENGTH = "org.bouncycastle.openpgp.max_armor_header_length";
+
+    /**
+     * The largest number of OpenPGP ASCII armor header lines ArmoredInputStream will accept before
+     * the blank line that ends the header block. Bounds the companion case to
+     * {@link #OPENPGP_MAX_ARMOR_HEADER_LENGTH}, where each line is short but they never stop
+     * arriving. Default is 64, counting the armor header line itself; a value of zero or less is
+     * ignored and the default used.
+     */
+    public static final String OPENPGP_MAX_ARMOR_HEADERS = "org.bouncycastle.openpgp.max_armor_headers";
+
+    /**
      * If set to "true", the BC PKCS#12 KeyStore will additionally accept (on load only)
      * SafeBags of type secretBag that use SunJCE's non-standard nested encoding —
      * a SecretBag whose secretTypeId is pkcs8ShroudedKeyBag and whose secretValue is
@@ -146,6 +190,220 @@ public class Properties
      * only matters for primitives whose contents arrived non-conformant from the wire.
      */
     public static final String ASN1_ALLOW_NON_DER_TIME = "org.bouncycastle.asn1.allow_non_der_time";
+
+    /**
+     * Maximum depth of nested constructed ASN.1 objects the parser will descend before failing
+     * with "maximum nested construction level reached", guarding against stack exhaustion from
+     * deeply nested crafted input. Read as an integer; default 64.
+     */
+    public static final String ASN1_MAX_CONS_DEPTH = "org.bouncycastle.asn1.max_cons_depth";
+
+    /**
+     * Overrides the maximum length accepted for a single definite-length ASN.1 object read from a
+     * stream whose length is not otherwise known. The value is a byte count and may carry a trailing
+     * 'k', 'm' or 'g' multiplier (e.g. "16m"); when unset the limit falls back to the available heap
+     * size. Can also be set per stream via the ASN1InputStream(InputStream, int) constructor.
+     */
+    public static final String ASN1_MAX_LIMIT = "org.bouncycastle.asn1.max_limit";
+
+    /**
+     * Upper bound (in bits) on the prime modulus p accepted when validating an imported
+     * Diffie-Hellman public key. Validation performs a modular exponentiation / Legendre
+     * computation whose cost is super-linear in the size of p, so an unbounded p taken from a
+     * crafted key encoding would turn key import into a CPU-exhaustion denial of service. The
+     * default (16384) is the analogue of {@code org.bouncycastle.rsa.max_size} and is well above
+     * any standardised DH group. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String DH_MAX_SIZE = "org.bouncycastle.dh.max_size";
+
+    /**
+     * Upper bound (in bits) on the prime modulus p accepted when validating an imported DSA
+     * public key. As with {@link #DH_MAX_SIZE}, validation runs a modular exponentiation whose
+     * cost grows super-linearly in the size of p, so an unbounded p from a crafted encoding is an
+     * import-time CPU-exhaustion vector. Default 16384. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String DSA_MAX_SIZE = "org.bouncycastle.dsa.max_size";
+
+    /**
+     * Upper bound on the PBKDF2 iteration count honoured when deriving the integrity-MAC key of a
+     * BCFKS keystore during load. The KDF runs on parameters taken from the (not-yet-verified)
+     * keystore, so an unbounded iteration count is a pre-integrity CPU-exhaustion vector. Default
+     * 5,000,000 (the BCFKS writer uses ~51,200). Read via {@link #asInteger(String, int)}.
+     */
+    public static final String BCFKS_MAX_IT_COUNT = "org.bouncycastle.bcfks.max_it_count";
+
+    /**
+     * Upper bound, in bytes, on the working memory (~128 * N * r) of the scrypt KDF honoured when
+     * deriving the integrity-MAC key of a BCFKS keystore during load. As with
+     * {@link #BCFKS_MAX_IT_COUNT} the scrypt cost parameters are taken from the not-yet-verified
+     * keystore, so an unbounded cost is a pre-integrity memory-exhaustion vector. Default
+     * 1073741824 (1 GiB); the BCFKS writer uses N=16384, r=8 (~16 MiB). Read via
+     * {@link #asInteger(String, int)}.
+     */
+    public static final String BCFKS_MAX_SCRYPT_MEMORY = "org.bouncycastle.bcfks.max_scrypt_memory";
+
+    /**
+     * Upper bound on the PBKDF2 iteration count honoured when BC takes that count from an
+     * untrusted encoding: decrypting a PBES2-protected PKCS#8 / PEM private key or PKCS#12
+     * bag, verifying an RFC 9579 PBMAC1, unwrapping a CMS password recipient, and the raw JCA
+     * PBKDF2 provider (both the {@code SecretKeyFactory} derivation and the
+     * {@code AlgorithmParameters} parse a {@code Cipher} performs for PBES2). In each case the
+     * key-derivation parameters travel inside an unauthenticated container, so an unbounded
+     * count makes processing attacker-supplied material a CPU-exhaustion vector. Default
+     * 10,000,000 - the count RFC 8018 sec. 4.2 names as possibly appropriate for especially
+     * critical keys, so generous enough for deliberately strong settings. Read via
+     * {@link #asInteger(String, int)}.
+     */
+    public static final String PBE_MAX_ITERATION_COUNT = "org.bouncycastle.pbe.max_iteration_count";
+
+    /**
+     * Upper bound, in bytes, on the scrypt working memory (~128 * N * r) honoured when decrypting
+     * a PBES2-protected PKCS#8 / PEM private key. As with {@link #PBE_MAX_ITERATION_COUNT} the
+     * scrypt cost travels in the unauthenticated container, so an unbounded cost is a
+     * memory-exhaustion vector. Default 1073741824 (1 GiB). Read via {@link #asInteger(String, int)}.
+     */
+    public static final String PBE_MAX_SCRYPT_MEMORY = "org.bouncycastle.pbe.max_scrypt_memory";
+
+    /**
+     * Upper bound on the RFC 4211 PKMAC / CMP password-based-MAC iteration count honoured when no
+     * explicit ceiling was supplied to {@link org.bouncycastle.cert.crmf.PKMACBuilder}. The count
+     * travels in the (unauthenticated) PBMParameter of an incoming CMP message and drives an
+     * iterated hash, so an unbounded count makes verifying an attacker-supplied message a
+     * CPU-exhaustion vector. Default 10,000,000, generous enough for any legitimate setting. Read
+     * via {@link #asInteger(String, int)}.
+     */
+    public static final String PKMAC_MAX_ITERATION_COUNT = "org.bouncycastle.pkmac.max_iteration_count";
+
+    /**
+     * Upper bound on the total number of valid-policy-tree nodes retained (across all depth
+     * levels) during PKIX certification-path validation. Certificate policy mapping combined with
+     * the anyPolicy expansion of RFC 5280 6.1.3/6.1.4 can grow the tree multiplicatively per
+     * certificate, so a crafted chain that still chains to a trust anchor could drive the validator
+     * into exponential memory/CPU consumption -- a denial of service of the class of CVE-2023-0464.
+     * The tree size is checked once per certificate and validation is aborted with a
+     * CertPathValidatorException once it exceeds this bound. The default (8192) is far above any
+     * legitimate policy tree (a real chain produces a handful of nodes) and is configurable for
+     * unusual deployments. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String X509_MAX_POLICY_NODES = "org.bouncycastle.x509.max_policy_nodes";
+
+    /**
+     * Upper bound on the total number of nodes the PKIX certification-path builder visits while
+     * searching for a chain. The builder does a depth-first walk up the PKI graph, bounded per path
+     * by cycle detection and the caller's maxPathLength. Because candidate issuers are matched by
+     * subject name only, a certificate store containing many certificates that share a subject name
+     * without chaining to a trust anchor can make the search explore a large number of partial paths
+     * before it concludes no chain exists. This bound keeps that work predictable: the visited-node
+     * count is checked on entry to each build step and the build is aborted with a
+     * CertPathBuilderException once it exceeds the bound. This is a hardening measure and the
+     * builder-side companion to {@link #X509_MAX_POLICY_NODES}. The default (262144) is far above
+     * any legitimate build (a real build returns on the first path that chains to an anchor) and is
+     * configurable for unusual cross-certified meshes. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String X509_MAX_CERT_PATH_BUILD_NODES = "org.bouncycastle.x509.max_cert_path_build_nodes";
+
+    /**
+     * Opt in to the relaxed directoryName name-constraint matching required by GSMA SGP.22 v2.5
+     * (Remote SIM Provisioning), sections 4.5.2.1.0.2 / 4.5.2.1.0.3. When set, a permitted-subtree
+     * RDN is satisfied by any matching subject RDN regardless of position, additional subject
+     * attributes beyond those named in the subtree are tolerated, and a serialNumber RDN is matched
+     * with a startsWith comparison wherever it appears. This is deliberately looser than the
+     * contiguous-prefix DN matching mandated by RFC 5280 7.1, so it defaults to off and must be
+     * enabled explicitly; BC's default validation remains RFC 5280 strict. See github #2327.
+     * Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String X509_SGP22_NAME_CONSTRAINTS = "org.bouncycastle.x509.sgp22_name_constraints";
+
+    /**
+     * Fall back to the legacy lenient parsing of rfc822Name values in X.509 name-constraint checks. By
+     * default the validator is strict about rfc822Name conformance; today that means a tested rfc822Name
+     * with more than one '@' is rejected as ambiguous when email constraints apply (RFC 5321 sec. 4.1.2
+     * allows '@' inside a quoted local part, so the domain is not simply the text after the first '@',
+     * and a wrong split could evade a constraint). When this property is set, that strictness (and any
+     * future rfc822Name conformance strictness) is disabled and the historical permissive parsing is used
+     * instead. Strict is the default; set this only to restore the old behaviour. This is a safety valve,
+     * not a recommended mode. Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String X509_ALLOW_LENIENT_RFC822_NAME = "org.bouncycastle.x509.allow_lenient_rfc822_name";
+
+    /**
+     * If set to "true", the certificate parser (TBSCertificate and everything built on it, such as
+     * the X.509 CertificateFactory) will accept a certificate whose issuer is an empty distinguished
+     * name. RFC 5280 sec. 4.1.2.4 requires the issuer field to contain a non-empty DN and the parser
+     * rejects an empty one by default, but some non-PKIX certificate profiles - notably the libp2p
+     * TLS profile, which uses a self-signed certificate purely as a peer-identity carrier - place no
+     * requirements on the issuer and such certificates are in circulation. This is a read-side
+     * concession only: certificate generation still requires a non-empty issuer unconditionally, and
+     * X509CertificateReviewer reports the empty issuer whether or not the property is set. Read via
+     * {@link #isOverrideSet(String)}.
+     */
+    public static final String X509_ALLOW_EMPTY_ISSUER_CERT = "org.bouncycastle.x509.allow_empty_issuer_cert";
+
+    /**
+     * Opt in to short AEAD authentication tags for AES-GCM parameters. RFC 5084 constrains the
+     * AES-GCM ICV (tag) length carried in {@code GCMParameters} to 12..16 octets (96..128 bits), and
+     * BC enforces that by default. When this property is set, {@code GCMParameters} additionally
+     * accepts tags down to the NIST SP 800-38D minimum of 4 octets (32 bits; SP 800-38D sec. 5.2.1.2
+     * permits a 32-bit tag for limited applications). Short tags weaken integrity protection, so this
+     * defaults to off and must be enabled explicitly; anything below 4 octets or above 16 octets is
+     * still rejected. Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String GCM_ALLOW_SHORT_TAGS = "org.bouncycastle.gcm.allow_short_tags";
+
+    /**
+     * Opt in to handling legacy version 0/1 BKS keystores. Those stores derive the HMAC integrity
+     * key at only the digest size in bits (a 16-bit key for SHA-1; CVE-2018-5382), which is
+     * brute-forceable offline, so by default the default {@code BKS} keystore type refuses to load
+     * them and only writes the current version 2 format. Set this property to read or create the
+     * weak legacy format (e.g. to migrate an old store); it also gates registration of the separate
+     * {@code BKS-V1} keystore type. Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String BKS_ENABLE_V1 = "org.bouncycastle.bks.enable_v1";
+
+    /**
+     * Upper bound on the PKCS#12-PBE iteration count honoured when loading a BKS keystore. The
+     * count drives the integrity-MAC key derivation in {@code BcKeyStoreSpi.engineLoad} (and the
+     * per-entry sealed-key decryption), and is read from the (not-yet-verified) keystore ahead of
+     * the HMAC integrity check, so an unbounded value is a pre-integrity CPU-exhaustion vector -
+     * the analogue of {@link #BCFKS_MAX_IT_COUNT} / {@link #PKCS12_MAX_IT_COUNT} for the BKS
+     * format (the sibling UBER store already caps its own count). Default 1048576 (1 << 20); the
+     * BKS writer uses ~1024-2047. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String BKS_MAX_IT_COUNT = "org.bouncycastle.bks.max_it_count";
+
+    /**
+     * Upper bound on the bcrypt round count honoured when decrypting an encrypted OpenSSH v1
+     * private key. The count is read from the key's kdfoptions, which arrive unauthenticated, and
+     * drives the KDF before anything about the key has been verified, so an unbounded value is a
+     * pre-integrity CPU-exhaustion vector - the OpenSSH analogue of {@link #BCFKS_MAX_IT_COUNT} /
+     * {@link #PKCS12_MAX_IT_COUNT}. A round costs several milliseconds, so the 2^31-1 the wire
+     * format allows is worth CPU-months from a key file of a few hundred bytes. Reached only when
+     * a passphrase is supplied, i.e. on the key-import path. Default 1048576 (1 << 20); ssh-keygen
+     * defaults to 16 and its -a option is rarely taken far beyond a few hundred. Read via
+     * {@link #asInteger(String, int)}.
+     */
+    public static final String OPENSSH_MAX_ROUNDS = "org.bouncycastle.openssh.max_rounds";
+
+    /**
+     * Upper bound on the field size m accepted when building a characteristic-2 (F2m) elliptic curve.
+     * The field polynomial is evaluated when the curve is constructed, and the cost grows with m, so
+     * an unbounded value taken from a certificate's or key's explicit EC parameters is an import-time
+     * CPU-exhaustion vector (CVE-2024-29857). Default 1142 (twice the 571 of the largest standardised
+     * binary curve, B-571/K-571); a larger m is rejected with an {@code IllegalArgumentException}.
+     * Read via {@link #asInteger(String, int)}.
+     */
+    public static final String EC_MAX_F2M_FIELD_SIZE = "org.bouncycastle.ec.max_f2m_field_size";
+
+    /**
+     * Maximum depth of nested {@code multipart/*} content the S/MIME canonicalisers will descend
+     * before failing, the MIME analogue of {@link #ASN1_MAX_CONS_DEPTH}. Each level of nesting in
+     * the signed half of an inbound {@code multipart/signed} costs a stack frame in
+     * {@code SMIMEUtil.outputBodyPart} plus the frames JavaMail spends resolving the part, so an
+     * unbounded depth turns a few hundred KB of crafted mail into a {@code StackOverflowError}.
+     * RFC 8551 sec. 3.1 requires an agent to receive nested S/MIME but does not require unbounded
+     * depth. Default 64; real mail nests two or three deep. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String MIME_MAX_DEPTH = "org.bouncycastle.mime.max_depth";
 
     private Properties()
     {

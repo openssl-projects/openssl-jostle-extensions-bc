@@ -394,6 +394,14 @@ public abstract class ECCurve
         ECPoint p = null;
         int expectedLength = getFieldElementEncodingLength();
 
+        if (encoded == null || encoded.length < 1)
+        {
+            // An empty (or null) encoding must be reported as a malformed encoding, not leak an
+            // ArrayIndexOutOfBoundsException out of the point decoder to every caller that decodes
+            // an untrusted point (EC key parse, ECDH/ECIES/TLS ephemeral points).
+            throw new IllegalArgumentException("Invalid point encoding: empty");
+        }
+
         byte type = encoded[0];
         switch (type)
         {
@@ -853,7 +861,7 @@ public abstract class ECCurve
 
         private static FiniteField buildField(int m, int k1, int k2, int k3)
         {
-            if (m > Properties.asInteger("org.bouncycastle.ec.max_f2m_field_size", 1142))  // twice 571
+            if (m > Properties.asInteger(Properties.EC_MAX_F2M_FIELD_SIZE, 1142))  // twice 571
             {
                 throw new IllegalArgumentException("field size out of range: " + m);
             }
