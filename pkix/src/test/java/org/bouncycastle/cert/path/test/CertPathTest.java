@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.test.SimpleTest;
 
@@ -141,7 +141,7 @@ public class CertPathTest
         try
         {
             CertificateFactory cFac = CertificateFactory.getInstance("X.509",
-                    JostleProvider.PROVIDER_NAME);
+                    JslTestProvider.name());
             arr = os.toByteArray();
             is = new ByteArrayInputStream(arr);
             cFac.generateCertPath(is);
@@ -151,7 +151,7 @@ public class CertPathTest
             // ignore okay
         }
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
         List certCol = new ArrayList();
 
         certCol.add(cf.generateCertificate(new ByteArrayInputStream(certA)));
@@ -159,7 +159,7 @@ public class CertPathTest
         certCol.add(cf.generateCertificate(new ByteArrayInputStream(certC)));
         certCol.add(cf.generateCertificate(new ByteArrayInputStream(certD)));
 
-        CertPathBuilder pathBuilder = CertPathBuilder.getInstance("PKIX", JostleProvider.PROVIDER_NAME);
+        CertPathBuilder pathBuilder = CertPathBuilder.getInstance("PKIX", JslTestProvider.name());
         X509CertSelector select = new X509CertSelector();
         select.setSubject(((X509Certificate)certCol.get(0)).getSubjectX500Principal().getEncoded());
 
@@ -186,7 +186,7 @@ public class CertPathTest
     public void performTest()
         throws Exception
     {
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
         X509Certificate rootCert = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(rootCertBin));
         X509Certificate interCert = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(interCertBin));
@@ -239,7 +239,7 @@ public class CertPathTest
         //
         list = new ArrayList();
 
-        CertPath certPath = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(list);
+        CertPath certPath = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(list);
         if (certPath.getCertificates().size() != 0)
         {
             fail("list wrong size.");
@@ -259,7 +259,7 @@ public class CertPathTest
     public static void main(
         String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new CertPathTest());
     }

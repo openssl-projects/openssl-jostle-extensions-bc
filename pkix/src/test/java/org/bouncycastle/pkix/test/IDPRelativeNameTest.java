@@ -39,7 +39,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CRLConverter;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
@@ -59,9 +59,9 @@ public class IDPRelativeNameTest
 {
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -117,8 +117,8 @@ public class IDPRelativeNameTest
     private static KeyPair generateRsaKp()
         throws Exception
     {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JostleProvider.PROVIDER_NAME);
-        kpg.initialize(1024);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
+        kpg.initialize(JslTestProvider.isFips() ? 2048 : 1024);
         return kpg.generateKeyPair();
     }
 
@@ -141,8 +141,8 @@ public class IDPRelativeNameTest
         builder.addExtension(Extension.cRLDistributionPoints, false,
             new CRLDistPoint(new DistributionPoint[] { dp }));
 
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(caKp.getPrivate());
-        return new JcaX509CertificateConverter().setProvider(JostleProvider.PROVIDER_NAME).getCertificate(builder.build(signer));
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(caKp.getPrivate());
+        return new JcaX509CertificateConverter().setProvider(JslTestProvider.name()).getCertificate(builder.build(signer));
     }
 
     private static X509CRL makeCrlWithRelativeIdp(X500Name issuerDn, PrivateKey issuerKey, ASN1Set relativeRdn)
@@ -157,8 +157,8 @@ public class IDPRelativeNameTest
         IssuingDistributionPoint idp = new IssuingDistributionPoint(dpName, false, false);
         builder.addExtension(Extension.issuingDistributionPoint, true, idp);
 
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(issuerKey);
-        return new JcaX509CRLConverter().setProvider(JostleProvider.PROVIDER_NAME).getCRL(builder.build(signer));
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(issuerKey);
+        return new JcaX509CRLConverter().setProvider(JslTestProvider.name()).getCRL(builder.build(signer));
     }
 
     private void runValidate(X509Certificate ca, X509Certificate ee, X509CRL crl)
@@ -172,7 +172,7 @@ public class IDPRelativeNameTest
 
         List chain = new ArrayList();
         chain.add(ee);
-        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(chain);
+        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(chain);
 
         Set trust = new HashSet();
         trust.add(new TrustAnchor(ca, null));

@@ -21,7 +21,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
 import org.bouncycastle.jcajce.spec.MLKEMParameterSpec;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.ContentVerifierProvider;
 import org.bouncycastle.operator.OperatorCreationException;
@@ -36,13 +36,17 @@ public class PQCPKCS10Test
 {
     public void setUp()
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
     }
 
     public void testKEMPKCS10()
         throws Exception
     {
-        KeyPairGenerator dilKpGen = KeyPairGenerator.getInstance("ML-DSA", JostleProvider.PROVIDER_NAME);
+        if (!JslTestProvider.supports("KeyPairGenerator.ML-DSA"))
+        {
+            return;
+        }
+        KeyPairGenerator dilKpGen = KeyPairGenerator.getInstance("ML-DSA", JslTestProvider.name());
 
         dilKpGen.initialize(MLDSAParameterSpec.ml_dsa_65);
 
@@ -50,7 +54,7 @@ public class PQCPKCS10Test
 
         X509CertificateHolder sigCert = makeV3Certificate("CN=ML-KEM Client", dilKp);
 
-        KeyPairGenerator kemKpGen = KeyPairGenerator.getInstance("ML-KEM", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kemKpGen = KeyPairGenerator.getInstance("ML-KEM", JslTestProvider.name());
 
         kemKpGen.initialize(MLKEMParameterSpec.ml_kem_768);
 
@@ -63,9 +67,9 @@ public class PQCPKCS10Test
                                         new PrivateKeyPossessionStatement(sigCert.toASN1Structure()));
 
         PKCS10CertificationRequest request = pkcs10Builder.build(
-                            new JcaContentSignerBuilder("ML-DSA").setProvider(JostleProvider.PROVIDER_NAME).build(dilKp.getPrivate()));
+                            new JcaContentSignerBuilder("ML-DSA").setProvider(JslTestProvider.name()).build(dilKp.getPrivate()));
 
-        assertTrue(request.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(sigCert.getSubjectPublicKeyInfo())));
+        assertTrue(request.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(sigCert.getSubjectPublicKeyInfo())));
     }
 
     private static X509CertificateHolder makeV3Certificate(String _subDN, KeyPair issKP)

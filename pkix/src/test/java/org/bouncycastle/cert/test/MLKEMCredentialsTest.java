@@ -3,7 +3,7 @@ package org.bouncycastle.cert.test;
 import java.security.GeneralSecurityException;
 import java.security.Security;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.test.SimpleTest;
 
 public class MLKEMCredentialsTest
@@ -13,6 +13,7 @@ public class MLKEMCredentialsTest
     public void test()
         throws Exception
     {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.ML-KEM-512");
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful())
         {
@@ -36,12 +37,12 @@ public class MLKEMCredentialsTest
     private static void checkSampleCredentials(SampleCredentials subject, SampleCredentials issuer)
         throws GeneralSecurityException
     {
-        subject.getCertificate().verify(issuer.getCertificate().getPublicKey(), JostleProvider.PROVIDER_NAME);
+        subject.getCertificate().verify(issuer.getCertificate().getPublicKey(), JslTestProvider.name());
     }
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new MLKEMCredentialsTest());
     }

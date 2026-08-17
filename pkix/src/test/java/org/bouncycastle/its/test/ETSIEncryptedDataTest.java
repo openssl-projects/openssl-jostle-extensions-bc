@@ -24,7 +24,7 @@ import org.bouncycastle.its.jcajce.JceETSIDataEncryptor;
 import org.bouncycastle.its.jcajce.JceETSIKeyWrapper;
 import org.bouncycastle.its.operator.ETSIDataDecryptor;
 import org.bouncycastle.its.operator.ETSIDataEncryptor;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.oer.Element;
 import org.bouncycastle.oer.OERInputStream;
 import org.bouncycastle.oer.OEROutputStream;
@@ -47,9 +47,9 @@ public class ETSIEncryptedDataTest
 
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -118,7 +118,7 @@ public class ETSIEncryptedDataTest
             "5f89a8a406430d3a335caa563b35bbb0733379d58f9056d017fdd7");
 
 
-        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
 
         kpGen.initialize(new ECGenParameterSpec("P-256"), new FixedSecureRandom(Hex.decode("06EB0D8314ADC4C3564A8E721DF1372FF54B5C725D09E2E353F2D0A46003AB86")));
 
@@ -131,7 +131,7 @@ public class ETSIEncryptedDataTest
         ETSIDataDecryptor dec = JcaETSIDataDecryptor.builder(
             kp.getPrivate(),
             Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")
-        ).provider(JostleProvider.PROVIDER_NAME).build();
+        ).provider(JslTestProvider.name()).build();
 
         byte[] content = info.getContent(dec); // Will fail on bad tag otherwise
 
@@ -184,7 +184,7 @@ public class ETSIEncryptedDataTest
     public void DISABLED_testEncryptionNist()
         throws Exception
     {
-        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
 
         kpGen.initialize(new ECGenParameterSpec("P-256"), new FixedSecureRandom(Hex.decode("06EB0D8314ADC4C3564A8E721DF1372FF54B5C725D09E2E353F2D0A46003AB86")));
 
@@ -194,11 +194,11 @@ public class ETSIEncryptedDataTest
 
         ETSIEncryptedDataBuilder builder = new ETSIEncryptedDataBuilder();
 
-        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")).setProvider(JostleProvider.PROVIDER_NAME).build();
+        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")).setProvider(JslTestProvider.name()).build();
         ETSIRecipientInfoBuilder recipientInfoBuilder = new ETSIRecipientInfoBuilder(keyWrapper, Hex.decode("6CC2023B5115003E"));
         builder.addRecipientInfoBuilder(recipientInfoBuilder);
 
-        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JostleProvider.PROVIDER_NAME).build();
+        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JslTestProvider.name()).build();
         ETSIEncryptedData encryptedData = builder.build(encryptor, Strings.toByteArray("Hello World"));
 
         // recoding
@@ -212,7 +212,7 @@ public class ETSIEncryptedDataTest
         ETSIDataDecryptor dec = JcaETSIDataDecryptor.builder(
             kp.getPrivate(),
             Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")
-        ).provider(JostleProvider.PROVIDER_NAME).build();
+        ).provider(JslTestProvider.name()).build();
 
         byte[] content = info.getContent(dec);
 
@@ -223,7 +223,7 @@ public class ETSIEncryptedDataTest
     public void DISABLED_testEncryptionTele()
         throws Exception
     {
-        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
 
         kpGen.initialize(new ECGenParameterSpec("brainpoolP256r1"), new FixedSecureRandom(Hex.decode("06EB0D8314ADC4C3564A8E721DF1372FF54B5C725D09E2E353F2D0A46003AB86")));
 
@@ -233,11 +233,11 @@ public class ETSIEncryptedDataTest
 
         ETSIEncryptedDataBuilder builder = new ETSIEncryptedDataBuilder();
 
-        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")).setProvider(JostleProvider.PROVIDER_NAME).build();
+        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")).setProvider(JslTestProvider.name()).build();
         ETSIRecipientInfoBuilder recipientInfoBuilder = new ETSIRecipientInfoBuilder(keyWrapper, Hex.decode("6CC2023B5115003E"));
         builder.addRecipientInfoBuilder(recipientInfoBuilder);
 
-        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JostleProvider.PROVIDER_NAME).build();
+        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JslTestProvider.name()).build();
         ETSIEncryptedData encryptedData = builder.build(encryptor, Strings.toByteArray("Hello World"));
 
         // recoding
@@ -251,7 +251,7 @@ public class ETSIEncryptedDataTest
         ETSIDataDecryptor dec = JcaETSIDataDecryptor.builder(
             kp.getPrivate(),
             Hex.decode("843BA5DC059A5DD3A6BF81842991608C4CB980456B9DA26F6CC2023B5115003E")
-        ).provider(JostleProvider.PROVIDER_NAME).build();
+        ).provider(JslTestProvider.name()).build();
 
         byte[] content = info.getContent(dec);
 
@@ -263,7 +263,7 @@ public class ETSIEncryptedDataTest
     private Object[] getRecipient(String name, String curve)
         throws Exception
     {
-        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
 
         kpGen.initialize(new ECGenParameterSpec(curve), new SecureRandom());
         KeyPair kp = kpGen.generateKeyPair();
@@ -275,7 +275,7 @@ public class ETSIEncryptedDataTest
         byte[] refHash = MessageDigest.getInstance("SHA256").digest(name.getBytes());
         byte[] id = Arrays.copyOfRange(refHash, 0, 8);
 
-        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), refHash).setProvider(JostleProvider.PROVIDER_NAME).build();
+        JceETSIKeyWrapper keyWrapper = new JceETSIKeyWrapper.Builder((ECPublicKey)kp.getPublic(), refHash).setProvider(JslTestProvider.name()).build();
         ETSIRecipientInfoBuilder recipientInfoBuilder = new ETSIRecipientInfoBuilder(keyWrapper, id);
 
         // We need the private key for the test.
@@ -299,7 +299,7 @@ public class ETSIEncryptedDataTest
         builder.addRecipientInfoBuilder((ETSIRecipientInfoBuilder)items[0][0]);
         builder.addRecipientInfoBuilder((ETSIRecipientInfoBuilder)items[1][0]);
 
-        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JostleProvider.PROVIDER_NAME).build();
+        ETSIDataEncryptor encryptor = new JceETSIDataEncryptor.Builder().setProvider(JslTestProvider.name()).build();
         ETSIEncryptedData encryptedData = builder.build(encryptor, Strings.toByteArray("Test message"));
 
         // recoding
@@ -313,7 +313,7 @@ public class ETSIEncryptedDataTest
             ETSIDataDecryptor dec = JcaETSIDataDecryptor.builder(
                 (PrivateKey)item[1],
                 (byte[])item[2]
-            ).provider(JostleProvider.PROVIDER_NAME).build();
+            ).provider(JslTestProvider.name()).build();
 
             byte[] content = info.getContent(dec);
 

@@ -15,7 +15,7 @@ import org.bouncycastle.asn1.pkcs.RSAPrivateKey;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.crypto.util.PBKDFConfig;
 import org.bouncycastle.crypto.util.ScryptConfig;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfoBuilder;
 import org.bouncycastle.pkcs.jcajce.JcePKCSPBEInputDecryptorProviderBuilder;
@@ -97,7 +97,7 @@ public class PKCS8Test
 
     public void setUp()
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
     }
 
     public void DISABLED_testSHA256()
@@ -105,7 +105,7 @@ public class PKCS8Test
     {
         PKCS8EncryptedPrivateKeyInfo info = new PKCS8EncryptedPrivateKeyInfo(pkcs8Sha256);
         
-        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -117,7 +117,7 @@ public class PKCS8Test
     {
         PKCS8EncryptedPrivateKeyInfo info = new PKCS8EncryptedPrivateKeyInfo(pkcs8Gost3411);
 
-        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -134,7 +134,7 @@ public class PKCS8Test
         
         PKCS8EncryptedPrivateKeyInfo info = new PKCS8EncryptedPrivateKeyInfo(pkcs8Scrypt);
 
-        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("Rabbit".toCharArray()));
+        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("Rabbit".toCharArray()));
         
         assertTrue(Arrays.areEqual(scryptKey, pkInfo.getEncoded()));
     }
@@ -147,7 +147,7 @@ public class PKCS8Test
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(NISTObjectIdentifiers.id_aes256_CBC)
                 .setPRF(new AlgorithmIdentifier(PKCSObjectIdentifiers.id_hmacWithSHA256, DERNull.INSTANCE))
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("hello".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
@@ -159,7 +159,7 @@ public class PKCS8Test
                     .getKeyDerivationFunc().getParameters())
                 .getPrf());
 
-        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -174,7 +174,7 @@ public class PKCS8Test
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(NISTObjectIdentifiers.id_aes256_CBC)
                 .setPRF(new AlgorithmIdentifier(NISTObjectIdentifiers.id_hmacWithSHA3_256, DERNull.INSTANCE))
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("hello".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
@@ -186,7 +186,7 @@ public class PKCS8Test
                     .getKeyDerivationFunc().getParameters())
                 .getPrf());
 
-        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -201,7 +201,7 @@ public class PKCS8Test
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(NISTObjectIdentifiers.id_aes128_wrap_pad)
                 .setPRF(new AlgorithmIdentifier(NISTObjectIdentifiers.id_hmacWithSHA3_256, DERNull.INSTANCE))
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("hello".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
@@ -213,7 +213,7 @@ public class PKCS8Test
                     .getKeyDerivationFunc().getParameters())
                 .getPrf());
 
-        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -228,7 +228,7 @@ public class PKCS8Test
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(NISTObjectIdentifiers.id_aes192_CCM)
                 .setPRF(new AlgorithmIdentifier(NISTObjectIdentifiers.id_hmacWithSHA3_256, DERNull.INSTANCE))
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("hello".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
@@ -240,7 +240,7 @@ public class PKCS8Test
                     .getKeyDerivationFunc().getParameters())
                 .getPrf());
 
-        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -255,7 +255,7 @@ public class PKCS8Test
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(NISTObjectIdentifiers.id_aes256_GCM)
                 .setPRF(new AlgorithmIdentifier(NISTObjectIdentifiers.id_hmacWithSHA3_256, DERNull.INSTANCE))
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("hello".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
@@ -267,7 +267,7 @@ public class PKCS8Test
                     .getKeyDerivationFunc().getParameters())
                 .getPrf());
 
-        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("hello".toCharArray()));
+        PrivateKeyInfo pkInfo = encInfo.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("hello".toCharArray()));
 
         RSAPrivateKey k = RSAPrivateKey.getInstance(pkInfo.parsePrivateKey());
 
@@ -289,14 +289,14 @@ public class PKCS8Test
 
         PKCS8EncryptedPrivateKeyInfo encInfo = bldr.build(
             new JcePKCSPBEOutputEncryptorBuilder(scrypt, NISTObjectIdentifiers.id_aes256_CBC)
-                .setProvider(JostleProvider.PROVIDER_NAME)
+                .setProvider(JslTestProvider.name())
                 .build("Rabbit".toCharArray()));
 
         EncryptedPrivateKeyInfo encPkInfo = EncryptedPrivateKeyInfo.getInstance(encInfo.getEncoded());
 
         PKCS8EncryptedPrivateKeyInfo info = new PKCS8EncryptedPrivateKeyInfo(encPkInfo);
 
-        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build("Rabbit".toCharArray()));
+        PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("Rabbit".toCharArray()));
 
         assertTrue(Arrays.areEqual(scryptKey, pkInfo.getEncoded()));
     }

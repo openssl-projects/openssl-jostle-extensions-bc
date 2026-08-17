@@ -36,7 +36,7 @@ import org.bouncycastle.cert.X509AttributeCertificateHolder;
 import org.bouncycastle.cert.X509v2AttributeCertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
@@ -47,7 +47,7 @@ import org.bouncycastle.util.test.SimpleTest;
 public class AttrCertTest
     extends SimpleTest
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     private static final RSAPrivateCrtKeySpec RSA_PRIVATE_KEY_SPEC = new RSAPrivateCrtKeySpec(
                 new BigInteger("b4a7e46170574f16a97082b22be58b6a2a629798419be12872a4bdba626cfae9900f76abfb12139dce5de56564fab2b6543165a040c606887420e33d91ed7ed7", 16),
@@ -163,6 +163,7 @@ public class AttrCertTest
     public void test()
         throws Exception
     {
+        JslTestProvider.assumeAlgorithm("Signature.MD5WITHRSA");
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful())
         {
@@ -179,7 +180,7 @@ public class AttrCertTest
         throws Exception
     {
         X509AttributeCertificateHolder attrCert = new X509AttributeCertificateHolder(certWithBaseCertificateID);
-        CertificateFactory       fact = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);   
+        CertificateFactory       fact = CertificateFactory.getInstance("X.509", JslTestProvider.name());   
         X509Certificate          cert = (X509Certificate)fact.generateCertificate(new ByteArrayInputStream(holderCertWithBaseCertificateID));
         
         AttributeCertificateHolder holder = attrCert.getHolder();
@@ -271,7 +272,7 @@ public class AttrCertTest
     private void testGenerateWithCert()
         throws Exception
     {
-        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME);
+        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JslTestProvider.name());
         X509Certificate             iCert = (X509Certificate)fact.generateCertificate(new ByteArrayInputStream(signCert));
         
         //
@@ -287,7 +288,7 @@ public class AttrCertTest
         PrivateKey          privKey;
         PublicKey           pubKey;
 
-        KeyFactory  kFact = KeyFactory.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyFactory  kFact = KeyFactory.getInstance("RSA", JslTestProvider.name());
 
         privKey = kFact.generatePrivate(RSA_PRIVATE_KEY_SPEC);
         pubKey = kFact.generatePublic(pubKeySpec);
@@ -385,7 +386,7 @@ public class AttrCertTest
     private void testGenerateWithPrincipal()
         throws Exception
     {
-        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME);
+        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JslTestProvider.name());
         X509Certificate             iCert = (X509Certificate)fact.generateCertificate(new ByteArrayInputStream(signCert));
         
         //
@@ -401,7 +402,7 @@ public class AttrCertTest
         PrivateKey          privKey;
         PublicKey           pubKey;
     
-        KeyFactory  kFact = KeyFactory.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyFactory  kFact = KeyFactory.getInstance("RSA", JslTestProvider.name());
     
         privKey = kFact.generatePrivate(RSA_PRIVATE_KEY_SPEC);
         pubKey = kFact.generatePublic(pubKeySpec);
@@ -472,7 +473,7 @@ public class AttrCertTest
         throws Exception
     {
         X509AttributeCertificateHolder    aCert = new X509AttributeCertificateHolder(attrCert);
-        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME);
+        CertificateFactory          fact = CertificateFactory.getInstance("X.509",JslTestProvider.name());
         X509Certificate             sCert = (X509Certificate)fact.generateCertificate(new ByteArrayInputStream(signCert));
         
         if (!aCert.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(BC).build(sCert)))
@@ -536,7 +537,7 @@ public class AttrCertTest
         PrivateKey          privKey;
         PublicKey           pubKey;
 
-        KeyFactory  kFact = KeyFactory.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyFactory  kFact = KeyFactory.getInstance("RSA", JslTestProvider.name());
 
         privKey = kFact.generatePrivate(privKeySpec);
         pubKey = kFact.generatePublic(pubKeySpec);
@@ -668,7 +669,7 @@ public class AttrCertTest
         testGenerateWithPrincipal();
 
         aCert = new X509v2AttributeCertificateBuilder(aCert).build(
-            new JcaContentSignerBuilder("SHA1withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(privKey));
+            new JcaContentSignerBuilder("SHA1withRSA").setProvider(JslTestProvider.name()).build(privKey));
 
         if (!aCert.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(BC).build(pubKey)))
         {
@@ -680,7 +681,7 @@ public class AttrCertTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new AttrCertTest());
     }

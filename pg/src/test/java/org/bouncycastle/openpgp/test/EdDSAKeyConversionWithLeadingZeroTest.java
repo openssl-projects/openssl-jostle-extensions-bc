@@ -2,7 +2,7 @@ package org.bouncycastle.openpgp.test;
 
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.test.AbstractPacketTest;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyPair;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyConverter;
@@ -39,9 +39,9 @@ public class EdDSAKeyConversionWithLeadingZeroTest
     private void testWithEd448KeyWithLeadingZero()
             throws NoSuchAlgorithmException, InvalidKeySpecException, PGPException, InvalidKeyException, SignatureException
     {
-        JcaPGPKeyConverter jcaPGPKeyConverter = new JcaPGPKeyConverter().setProvider(new JostleProvider());
+        JcaPGPKeyConverter jcaPGPKeyConverter = new JcaPGPKeyConverter().setProvider(JslTestProvider.provider());
 
-        KeyFactory factory = KeyFactory.getInstance("EdDSA", new JostleProvider());
+        KeyFactory factory = KeyFactory.getInstance("EdDSA", JslTestProvider.provider());
 
         PublicKey pubKey = factory.generatePublic(new X509EncodedKeySpec(Hex.decode(ED448_PUB_WITH_LEADING_ZERO)));
         PrivateKey privKey = factory.generatePrivate(new PKCS8EncodedKeySpec(Hex.decode(ED448_KEY_WITH_LEADING_ZERO)));
@@ -67,9 +67,9 @@ public class EdDSAKeyConversionWithLeadingZeroTest
     private void testWithEd25519KeyWithLeadingZero()
             throws NoSuchAlgorithmException, InvalidKeySpecException, PGPException, InvalidKeyException, SignatureException
     {
-        JcaPGPKeyConverter jcaPGPKeyConverter = new JcaPGPKeyConverter().setProvider(new JostleProvider());
+        JcaPGPKeyConverter jcaPGPKeyConverter = new JcaPGPKeyConverter().setProvider(JslTestProvider.provider());
 
-        KeyFactory factory = KeyFactory.getInstance("EdDSA", new JostleProvider());
+        KeyFactory factory = KeyFactory.getInstance("EdDSA", JslTestProvider.provider());
 
         PublicKey pubKey = factory.generatePublic(new X509EncodedKeySpec(Hex.decode(ED25519_PUB_WITH_LEADING_ZERO)));
         PrivateKey privKey = factory.generatePrivate(new PKCS8EncodedKeySpec(Hex.decode(ED25519_KEY_WITH_LEADING_ZERO)));
@@ -94,7 +94,7 @@ public class EdDSAKeyConversionWithLeadingZeroTest
     private void testSignature(PrivateKey privateKey, PublicKey publicKey, String edAlgo)
             throws NoSuchAlgorithmException, SignatureException, InvalidKeyException
     {
-        Signature signature = Signature.getInstance(edAlgo, new JostleProvider());
+        Signature signature = Signature.getInstance(edAlgo, JslTestProvider.provider());
         signature.initSign(privateKey);
         signature.update("Hello, World!\n".getBytes());
         byte[] sig = signature.sign();
@@ -106,7 +106,7 @@ public class EdDSAKeyConversionWithLeadingZeroTest
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
         runTest(new EdDSAKeyConversionWithLeadingZeroTest());
     }
 }

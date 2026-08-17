@@ -1,7 +1,6 @@
 // Copyright (c) 2005 The Legion Of The Bouncy Castle (https://www.bouncycastle.org)
 package org.bouncycastle.mail.smime.test;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
-
+import org.bouncycastle.jsl.test.JslTestProvider;
 import java.security.Security;
 
 import javax.activation.CommandMap;
@@ -22,7 +21,7 @@ class SMIMETestSetup extends TestSetup
     protected void setUp()
     {
         Security
-                .addProvider(new org.openssl.jostle.jcajce.provider.JostleProvider());
+                .addProvider(JslTestProvider.provider());
 
         MailcapCommandMap _mailcap = (MailcapCommandMap)CommandMap
                 .getDefaultCommandMap();
@@ -46,7 +45,7 @@ class SMIMETestSetup extends TestSetup
     {
         CommandMap.setDefaultCommandMap(originalMap);
         originalMap = null;
-        Security.removeProvider(JostleProvider.PROVIDER_NAME);
+        Security.removeProvider(JslTestProvider.name());
     }
 
 

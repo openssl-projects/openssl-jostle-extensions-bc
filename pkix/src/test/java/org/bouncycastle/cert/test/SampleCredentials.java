@@ -16,7 +16,7 @@ import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.test.TestResourceFinder;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
@@ -68,9 +68,9 @@ public class SampleCredentials
     {
         try
         {
-            if (Security.getProvider("JSL") == null)
+            if (Security.getProvider(JslTestProvider.name()) == null)
             {
-                Security.addProvider(new JostleProvider());
+                JslTestProvider.install();
             }
 
             InputStream input = new BufferedInputStream(TestResourceFinder.findTestResource(path, name));
@@ -82,12 +82,12 @@ public class SampleCredentials
             PemObject pemCert = expectPemObject(pemReader, "CERTIFICATE");
             pemReader.close();
 
-            KeyFactory kf = KeyFactory.getInstance(algorithm, JostleProvider.PROVIDER_NAME);
+            KeyFactory kf = KeyFactory.getInstance(algorithm, JslTestProvider.name());
             // Parse the cert through JSL so certificate.getPublicKey() yields a JSL
             // key matching kf.generatePublic(...) below. (When this helper was first
             // migrated JSL had no X.509 CertificateFactory and this fell back to the
             // JDK default, whose key wouldn't equals() the JSL-derived public key.)
-            CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+            CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
             PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(pemPriv.getContent()));
             PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(pemPub .getContent()));

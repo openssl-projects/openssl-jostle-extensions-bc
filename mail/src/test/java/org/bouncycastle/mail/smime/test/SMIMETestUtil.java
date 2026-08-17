@@ -10,7 +10,7 @@ import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 
 import junit.framework.TestCase;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.Arrays;
 
 public class SMIMETestUtil
@@ -19,7 +19,7 @@ public class SMIMETestUtil
 
     static
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
     }
 
     /*  

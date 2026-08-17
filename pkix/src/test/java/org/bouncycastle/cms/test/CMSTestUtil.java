@@ -45,7 +45,7 @@ import org.bouncycastle.cert.jcajce.JcaX509v1CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.encoders.Base64;
 
 public class CMSTestUtil
@@ -137,11 +137,26 @@ public class CMSTestUtil
               + "6asYwy151HshbPNYz+Cgeqs45KkVzh7bL/0e1r8sDVIaaGIkjHK3CqBABnfSayr3"
               + "Rd1yBoDdEv8Qb+3eEPH6ab9021AsLEnJ6LWTmybbOpMNZ3tv");
     
+
+    /**
+     * A KeyPairGenerator for {@code algorithm}, or null when the provider under test does not
+     * implement it. This runs from a static initialiser: letting the lookup throw would fail class
+     * init and take every test in the calling class down with NoClassDefFoundError rather than
+     * skipping. The FIPS module carries none of the Edwards or PQC algorithms.
+     */
+    private static KeyPairGenerator optionalKpg(String algorithm)
+        throws Exception
+    {
+        return JslTestProvider.has("KeyPairGenerator", algorithm)
+            ? KeyPairGenerator.getInstance(algorithm, JslTestProvider.name())
+            : null;
+    }
+
     static
     {
         try
         {
-            java.security.Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
 
             try
             {
@@ -154,10 +169,13 @@ public class CMSTestUtil
 
             rand = new SecureRandom();
 
-            kpg  = KeyPairGenerator.getInstance("RSA", "JSL");
-            kpg.initialize(1024, rand);
+            kpg  = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
+            // 1024-bit RSA is below the FIPS minimum (the module rejects anything under 2048),
+            // so the FIPS run uses the same size as kpg_2048 rather than skipping every test
+            // that leans on this generator.
+            kpg.initialize(JslTestProvider.isFips() ? 2048 : 1024, rand);
 
-            kpg_2048  = KeyPairGenerator.getInstance("RSA", "JSL");
+            kpg_2048  = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
             kpg_2048.initialize(2048, rand);
 
             // GOST/ECGOST/NTRU are not provided by JSL — pruned for this migration.
@@ -165,7 +183,7 @@ public class CMSTestUtil
             // per-run parameter generation. bc-java's classic 512-bit (L=512/N=160) params are
             // rejected by OpenSSL ("ffc_validate_LN: bad ffc parameters"), so use a valid
             // FIPS 186 L=2048/N=256 group instead.
-            dsaKpg = KeyPairGenerator.getInstance("DSA", "JSL");
+            dsaKpg = KeyPairGenerator.getInstance("DSA", JslTestProvider.name());
             DSAParameterSpec dsaSpec = new DSAParameterSpec(
                         new BigInteger("19907565429699108605275272201029585048408596875322885479894746357284399280166582585765686106984881564412104574550300138070457571247860071221477838908456619458861228607337783502463731542532762694884945833487703809747602316770156332911602554652015599330415547625485320715155417793124370708600251872088280352141538973303229601775394226588766869167763895454981975693019798760300986573918169305343915525337885310799725408674995067392159515122937325375425294368275646171085327971643626041043161733317587273013543328773565906825915000132384966127230722893125496365396771075916620559716104409563919651186177896251297550794463"),
                         new BigInteger("73315037449468766965231205574813280361082575942612732494865930830281743537203"),
@@ -174,44 +192,44 @@ public class CMSTestUtil
 
             // DH is now provided by JSL; reuse the DSA prime/generator as the DH group
             // (matching bc-java), which is a valid 2048-bit finite-field group.
-            dhKpg = KeyPairGenerator.getInstance("DH", "JSL");
+            dhKpg = KeyPairGenerator.getInstance("DH", JslTestProvider.name());
             dhKpg.initialize(new DHParameterSpec(dsaSpec.getP(), dsaSpec.getG()), new SecureRandom());
 
-            ecDsaKpg = KeyPairGenerator.getInstance("EC", "JSL");
+            ecDsaKpg = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
             ecDsaKpg.initialize(256, new SecureRandom());
 
-            ed25519Kpg = KeyPairGenerator.getInstance("Ed25519", "JSL");
-            ed448Kpg = KeyPairGenerator.getInstance("Ed448", "JSL");
+            ed25519Kpg = optionalKpg("Ed25519");
+            ed448Kpg = optionalKpg("Ed448");
 
-            mlDsa44Kpg = KeyPairGenerator.getInstance("ML-DSA-44", "JSL");
-            mlDsa65Kpg = KeyPairGenerator.getInstance("ML-DSA-65", "JSL");
-            mlDsa87Kpg = KeyPairGenerator.getInstance("ML-DSA-87", "JSL");
+            mlDsa44Kpg = optionalKpg("ML-DSA-44");
+            mlDsa65Kpg = optionalKpg("ML-DSA-65");
+            mlDsa87Kpg = optionalKpg("ML-DSA-87");
 
-            mlKem512Kpg = KeyPairGenerator.getInstance("ML-KEM-512", "JSL");
-            mlKem768Kpg = KeyPairGenerator.getInstance("ML-KEM-768", "JSL");
-            mlKem1024Kpg = KeyPairGenerator.getInstance("ML-KEM-1024", "JSL");
+            mlKem512Kpg = optionalKpg("ML-KEM-512");
+            mlKem768Kpg = optionalKpg("ML-KEM-768");
+            mlKem1024Kpg = optionalKpg("ML-KEM-1024");
 
-            slhDsa_Sha2_128f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-128F", "JSL");
-            slhDsa_Sha2_128s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-128S", "JSL");
-            slhDsa_Sha2_192f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-192F", "JSL");
-            slhDsa_Sha2_192s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-192S", "JSL");
-            slhDsa_Sha2_256f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-256F", "JSL");
-            slhDsa_Sha2_256s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHA2-256S", "JSL");
-            slhDsa_Shake_128f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-128F", "JSL");
-            slhDsa_Shake_128s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-128S", "JSL");
-            slhDsa_Shake_192f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-192F", "JSL");
-            slhDsa_Shake_192s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-192S", "JSL");
-            slhDsa_Shake_256f_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-256F", "JSL");
-            slhDsa_Shake_256s_Kpg = KeyPairGenerator.getInstance("SLH-DSA-SHAKE-256S", "JSL");
+            slhDsa_Sha2_128f_Kpg = optionalKpg("SLH-DSA-SHA2-128F");
+            slhDsa_Sha2_128s_Kpg = optionalKpg("SLH-DSA-SHA2-128S");
+            slhDsa_Sha2_192f_Kpg = optionalKpg("SLH-DSA-SHA2-192F");
+            slhDsa_Sha2_192s_Kpg = optionalKpg("SLH-DSA-SHA2-192S");
+            slhDsa_Sha2_256f_Kpg = optionalKpg("SLH-DSA-SHA2-256F");
+            slhDsa_Sha2_256s_Kpg = optionalKpg("SLH-DSA-SHA2-256S");
+            slhDsa_Shake_128f_Kpg = optionalKpg("SLH-DSA-SHAKE-128F");
+            slhDsa_Shake_128s_Kpg = optionalKpg("SLH-DSA-SHAKE-128S");
+            slhDsa_Shake_192f_Kpg = optionalKpg("SLH-DSA-SHAKE-192F");
+            slhDsa_Shake_192s_Kpg = optionalKpg("SLH-DSA-SHAKE-192S");
+            slhDsa_Shake_256f_Kpg = optionalKpg("SLH-DSA-SHAKE-256F");
+            slhDsa_Shake_256s_Kpg = optionalKpg("SLH-DSA-SHAKE-256S");
 
             // Symmetric content-encryption keygens are not exercised by the SignedData
             // tests; tolerate individually any algorithm the JSL provider does not expose
             // (RC2/SEED are absent; Camellia is Cipher-only) so class init still completes.
-            try { aes192kg = KeyGenerator.getInstance("AES", "JSL"); aes192kg.init(192, rand); } catch (Exception e) { }
-            try { desede128kg = KeyGenerator.getInstance("DESEDE", "JSL"); desede128kg.init(192, rand); } catch (Exception e) { }
-            try { desede192kg = KeyGenerator.getInstance("DESEDE", "JSL"); desede192kg.init(168, rand); } catch (Exception e) { }
-            try { aesKg = KeyGenerator.getInstance("AES", "JSL"); } catch (Exception e) { }
-            try { camelliaKg = KeyGenerator.getInstance("Camellia", "JSL"); } catch (Exception e) { }
+            try { aes192kg = KeyGenerator.getInstance("AES", JslTestProvider.name()); aes192kg.init(192, rand); } catch (Exception e) { }
+            try { desede128kg = KeyGenerator.getInstance("DESEDE", JslTestProvider.name()); desede128kg.init(192, rand); } catch (Exception e) { }
+            try { desede192kg = KeyGenerator.getInstance("DESEDE", JslTestProvider.name()); desede192kg.init(168, rand); } catch (Exception e) { }
+            try { aesKg = KeyGenerator.getInstance("AES", JslTestProvider.name()); } catch (Exception e) { }
+            try { camelliaKg = KeyGenerator.getInstance("Camellia", JslTestProvider.name()); } catch (Exception e) { }
 
             serialNumber = new BigInteger("1");
         }
@@ -277,12 +295,14 @@ public class CMSTestUtil
 
     public static KeyPair makeEd25519KeyPair()
     {
-        return ed25519Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == ed25519Kpg) ? null : ed25519Kpg.generateKeyPair();
     }
 
     public static KeyPair makeEd448KeyPair()
     {
-        return ed448Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == ed448Kpg) ? null : ed448Kpg.generateKeyPair();
     }
 
     public static KeyPair makeEcDsaKeyPair()
@@ -292,7 +312,20 @@ public class CMSTestUtil
 
     public static KeyPair makeDhKeyPair()
     {
-        return dhKpg.generateKeyPair();
+        try
+        {
+            return dhKpg.generateKeyPair();
+        }
+        catch (RuntimeException e)
+        {
+            // the DH group here is derived from the DSA parameters above; the FIPS module will not
+            // generate against it. Null lets the calling class initialise and its DH tests opt out.
+            if (JslTestProvider.isFips())
+            {
+                return null;
+            }
+            throw e;
+        }
     }
 
     public static KeyPair makeEcGostKeyPair()
@@ -312,92 +345,110 @@ public class CMSTestUtil
 
     public static KeyPair makeMLKem512KeyPair()
     {
-        return mlKem512Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlKem512Kpg) ? null : mlKem512Kpg.generateKeyPair();
     }
 
     public static KeyPair makeMLKem768KeyPair()
     {
-        return mlKem768Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlKem768Kpg) ? null : mlKem768Kpg.generateKeyPair();
     }
 
     public static KeyPair makeMLKem1024KeyPair()
     {
-        return mlKem1024Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlKem1024Kpg) ? null : mlKem1024Kpg.generateKeyPair();
     }
 
     public static KeyPair makeMLDsa44KeyPair()
     {
-        return mlDsa44Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlDsa44Kpg) ? null : mlDsa44Kpg.generateKeyPair();
     }
 
     public static KeyPair makeMLDsa65KeyPair()
     {
-        return mlDsa65Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlDsa65Kpg) ? null : mlDsa65Kpg.generateKeyPair();
     }
 
     public static KeyPair makeMLDsa87KeyPair()
     {
-        return mlDsa87Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == mlDsa87Kpg) ? null : mlDsa87Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_128f_KeyPair()
     {
-        return slhDsa_Sha2_128f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_128f_Kpg) ? null : slhDsa_Sha2_128f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_128s_KeyPair()
     {
-        return slhDsa_Sha2_128s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_128s_Kpg) ? null : slhDsa_Sha2_128s_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_192f_KeyPair()
     {
-        return slhDsa_Sha2_192f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_192f_Kpg) ? null : slhDsa_Sha2_192f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_192s_KeyPair()
     {
-        return slhDsa_Sha2_192s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_192s_Kpg) ? null : slhDsa_Sha2_192s_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_256f_KeyPair()
     {
-        return slhDsa_Sha2_256f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_256f_Kpg) ? null : slhDsa_Sha2_256f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Sha2_256s_KeyPair()
     {
-        return slhDsa_Sha2_256s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Sha2_256s_Kpg) ? null : slhDsa_Sha2_256s_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_128f_KeyPair()
     {
-        return slhDsa_Shake_128f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_128f_Kpg) ? null : slhDsa_Shake_128f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_128s_KeyPair()
     {
-        return slhDsa_Shake_128s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_128s_Kpg) ? null : slhDsa_Shake_128s_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_192f_KeyPair()
     {
-        return slhDsa_Shake_192f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_192f_Kpg) ? null : slhDsa_Shake_192f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_192s_KeyPair()
     {
-        return slhDsa_Shake_192s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_192s_Kpg) ? null : slhDsa_Shake_192s_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_256f_KeyPair()
     {
-        return slhDsa_Shake_256f_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_256f_Kpg) ? null : slhDsa_Shake_256f_Kpg.generateKeyPair();
     }
 
     public static KeyPair makeSlhDsa_Shake_256s_KeyPair()
     {
-        return slhDsa_Shake_256s_Kpg.generateKeyPair();
+        // null when the provider under test lacks the algorithm - see optionalKpg
+        return (null == slhDsa_Shake_256s_Kpg) ? null : slhDsa_Shake_256s_Kpg.generateKeyPair();
     }
 
     public static SecretKey makeDesede128Key()
@@ -451,6 +502,13 @@ public class CMSTestUtil
             String _subDN, KeyPair _issKP, String _issDN)
         throws GeneralSecurityException, IOException, OperatorCreationException
     {
+        // a null subject key means the provider under test does not implement its algorithm, so
+        // there is no certificate to make either; the tests that use it opt out.
+        if (null == _subKP)
+        {
+            return null;
+        }
+
         return makeCertificate(_subKP, _subDN, _issKP, _issDN, false);
     }
 
@@ -622,18 +680,23 @@ public class CMSTestUtil
          * NOTE: Current ALL test certificates are issued under a SHA1withRSA root, so this list is mostly
          * redundant (and also incomplete in that it doesn't handle EdDSA or ML-DSA issuers).
          */
+        // SHA-1 is not an approved digest for signature GENERATION, and the FIPS module refuses
+        // it outright ("digest not allowed"). Sign with SHA-256 there instead of skipping every
+        // test that needs a certificate - the certificate is scaffolding, not the thing under test.
+        String d = JslTestProvider.isFips() ? "SHA256" : "SHA1";
+
         JcaContentSignerBuilder contentSignerBuilder;
         if (issPub instanceof RSAPublicKey)
         {
-            contentSignerBuilder = new JcaContentSignerBuilder("SHA1WithRSA");
+            contentSignerBuilder = new JcaContentSignerBuilder(d + "WithRSA");
         }
         else if (issPub.getAlgorithm().equals("DSA"))
         {
-            contentSignerBuilder = new JcaContentSignerBuilder("SHA1withDSA");
+            contentSignerBuilder = new JcaContentSignerBuilder(d + "withDSA");
         }
         else if (issPub.getAlgorithm().equals("ECDSA"))
         {
-            contentSignerBuilder = new JcaContentSignerBuilder("SHA1withECDSA");
+            contentSignerBuilder = new JcaContentSignerBuilder(d + "withECDSA");
         }
         else if (issPub.getAlgorithm().equals("ECGOST3410"))
         {
@@ -648,7 +711,7 @@ public class CMSTestUtil
             throw new UnsupportedOperationException("Algorithm handlers incomplete");
         }
 
-        contentSignerBuilder.setProvider(JostleProvider.PROVIDER_NAME);
+        contentSignerBuilder.setProvider(JslTestProvider.name());
 
         return contentSignerBuilder;
     }
@@ -666,7 +729,7 @@ public class CMSTestUtil
 
         crlGen.addExtension(Extension.authorityKeyIdentifier, false, extensionUtils.createAuthorityKeyIdentifier(pair.getPublic()));
 
-        return new JcaX509CRLConverter().getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("JSL").build(pair.getPrivate())));
+        return new JcaX509CRLConverter().getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(pair.getPrivate())));
     }
 
     /*  

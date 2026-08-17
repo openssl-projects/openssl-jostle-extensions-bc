@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.security.Security;
 
 import org.bouncycastle.bcpg.ArmoredInputStream;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.io.Streams;
 import org.bouncycastle.util.test.SimpleTest;
@@ -110,7 +110,7 @@ public class ArmoredInputStreamIngoreMissingCRCSum
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new ArmoredInputStreamIngoreMissingCRCSum());
     }

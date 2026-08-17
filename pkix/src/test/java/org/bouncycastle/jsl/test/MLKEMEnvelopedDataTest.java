@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 
@@ -25,6 +27,12 @@ import static org.junit.Assert.assertTrue;
 public class MLKEMEnvelopedDataTest
     extends JostleProviderTestBase
 {
+    @org.junit.Before
+    public void gateOnProviderCapability()
+    {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.ML-KEM-768");
+    }
+
     @Test
     public void mlkemEnvelopedRoundTrip()
         throws Exception

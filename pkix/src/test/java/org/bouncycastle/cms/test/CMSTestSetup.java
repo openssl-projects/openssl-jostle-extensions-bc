@@ -5,8 +5,7 @@ import junit.framework.Test;
 
 import java.security.Security;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
-
+import org.bouncycastle.jsl.test.JslTestProvider;
 class CMSTestSetup extends TestSetup
 {
     public CMSTestSetup(Test test)
@@ -16,11 +15,11 @@ class CMSTestSetup extends TestSetup
 
     protected void setUp()
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
     }
 
     protected void tearDown()
     {
-        Security.removeProvider("JSL");
+        Security.removeProvider(JslTestProvider.name());
     }
 }

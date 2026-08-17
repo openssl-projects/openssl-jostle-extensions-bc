@@ -29,7 +29,7 @@ import org.bouncycastle.asn1.x509.qualified.QcType;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkix.jcajce.PKIXCertPathReviewer;
@@ -48,12 +48,12 @@ public class QcStatementReviewerTest
     public void testModernQcStatementsAreRecognised()
         throws Exception
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
 
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
         kpg.initialize(2048);
 
         KeyPair rootKp = kpg.generateKeyPair();
@@ -86,7 +86,7 @@ public class QcStatementReviewerTest
         eeBldr.addExtension(Extension.qCStatements, true, new DERSequence(statements));
         X509Certificate ee = sign(eeBldr, rootKp.getPrivate());
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
         List certs = new ArrayList();
         certs.add(ee);
@@ -114,8 +114,8 @@ public class QcStatementReviewerTest
     private static X509Certificate sign(X509v3CertificateBuilder builder, PrivateKey signingKey)
         throws Exception
     {
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(signingKey);
-        return new JcaX509CertificateConverter().setProvider(JostleProvider.PROVIDER_NAME).getCertificate(builder.build(signer));
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(signingKey);
+        return new JcaX509CertificateConverter().setProvider(JslTestProvider.name()).getCertificate(builder.build(signer));
     }
 
     private static boolean anyFindingContains(List[] findingsByIndex, String needle)

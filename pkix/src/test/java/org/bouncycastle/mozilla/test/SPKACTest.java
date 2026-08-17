@@ -8,7 +8,7 @@ import org.bouncycastle.asn1.ASN1IA5String;
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.mozilla.PublicKeyAndChallenge;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.mozilla.jcajce.JcaSignedPublicKeyAndChallenge;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.util.encoders.Base64;
@@ -29,6 +29,7 @@ public class SPKACTest
 
     @org.junit.Test
     public void test() throws Exception {
+        JslTestProvider.assumeAlgorithm("Signature.MD5WITHRSA");
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
     }
@@ -41,7 +42,7 @@ public class SPKACTest
     public void spkacTest(String testName, byte[] req)
         throws Exception
     {
-        JcaSignedPublicKeyAndChallenge spkac = new JcaSignedPublicKeyAndChallenge(req).setProvider(JostleProvider.PROVIDER_NAME);
+        JcaSignedPublicKeyAndChallenge spkac = new JcaSignedPublicKeyAndChallenge(req).setProvider(JslTestProvider.name());
 
         PublicKeyAndChallenge pkac = spkac.getPublicKeyAndChallenge();
         PublicKey pubKey = spkac.getPublicKey();
@@ -85,7 +86,7 @@ public class SPKACTest
             }
         }
 
-        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(pubKey)))
+        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(pubKey)))
         {
             fail(testName + " verification failed");
         }
@@ -140,14 +141,14 @@ public class SPKACTest
             }
         }
 
-        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(spkac.getSubjectPublicKeyInfo())))
+        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(spkac.getSubjectPublicKeyInfo())))
         {
             fail(testName + " verification failed");
         }
 
         JcaSignedPublicKeyAndChallenge jcaSignedPublicKeyAndChallenge = new JcaSignedPublicKeyAndChallenge(req);
 
-        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(jcaSignedPublicKeyAndChallenge.getPublicKey())))
+        if (!spkac.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(jcaSignedPublicKeyAndChallenge.getPublicKey())))
         {
             fail(testName + " verification failed");
         }
@@ -162,7 +163,7 @@ public class SPKACTest
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new SPKACTest());
     }

@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Set;
 
 import junit.framework.TestCase;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.pkix.jcajce.PKIXCertPathReviewer;
 import org.bouncycastle.test.TestResourceFinder;
 
@@ -31,9 +31,9 @@ public class CheckNameConstraintsTest
     public void DISABLED_testPKIXCertPathReviewer()
         throws Exception
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
         X509Certificate root = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
         X509Certificate ca1 = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));
@@ -61,9 +61,9 @@ public class CheckNameConstraintsTest
     public void testPKIXCertPathBuilder()
         throws Exception
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
         X509Certificate rootCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
         X509Certificate endCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));
 
@@ -98,9 +98,9 @@ public class CheckNameConstraintsTest
     public void testPKIXCertPathValidator()
         throws Exception
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
         X509Certificate rootCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
         X509Certificate endCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));

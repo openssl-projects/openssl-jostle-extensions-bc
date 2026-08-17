@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -26,6 +28,12 @@ import org.junit.Test;
 public class MLDsaEncodingDiagTest
     extends JostleProviderTestBase
 {
+    @org.junit.Before
+    public void gateOnProviderCapability()
+    {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.ML-DSA-44");
+    }
+
     @Test
     public void diag()
         throws Exception

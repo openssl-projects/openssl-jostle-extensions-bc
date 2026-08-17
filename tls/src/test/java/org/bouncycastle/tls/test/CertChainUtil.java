@@ -1,6 +1,5 @@
 package org.bouncycastle.tls.test;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
-
+import org.bouncycastle.jsl.test.JslTestProvider;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -30,7 +29,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 public class CertChainUtil
 {
-    public static String BC = JostleProvider.PROVIDER_NAME;
+    public static String BC = JslTestProvider.name();
 
     private static final AtomicLong serialNumber = new AtomicLong(1);
 

@@ -21,7 +21,7 @@ import org.bouncycastle.cms.jcajce.JcaSignerId;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoGeneratorBuilder;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.cms.test.CMSTestUtil;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.mime.Headers;
 import org.bouncycastle.mime.MimeParser;
 import org.bouncycastle.mime.MimeParserContext;
@@ -38,7 +38,7 @@ import org.bouncycastle.util.io.Streams;
 public class TestSMIMESigned
     extends TestCase
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     private static String _signDN;
     private static KeyPair _signKP;
@@ -82,9 +82,9 @@ public class TestSMIMESigned
     {
         if (!_initialised)
         {
-            if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+            if (Security.getProvider(JslTestProvider.name()) == null)
             {
-                Security.addProvider(new JostleProvider());
+                JslTestProvider.install();
             }
 
             _initialised = true;
@@ -143,7 +143,7 @@ public class TestSMIMESigned
         //
         final TestDoneFlag dataParsed = new TestDoneFlag();
 
-        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(org.openssl.jostle.jcajce.provider.JostleProvider.PROVIDER_NAME).build());
+        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build());
 
         MimeParser p = provider.createParser(new ReadOnceInputStream(bOut.toByteArray()));
 
@@ -171,7 +171,7 @@ public class TestSMIMESigned
 
                 try
                 {
-                    assertEquals(true, signerInfo.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certHolder)));
+                    assertEquals(true, signerInfo.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JslTestProvider.name()).build(certHolder)));
                 }
                 catch (OperatorCreationException e)
                 {

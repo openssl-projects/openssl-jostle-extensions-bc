@@ -66,6 +66,57 @@ subprojects {
         testImplementation 'junit:junit:4.13.2'
     }
 
+    // Shared test-only support (JslTestProvider) compiled into every module's test source set;
+    // the modules do not otherwise share test code.
+    sourceSets {
+        test {
+            java {
+                srcDir rootProject.file('testsupport/src/main/java')
+            }
+        }
+    }
+
+    // Every module's tests need the provider jar on the test classpath, including core's (which
+    // has none of its own yet) so the shared support class compiles. Resolved lazily:
+    // jostleProviderJar() is defined further down this file, after this block is evaluated.
+    dependencies {
+        testImplementation files({ rootProject.jostleProviderJar() })
+    }
+
+    // The suite always runs against JSL. When TEST_FIPS_LIB names a FIPS module, `fipsTest` runs
+    // the same classes again against JSLFIPS; tests needing an algorithm the FIPS module does not
+    // implement skip themselves via JslTestProvider.assumeAlgorithm.
+    //
+    // TEST_FIPS_LIB is declared as a task input on purpose. Gradle's up-to-date check hashes task
+    // inputs, not the environment, so without this a task that last ran with the variable unset is
+    // considered UP-TO-DATE when re-run with it set and replays a cached all-skipped result as
+    // BUILD SUCCESSFUL in milliseconds. (Bitten in the openssl-jostle repo; see
+    // .claude/guides/testing.md.)
+    tasks.register('fipsTest', Test) {
+        description = 'Runs the test suite against the JSLFIPS provider (requires TEST_FIPS_LIB).'
+        group = 'verification'
+
+        onlyIf { System.getenv('TEST_FIPS_LIB') != null }
+
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+
+        systemProperty 'test.jsl.provider', 'JSLFIPS'
+        inputs.property('fipsLib', System.getenv('TEST_FIPS_LIB') ?: '')
+    }
+
+    // Same reasoning for the ordinary test task: it registers JSLFIPS too when the variable is
+    // set, so its result depends on the variable as well.
+    tasks.named('test').configure {
+        inputs.property('fipsLib', System.getenv('TEST_FIPS_LIB') ?: '')
+    }
+
+    // core carries no tests of its own, but it still compiles the shared test support above, so
+    // "sources present, nothing discovered" is expected rather than a misconfiguration.
+    tasks.withType(Test).configureEach {
+        failOnNoDiscoveredTests = false
+    }
+
     // The compat artifact name carries the -jsl qualifier (bccore-jsl, bcutil-jsl, ...).
     ext.artifactBaseName = "bc${project.name == 'core' ? 'core' : project.name}-jsl"
 

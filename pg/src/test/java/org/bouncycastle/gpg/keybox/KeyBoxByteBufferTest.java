@@ -5,7 +5,7 @@ import java.security.Security;
 import java.util.Arrays;
 
 import junit.framework.TestCase;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.test.SimpleTest;
 
 public class KeyBoxByteBufferTest
@@ -15,7 +15,7 @@ public class KeyBoxByteBufferTest
     public static void main(
         String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
         runTest(new KeyBoxByteBufferTest());
     }
 

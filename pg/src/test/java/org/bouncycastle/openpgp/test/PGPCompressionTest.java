@@ -7,7 +7,7 @@ import java.io.OutputStream;
 import java.security.SecureRandom;
 import java.security.Security;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
 import org.bouncycastle.openpgp.PGPException;
@@ -155,7 +155,7 @@ public class PGPCompressionTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new PGPCompressionTest());
     }

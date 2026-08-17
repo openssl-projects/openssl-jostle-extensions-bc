@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 
@@ -25,6 +27,12 @@ import static org.junit.Assert.assertTrue;
 public class ScryptKdfTest
     extends JostleProviderTestBase
 {
+    @org.junit.Before
+    public void gateOnProviderCapability()
+    {
+        JslTestProvider.assumeAlgorithm("SecretKeyFactory.SCRYPT");
+    }
+
     // RFC 7914, section 12: scrypt("pleaseletmein","SodiumChloride", N=16384, r=8, p=1, dkLen=64)
     private static final char[] PASSWORD = "pleaseletmein".toCharArray();
     private static final byte[] SALT = Strings.toByteArray("SodiumChloride");

@@ -12,7 +12,7 @@ import junit.framework.TestCase;
 import junit.framework.TestSuite;
 import org.bouncycastle.bcpg.BCPGOutputStream;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPLiteralData;
 import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
@@ -41,9 +41,9 @@ public class DSA2Test
 {
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new org.openssl.jostle.jcajce.provider.JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -150,9 +150,9 @@ public class DSA2Test
         String                data = "hello world!";
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
         ByteArrayInputStream  testIn = new ByteArrayInputStream(data.getBytes());
-        PGPSignatureGenerator sGen = new PGPSignatureGenerator(new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.DSA, digest).setProvider(JostleProvider.PROVIDER_NAME));
+        PGPSignatureGenerator sGen = new PGPSignatureGenerator(new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.DSA, digest).setProvider(JslTestProvider.name()));
 
-        sGen.init(PGPSignature.BINARY_DOCUMENT, secRing.getSecretKey().extractPrivateKey(new JcePBESecretKeyDecryptorBuilder(new JcaPGPDigestCalculatorProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build()).setProvider(new JostleProvider()).build("test".toCharArray())));
+        sGen.init(PGPSignature.BINARY_DOCUMENT, secRing.getSecretKey().extractPrivateKey(new JcePBESecretKeyDecryptorBuilder(new JcaPGPDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build()).setProvider(JslTestProvider.provider()).build("test".toCharArray())));
 
         BCPGOutputStream bcOut = new BCPGOutputStream(bOut);
 
@@ -194,7 +194,7 @@ public class DSA2Test
 
         InputStream             dIn = p2.getInputStream();
 
-        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JostleProvider.PROVIDER_NAME), pubRing.getPublicKey());
+        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JslTestProvider.name()), pubRing.getPublicKey());
 
         while ((ch = dIn.read()) >= 0)
         {
@@ -229,7 +229,7 @@ public class DSA2Test
 
         InputStream dIn = p2.getInputStream();
 
-        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JostleProvider.PROVIDER_NAME), publicKey.getPublicKey());
+        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JslTestProvider.name()), publicKey.getPublicKey());
 
         int ch;
         while ((ch = dIn.read()) >= 0)

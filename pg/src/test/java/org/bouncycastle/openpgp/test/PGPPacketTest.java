@@ -9,7 +9,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.Random;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPLiteralData;
 import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
 import org.bouncycastle.openpgp.jcajce.JcaPGPObjectFactory;
@@ -173,7 +173,7 @@ public class PGPPacketTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new PGPPacketTest());
     }

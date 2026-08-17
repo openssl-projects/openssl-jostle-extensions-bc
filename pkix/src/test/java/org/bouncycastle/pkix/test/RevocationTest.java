@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Set;
 
 import junit.framework.TestCase;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.pkix.jcajce.X509RevocationChecker;
 import org.bouncycastle.util.CollectionStore;
 import org.bouncycastle.util.encoders.Base64;
@@ -256,8 +256,8 @@ public class RevocationTest
     {
         if(!initialized)
         {
-            Security.addProvider(new JostleProvider());
-            KeyPairGenerator kpGen = KeyPairGenerator.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+            JslTestProvider.install();
+            KeyPairGenerator kpGen = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
 
             kpGen.initialize(2048);
 
@@ -293,7 +293,7 @@ public class RevocationTest
         certchain.add(eeCert);
         certchain.add(caCert);
 
-        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(certchain);
         Set trust = new HashSet();
         trust.add(new TrustAnchor(trustCert, null));
 
@@ -341,7 +341,7 @@ public class RevocationTest
         certchain.add(eeCert);
         certchain.add(caCert);
 
-        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(certchain);
         Set trust = new HashSet();
         trust.add(new TrustAnchor(trustCert, null));
 
@@ -389,7 +389,7 @@ public class RevocationTest
         certchain.add(eeCert);
         certchain.add(caCert);
 
-        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(certchain);
         Set trust = new HashSet();
         trust.add(new TrustAnchor(trustCert, null));
 
@@ -439,7 +439,7 @@ public class RevocationTest
         certchain.add(eeCertWithDistPoint);
         certchain.add(caCert);
 
-        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(certchain);
         Set trust = new HashSet();
         trust.add(new TrustAnchor(trustCert, null));
 
@@ -489,7 +489,7 @@ public class RevocationTest
         throws Exception
     {
         // TODO: replace - certifcates have expired!
-//        CertificateFactory certFact = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+//        CertificateFactory certFact = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 //        List list = new ArrayList();
 //
 //        X509Certificate trustCert = (X509Certificate)certFact.generateCertificate(new ByteArrayInputStream(sampleTrust));
@@ -507,7 +507,7 @@ public class RevocationTest
 //        certchain.add(eeCert);
 //        certchain.add(caCert);
 //
-//        CertPath cp = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+//        CertPath cp = CertificateFactory.getInstance("X.509", JslTestProvider.name()).generateCertPath(certchain);
 //        Set trust = new HashSet();
 //        trust.add(new TrustAnchor(trustCert, null));
 //
@@ -518,7 +518,7 @@ public class RevocationTest
 //            .Builder(new TrustAnchor(trustCert, null))
 //            .setCheckEndEntityOnly(true)
 //            .addCrls(new CollectionStore<CRL>(crls))
-//            .usingProvider(JostleProvider.PROVIDER_NAME)
+//            .usingProvider(JslTestProvider.name())
 //            .build();
 //
 //        CertPathValidator cpv = CertPathValidator.getInstance("PKIX");

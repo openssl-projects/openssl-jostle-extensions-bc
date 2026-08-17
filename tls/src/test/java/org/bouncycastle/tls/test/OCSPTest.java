@@ -19,7 +19,7 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReqBuilder;
 import org.bouncycastle.cert.ocsp.SingleResp;
 import org.bouncycastle.cert.ocsp.jcajce.JcaCertificateID;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
@@ -90,9 +90,9 @@ public class OCSPTest
 
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
     

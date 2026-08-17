@@ -15,7 +15,7 @@ import java.util.Iterator;
 import org.bouncycastle.bcpg.BCPGOutputStream;
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
 import org.bouncycastle.openpgp.PGPKeyPair;
@@ -312,7 +312,7 @@ public class PGPDSATest
         String                  data = "hello world!";
         ByteArrayOutputStream   bOut = new ByteArrayOutputStream();
         ByteArrayInputStream    testIn = new ByteArrayInputStream(data.getBytes());
-        PGPSignatureGenerator   sGen = new PGPSignatureGenerator(new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.DSA, HashAlgorithmTags.SHA1).setProvider(JostleProvider.PROVIDER_NAME));
+        PGPSignatureGenerator   sGen = new PGPSignatureGenerator(new JcaPGPContentSignerBuilder(PublicKeyAlgorithmTags.DSA, HashAlgorithmTags.SHA1).setProvider(JslTestProvider.name()));
     
         sGen.init(PGPSignature.BINARY_DOCUMENT, pgpPrivKey);
 
@@ -373,7 +373,7 @@ public class PGPDSATest
 
         InputStream             dIn = p2.getInputStream();
 
-        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JostleProvider.PROVIDER_NAME), pgpPubKey);
+        ops.init(new JcaPGPContentVerifierBuilderProvider().setProvider(JslTestProvider.name()), pgpPubKey);
         
         while ((ch = dIn.read()) >= 0)
         {
@@ -388,13 +388,13 @@ public class PGPDSATest
         }
     }
 
-    private static final String P = JostleProvider.PROVIDER_NAME;
+    private static final String P = JslTestProvider.name();
 
     public void setUp()
     {
         if (Security.getProvider(P) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -467,6 +467,12 @@ public class PGPDSATest
     public void testGeneratedDsaKeyPairSignVerify()
         throws Exception
     {
+        // DSA here signs with SHA-1, which the FIPS module refuses for signature generation.
+        if (JslTestProvider.isFips())
+        {
+            System.out.println("[skipped] " + JslTestProvider.name() + " does not allow SHA-1 DSA signing");
+            return;
+        }
         // Fresh DSA key + full OpenPGP one-pass sign/verify round trip. Uses 2048-bit params
         // (OpenSSL rejects the 512-bit key the original bc-java test generates).
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("DSA", P);

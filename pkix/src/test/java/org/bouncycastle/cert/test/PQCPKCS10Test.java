@@ -20,7 +20,7 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
 import org.bouncycastle.jcajce.spec.MLKEMParameterSpec;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
@@ -35,7 +35,7 @@ import org.bouncycastle.util.Arrays;
 public class PQCPKCS10Test
     extends TestCase
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     public String getName()
     {
@@ -44,16 +44,20 @@ public class PQCPKCS10Test
 
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
     
     public void testMLDsa()
         throws Exception
     {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("ML-DSA", JostleProvider.PROVIDER_NAME);
+        if (!JslTestProvider.supports("KeyPairGenerator.ML-DSA"))
+        {
+            return;
+        }
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("ML-DSA", JslTestProvider.name());
 
         kpg.initialize(MLDSAParameterSpec.ml_dsa_65);
 
@@ -84,14 +88,18 @@ public class PQCPKCS10Test
     public void testMLKem()
         throws Exception
     {
-        KeyPairGenerator signKpg = KeyPairGenerator.getInstance("ML-DSA", JostleProvider.PROVIDER_NAME);
+        if (!JslTestProvider.supports("KeyPairGenerator.ML-KEM"))
+        {
+            return;
+        }
+        KeyPairGenerator signKpg = KeyPairGenerator.getInstance("ML-DSA", JslTestProvider.name());
 
         signKpg.initialize(MLDSAParameterSpec.ml_dsa_65);
 
         KeyPair signKp = signKpg.genKeyPair();
         X509Certificate signCert = getMLDSACertificate(signKp);
         
-        KeyPairGenerator kemKpg = KeyPairGenerator.getInstance("ML-KEM", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kemKpg = KeyPairGenerator.getInstance("ML-KEM", JslTestProvider.name());
 
         kemKpg.initialize(MLKEMParameterSpec.ml_kem_768);
 

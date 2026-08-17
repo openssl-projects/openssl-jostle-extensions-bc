@@ -32,7 +32,7 @@ import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
 import org.bouncycastle.cms.jcajce.JceKeyTransAuthEnvelopedRecipient;
 import org.bouncycastle.cms.jcajce.JceKeyTransEnvelopedRecipient;
 import org.bouncycastle.cms.jcajce.JceKeyTransRecipientInfoGenerator;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OutputAEADEncryptor;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -57,7 +57,7 @@ import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 public class DefiniteLengthLargeDataTest
     extends TestCase
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     private static final int BLOCK = 8192;
     private static final byte[] PATTERN = makePattern();
@@ -109,7 +109,7 @@ public class DefiniteLengthLargeDataTest
         }
         if (Security.getProvider(BC) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
         signKP = CMSTestUtil.makeKeyPair();
         signCert = CMSTestUtil.makeCertificate(signKP, "O=Bouncy Castle, C=AU", signKP, "O=Bouncy Castle, C=AU");

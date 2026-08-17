@@ -14,7 +14,7 @@ import org.bouncycastle.cert.path.CertPathValidationResult;
 import org.bouncycastle.cert.path.validations.BasicConstraintsValidation;
 import org.bouncycastle.cert.path.validations.KeyUsageValidation;
 import org.bouncycastle.cert.path.validations.ParentCertIssuedValidation;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.test.TestResourceFinder;
 import org.bouncycastle.util.test.SimpleTest;
 
@@ -225,7 +225,7 @@ public class PKITSBasicConstraintsTest
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new PKITSBasicConstraintsTest());
     }

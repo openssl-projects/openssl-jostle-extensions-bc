@@ -1,6 +1,5 @@
 package org.bouncycastle.pkix.test;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
-
+import org.bouncycastle.jsl.test.JslTestProvider;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
@@ -57,9 +56,9 @@ public class TestUtil
             new X500Name(name),
             kp.getPublic());
 
-        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JostleProvider.PROVIDER_NAME);
+        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JslTestProvider.name());
 
-        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JostleProvider.PROVIDER_NAME)
+        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JslTestProvider.name())
             .getCertificate(v1CertGen.build(contentSignerBuilder.build(kp.getPrivate())));
 
         cert.checkValidity(new Date());
@@ -96,9 +95,9 @@ public class TestUtil
             false,
             new BasicConstraints(0));
 
-        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JostleProvider.PROVIDER_NAME);
+        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JslTestProvider.name());
 
-        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JostleProvider.PROVIDER_NAME)
+        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JslTestProvider.name())
             .getCertificate(v3CertGen.build(contentSignerBuilder.build(issuerKey)));
 
         cert.checkValidity(new Date());
@@ -153,9 +152,9 @@ public class TestUtil
                 new CRLDistPoint(new DistributionPoint[]{ dp }));
         }
 
-        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JostleProvider.PROVIDER_NAME);
+        JcaContentSignerBuilder contentSignerBuilder = new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JslTestProvider.name());
 
-        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JostleProvider.PROVIDER_NAME)
+        X509Certificate cert = new JcaX509CertificateConverter().setProvider(JslTestProvider.name())
             .getCertificate(v3CertGen.build(contentSignerBuilder.build(issuerKey)));
 
         cert.checkValidity(new Date());
@@ -177,7 +176,7 @@ public class TestUtil
 
         crlGen.addExtension(Extension.authorityKeyIdentifier, false, extensionUtils.createAuthorityKeyIdentifier(issuer));
 
-        return new JcaX509CRLConverter().setProvider(JostleProvider.PROVIDER_NAME).getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JostleProvider.PROVIDER_NAME).build(sigKey)));
+        return new JcaX509CRLConverter().setProvider(JslTestProvider.name()).getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JslTestProvider.name()).build(sigKey)));
     }
 
     public static X509CRL makeCrl(X509Certificate issuer, Date issueDate, PrivateKey sigKey, BigInteger revoked)
@@ -193,6 +192,6 @@ public class TestUtil
 
         crlGen.addExtension(Extension.authorityKeyIdentifier, false, extensionUtils.createAuthorityKeyIdentifier(issuer));
 
-        return new JcaX509CRLConverter().setProvider(JostleProvider.PROVIDER_NAME).getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JostleProvider.PROVIDER_NAME).build(sigKey)));
+        return new JcaX509CRLConverter().setProvider(JslTestProvider.name()).getCRL(crlGen.build(new JcaContentSignerBuilder("SHA256WithRSA").setProvider(JslTestProvider.name()).build(sigKey)));
     }
 }

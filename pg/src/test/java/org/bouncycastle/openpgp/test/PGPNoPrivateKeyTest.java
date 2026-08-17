@@ -2,7 +2,7 @@ package org.bouncycastle.openpgp.test;
 
 import java.security.Security;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPSecretKey;
 import org.bouncycastle.openpgp.PGPSecretKeyRing;
@@ -18,7 +18,7 @@ public class PGPNoPrivateKeyTest
 {
     String pgpOldPass = "test";
     String pgpNewPass = "newtest";
-    String BOUNCY_CASTLE_PROVIDER_NAME = JostleProvider.PROVIDER_NAME;
+    String BOUNCY_CASTLE_PROVIDER_NAME = JslTestProvider.name();
 
     byte[]    pgpPrivateEmpty = Base64.decode(
           "lQCVBFGSNGwBBACwABZRIEW/4vDQajcO0FW39yNDcsHBDwPkGT95D7jiVTTRoSs6"
@@ -166,7 +166,7 @@ public class PGPNoPrivateKeyTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new PGPNoPrivateKeyTest());
     }

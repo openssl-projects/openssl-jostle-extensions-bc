@@ -16,7 +16,7 @@ import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.mime.BasicMimeParser;
 import org.bouncycastle.mime.ConstantMimeContext;
 import org.bouncycastle.mime.Headers;
@@ -40,9 +40,9 @@ public class MultipartParserTest
     protected void setUp()
         throws Exception
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -146,7 +146,7 @@ public class MultipartParserTest
 
         final TestDoneFlag dataParsed = new TestDoneFlag();
 
-        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(org.openssl.jostle.jcajce.provider.JostleProvider.PROVIDER_NAME).build());
+        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build());
 
         MimeParser p = provider.createParser(this.getClass().getResourceAsStream("quotable.message"));
 
@@ -179,7 +179,7 @@ public class MultipartParserTest
 
                     try
                     {
-                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certHolder)));
+                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JslTestProvider.name()).build(certHolder)));
                     }
                     catch (OperatorCreationException e)
                     {
@@ -204,7 +204,7 @@ public class MultipartParserTest
     {
         final ArrayList<Object> results = new ArrayList<Object>();
 
-        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(org.openssl.jostle.jcajce.provider.JostleProvider.PROVIDER_NAME).build());
+        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build());
 
         MimeParser p = provider.createParser(this.getClass().getResourceAsStream("3nnn_smime.eml"));
 
@@ -238,7 +238,7 @@ public class MultipartParserTest
                     try
                     {
                         // in this case the signature is invalid
-                        assertEquals(false, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certHolder)));
+                        assertEquals(false, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JslTestProvider.name()).build(certHolder)));
                     }
                     catch (OperatorCreationException e)
                     {
@@ -259,7 +259,7 @@ public class MultipartParserTest
     {
         final ArrayList<Object> results = new ArrayList<Object>();
 
-        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(org.openssl.jostle.jcajce.provider.JostleProvider.PROVIDER_NAME).build());
+        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build());
 
         MimeParser p = provider.createParser(this.getClass().getResourceAsStream("embeddedmulti.message"));
 
@@ -292,7 +292,7 @@ public class MultipartParserTest
 
                     try
                     {
-                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certHolder)));
+                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JslTestProvider.name()).build(certHolder)));
                     }
                     catch (OperatorCreationException e)
                     {
@@ -313,7 +313,7 @@ public class MultipartParserTest
     {
         final ArrayList<Object> results = new ArrayList<Object>();
 
-        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(org.openssl.jostle.jcajce.provider.JostleProvider.PROVIDER_NAME).build());
+        MimeParserProvider provider = new SMimeParserProvider("7bit", new org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build());
 
         MimeParser p = provider.createParser(this.getClass().getResourceAsStream("multi-alternative.eml"));
 
@@ -361,7 +361,7 @@ public class MultipartParserTest
 
                     try
                     {
-                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certHolder)));
+                        assertEquals(true, signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(JslTestProvider.name()).build(certHolder)));
                     }
                     catch (OperatorCreationException e)
                     {

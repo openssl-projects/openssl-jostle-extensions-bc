@@ -5,7 +5,7 @@ import java.security.PublicKey;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.test.SimpleTest;
 
 public class SLHDSACredentialsTest
@@ -15,6 +15,7 @@ public class SLHDSACredentialsTest
     public void test()
         throws Exception
     {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.SLH-DSA-SHA2-128S");
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful())
         {
@@ -38,12 +39,12 @@ public class SLHDSACredentialsTest
     {
         X509Certificate cert = creds.getCertificate();
         PublicKey pubKey = cert.getPublicKey();
-        cert.verify(pubKey, JostleProvider.PROVIDER_NAME);
+        cert.verify(pubKey, JslTestProvider.name());
     }
 
     public static void main(String[] args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new SLHDSACredentialsTest());
     }

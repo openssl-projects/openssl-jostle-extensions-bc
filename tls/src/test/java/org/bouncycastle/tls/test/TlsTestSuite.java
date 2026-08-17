@@ -4,7 +4,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.util.Vector;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.tls.AlertDescription;
 import org.bouncycastle.tls.HashAlgorithm;
 import org.bouncycastle.tls.ProtocolVersion;
@@ -22,7 +22,7 @@ import junit.framework.TestSuite;
 public class TlsTestSuite extends TestSuite
 {
     static org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCrypto BC_CRYPTO = org.bouncycastle.tls.test.TlsTestUtils.createTestCrypto(); 
-    static JcaTlsCrypto JCA_CRYPTO = (JcaTlsCrypto)new JcaTlsCryptoProvider().setProvider(new JostleProvider()).create(new SecureRandom());
+    static JcaTlsCrypto JCA_CRYPTO = (JcaTlsCrypto)new JcaTlsCryptoProvider().setProvider(JslTestProvider.provider()).create(new SecureRandom());
 
     static TlsCrypto getCrypto(TlsTestConfig config)
     {
@@ -46,17 +46,17 @@ public class TlsTestSuite extends TestSuite
 
     public static Test suite()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
         else
         {
             // remove the old one.
-            Security.removeProvider(JostleProvider.PROVIDER_NAME);
+            Security.removeProvider(JslTestProvider.name());
 
             // make sure BC provider is at the end
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
 
         TlsTestSuite testSuite = new TlsTestSuite();
@@ -325,7 +325,7 @@ public class TlsTestSuite extends TestSuite
             return "JCA";
         case TlsTestConfig.CRYPTO_BC:
         default:
-            return JostleProvider.PROVIDER_NAME;
+            return JslTestProvider.name();
         }
     }
 }

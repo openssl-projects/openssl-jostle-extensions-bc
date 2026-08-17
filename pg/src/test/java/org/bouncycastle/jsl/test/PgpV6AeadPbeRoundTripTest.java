@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -47,31 +49,31 @@ public class PgpV6AeadPbeRoundTripTest
     public static void installProvider()
         throws Exception
     {
-        if (Security.getProvider("JSL") == null)
-        {
-            Class<?> c = Class.forName("org.openssl.jostle.jcajce.provider.JostleProvider");
-            Security.addProvider((Provider)c.getDeclaredConstructor().newInstance());
-        }
+        JslTestProvider.install();
     }
 
     @Test
     public void v6AeadOcbPbeRoundTrip()
         throws Exception
     {
+        // OCB is not an approved AEAD mode. Note the capability probe is not enough here:
+        // Cipher.getInstance("AES/OCB/NoPadding") SUCCEEDS against JSLFIPS - the mode string is
+        // accepted - and the failure only appears at init, when OpenSSL cannot fetch the mode.
+        JslTestProvider.assumeNotFips("OCB is not an approved AEAD mode");
         byte[] data = "OpenPGP v6 AEAD over an HKDF-derived key, through OpenSSL".getBytes("UTF-8");
 
         PGPDigestCalculatorProvider digCalcProv =
-            new JcaPGPDigestCalculatorProviderBuilder().setProvider("JSL").build();
+            new JcaPGPDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build();
 
         JcePGPDataEncryptorBuilder encBuilder =
-            new JcePGPDataEncryptorBuilder(SymmetricKeyAlgorithmTags.AES_256).setProvider("JSL");
+            new JcePGPDataEncryptorBuilder(SymmetricKeyAlgorithmTags.AES_256).setProvider(JslTestProvider.name());
         encBuilder.setUseV6AEAD();
         encBuilder.setWithAEAD(AEADAlgorithmTags.OCB, 6);
 
         PGPEncryptedDataGenerator encGen = new PGPEncryptedDataGenerator(encBuilder, false);
         encGen.setForceSessionKey(true);
         encGen.addMethod(new JcePBEKeyEncryptionMethodGenerator(PASSWORD,
-            digCalcProv.get(HashAlgorithmTags.SHA256)).setProvider("JSL"));
+            digCalcProv.get(HashAlgorithmTags.SHA256)).setProvider(JslTestProvider.name()));
 
         ByteArrayOutputStream ctOut = new ByteArrayOutputStream();
         OutputStream encOut = encGen.open(ctOut, new byte[1 << 9]);
@@ -87,7 +89,7 @@ public class PgpV6AeadPbeRoundTripTest
         PGPPBEEncryptedData pbe = (PGPPBEEncryptedData)encList.get(0);
 
         PBEDataDecryptorFactory decFact = new JcePBEDataDecryptorFactoryBuilder(
-            new JcaPGPDigestCalculatorProviderBuilder().setProvider("JSL").build()).setProvider("JSL").build(PASSWORD);
+            new JcaPGPDigestCalculatorProviderBuilder().setProvider(JslTestProvider.name()).build()).setProvider(JslTestProvider.name()).build(PASSWORD);
 
         InputStream clear = pbe.getDataStream(decFact);
         PGPObjectFactory of2 = new JcaPGPObjectFactory(clear);

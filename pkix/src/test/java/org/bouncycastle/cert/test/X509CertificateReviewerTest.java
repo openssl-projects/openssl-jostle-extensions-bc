@@ -25,7 +25,7 @@ import org.bouncycastle.cert.X509CertificateReviewer.Finding;
 import org.bouncycastle.cert.X509CertificateReviewer.Review;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
@@ -34,9 +34,9 @@ public class X509CertificateReviewerTest
 {
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -207,7 +207,7 @@ public class X509CertificateReviewerTest
     private static X509CertificateHolder makeCertificateWithExtension()
         throws Exception
     {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
         kpg.initialize(2048);
         KeyPair kp = kpg.generateKeyPair();
 
@@ -221,14 +221,14 @@ public class X509CertificateReviewerTest
             kp.getPublic());
         builder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
 
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(kp.getPrivate());
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(kp.getPrivate());
         return builder.build(signer);
     }
 
     private static X509CertificateHolder makeCertificate()
         throws Exception
     {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", JslTestProvider.name());
         kpg.initialize(2048);
         KeyPair kp = kpg.generateKeyPair();
 
@@ -241,7 +241,7 @@ public class X509CertificateReviewerTest
             new X500Principal("CN=Test"),
             kp.getPublic());
 
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JostleProvider.PROVIDER_NAME).build(kp.getPrivate());
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(JslTestProvider.name()).build(kp.getPrivate());
         return builder.build(signer);
     }
 }

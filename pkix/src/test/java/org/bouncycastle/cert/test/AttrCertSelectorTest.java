@@ -25,7 +25,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v2AttributeCertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.cert.selector.X509AttributeCertificateHolderSelectorBuilder;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.util.encoders.Base64;
@@ -36,7 +36,7 @@ import org.bouncycastle.util.test.TestResult;
 public class AttrCertSelectorTest
     extends SimpleTest
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     static final RSAPrivateCrtKeySpec RSA_PRIVATE_KEY_SPEC = new RSAPrivateCrtKeySpec(
         new BigInteger(
@@ -99,6 +99,7 @@ public class AttrCertSelectorTest
     public void test()
         throws Exception
     {
+        JslTestProvider.assumeAlgorithm("Signature.MD5WITHRSA");
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful())
         {
@@ -113,7 +114,7 @@ public class AttrCertSelectorTest
 
     private X509AttributeCertificateHolder createAttrCert() throws Exception
     {
-        CertificateFactory fact = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory fact = CertificateFactory.getInstance("X.509", JslTestProvider.name());
         X509Certificate iCert = (X509Certificate) fact
             .generateCertificate(new ByteArrayInputStream(holderCert));
         X509CertificateHolder iCertHolder = new JcaX509CertificateHolder(iCert);
@@ -130,7 +131,7 @@ public class AttrCertSelectorTest
         //
         PrivateKey privKey;
 
-        KeyFactory kFact = KeyFactory.getInstance("RSA", JostleProvider.PROVIDER_NAME);
+        KeyFactory kFact = KeyFactory.getInstance("RSA", JslTestProvider.name());
 
         privKey = kFact.generatePrivate(RSA_PRIVATE_KEY_SPEC);
 
@@ -199,7 +200,7 @@ public class AttrCertSelectorTest
         }
         sel.setIssuer(null);
 
-        CertificateFactory fact = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory fact = CertificateFactory.getInstance("X.509", JslTestProvider.name());
         X509CertificateHolder iCert = new JcaX509CertificateHolder((X509Certificate) fact
             .generateCertificate(new ByteArrayInputStream(holderCert)));
         match = aCert.getHolder().match(iCert);
@@ -240,7 +241,7 @@ public class AttrCertSelectorTest
 
     public void performTest() throws Exception
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
         testSelector();
     }
 

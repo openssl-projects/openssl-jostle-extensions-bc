@@ -21,7 +21,7 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509ExtensionUtils;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
@@ -126,7 +126,7 @@ public class X509ExtensionUtilsTest
     {
         JcaX509ExtensionUtils x509ExtensionUtils = new JcaX509ExtensionUtils();
 
-        PublicKey key = KeyFactory.getInstance("RSA", JostleProvider.PROVIDER_NAME).generatePublic(new X509EncodedKeySpec(pubKeyInfo));
+        PublicKey key = KeyFactory.getInstance("RSA", JslTestProvider.name()).generatePublic(new X509EncodedKeySpec(pubKeyInfo));
 
         SubjectKeyIdentifier ski = x509ExtensionUtils.createSubjectKeyIdentifier(key);
 
@@ -142,7 +142,7 @@ public class X509ExtensionUtilsTest
             fail("jca truncated SHA-1 ID does not match");
         }
 
-        CertificateFactory cFact = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+        CertificateFactory cFact = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
         X509Certificate v0certificate = (X509Certificate)cFact.generateCertificate(new ByteArrayInputStream(v0Cert));
         X509Certificate v3certificate = (X509Certificate)cFact.generateCertificate(new ByteArrayInputStream(v3Cert));
@@ -206,7 +206,7 @@ public class X509ExtensionUtilsTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new X509ExtensionUtilsTest());
     }

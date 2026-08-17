@@ -1,20 +1,22 @@
 package org.bouncycastle.jsse.provider.test;
 
+import org.openssl.jostle.jcajce.provider.JostleProvider;
+
 import java.security.Provider;
 import java.security.Security;
 
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 
 class ProviderUtils
 {
-    static final String PROVIDER_NAME_BC = JostleProvider.PROVIDER_NAME;
+    static final String PROVIDER_NAME_BC = JslTestProvider.name();
     static final String PROVIDER_NAME_BCJSSE = BouncyCastleJsseProvider.PROVIDER_NAME;
 
     static Provider createProviderBC()
     {
-        return new JostleProvider();
+        return JslTestProvider.provider();
     }
 
     static Provider createProviderBCJSSE()

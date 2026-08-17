@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -22,6 +24,12 @@ import static org.junit.Assert.assertTrue;
 public class SLHDSACertTest
     extends JostleProviderTestBase
 {
+    @org.junit.Before
+    public void gateOnProviderCapability()
+    {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.SLH-DSA-SHA2-128F");
+    }
+
     @Test
     public void slhdsaSha2_128f()
         throws Exception

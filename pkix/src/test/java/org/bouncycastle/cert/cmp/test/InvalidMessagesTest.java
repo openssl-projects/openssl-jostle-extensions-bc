@@ -17,7 +17,7 @@ import org.bouncycastle.cert.cmp.GeneralPKIMessage;
 import org.bouncycastle.cert.cmp.ProtectedPKIMessage;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.crypto.params.DSAParameters;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.PKCSException;
@@ -29,9 +29,9 @@ public class InvalidMessagesTest
 {
     public void setUp()
     {
-        if (Security.getProvider(JostleProvider.PROVIDER_NAME) == null)
+        if (Security.getProvider(JslTestProvider.name()) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
     }
 
@@ -73,7 +73,7 @@ public class InvalidMessagesTest
         PKCS10CertificationRequest certReq = new PKCS10CertificationRequest(CertificationRequest.getInstance(body.getContent()));
         try
         {
-            certReq.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME).build(certReq.getSubjectPublicKeyInfo()));
+            certReq.isSignatureValid(new JcaContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(certReq.getSubjectPublicKeyInfo()));
         }
         catch (PKCSException e)
         {
@@ -84,7 +84,7 @@ public class InvalidMessagesTest
     public void DISABLED_testBadProtection()
         throws Exception
     {
-        KeyPairGenerator dsaKpGen = KeyPairGenerator.getInstance("DSA", JostleProvider.PROVIDER_NAME);
+        KeyPairGenerator dsaKpGen = KeyPairGenerator.getInstance("DSA", JslTestProvider.name());
 
         DSAParameters dsaParams = (DSAParameters)CryptoServicesRegistrar.getSizedProperty(CryptoServicesRegistrar.Property.DSA_DEFAULT_PARAMS, 2048);
 

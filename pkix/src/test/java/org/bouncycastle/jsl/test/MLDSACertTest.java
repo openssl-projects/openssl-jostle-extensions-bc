@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.test;
 
+import org.bouncycastle.jsl.test.JslTestProvider;
+
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -28,6 +30,12 @@ import static org.junit.Assert.assertTrue;
 public class MLDSACertTest
     extends JostleProviderTestBase
 {
+    @org.junit.Before
+    public void gateOnProviderCapability()
+    {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.ML-DSA-44");
+    }
+
     @Test
     public void selfSignedCertBuildsAndVerifies()
         throws Exception

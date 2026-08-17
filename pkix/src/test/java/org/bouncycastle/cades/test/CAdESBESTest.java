@@ -24,7 +24,7 @@ import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.test.CMSTestUtil;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -34,7 +34,7 @@ import org.bouncycastle.util.encoders.Hex;
 public class CAdESBESTest
     extends TestCase
 {
-    private static final String BC = JostleProvider.PROVIDER_NAME;
+    private static final String BC = JslTestProvider.name();
 
     private static KeyPair signKP;
     private static X509Certificate signCert;
@@ -44,7 +44,7 @@ public class CAdESBESTest
     {
         if (Security.getProvider(BC) == null)
         {
-            Security.addProvider(new JostleProvider());
+            JslTestProvider.install();
         }
         if (signKP == null)
         {

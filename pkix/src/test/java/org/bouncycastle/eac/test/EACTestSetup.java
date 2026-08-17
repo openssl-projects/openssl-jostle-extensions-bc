@@ -5,8 +5,7 @@ import java.security.Security;
 
 import junit.extensions.TestSetup;
 import junit.framework.Test;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
-
+import org.bouncycastle.jsl.test.JslTestProvider;
 class EACTestSetup
     extends TestSetup
 {
@@ -17,12 +16,12 @@ class EACTestSetup
 
     protected void setUp()
     {
-        Security.addProvider(new org.openssl.jostle.jcajce.provider.JostleProvider());
+        JslTestProvider.install();
     }
 
     protected void tearDown()
     {
-        Security.removeProvider(JostleProvider.PROVIDER_NAME);
+        Security.removeProvider(JslTestProvider.name());
     }
 
 }

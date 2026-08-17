@@ -18,7 +18,7 @@ import org.bouncycastle.cert.path.validations.BasicConstraintsValidation;
 import org.bouncycastle.cert.path.validations.CRLValidation;
 import org.bouncycastle.cert.path.validations.KeyUsageValidation;
 import org.bouncycastle.cert.path.validations.ParentCertIssuedValidation;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.CollectionStore;
 import org.bouncycastle.util.Store;
 import org.bouncycastle.util.encoders.Base64;
@@ -194,7 +194,7 @@ public class CertPathValidationTest
 //    private void checkCircProcessing()
 //        throws Exception
 //    {
-//        CertificateFactory cf = CertificateFactory.getInstance("X.509", JostleProvider.PROVIDER_NAME);
+//        CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 //
 //        X509Certificate caCert = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(circCA));
 //        X509Certificate crlCaCert = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(circCRLCA));
@@ -216,12 +216,12 @@ public class CertPathValidationTest
 //        List certchain = new ArrayList();
 //
 //        certchain.add(crlCaCert);
-//        CertPath cp = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+//        CertPath cp = CertificateFactory.getInstance("X.509",JslTestProvider.name()).generateCertPath(certchain);
 //
 //        Set trust = new HashSet();
 //        trust.add(new TrustAnchor(caCert, null));
 //
-//        CertPathValidator cpv = CertPathValidator.getInstance("PKIX",JostleProvider.PROVIDER_NAME);
+//        CertPathValidator cpv = CertPathValidator.getInstance("PKIX",JslTestProvider.name());
 //        //PKIXParameters param = new PKIXParameters(trust);
 //
 //        PKIXBuilderParameters param = new PKIXBuilderParameters(trust, null);
@@ -256,7 +256,7 @@ public class CertPathValidationTest
         X509CRLHolder interCrl =  new X509CRLHolder(CertPathTest.interCrlBin);
 
         CertPath path = new CertPath(new X509CertificateHolder[] { finalCert, interCert });
-        X509ContentVerifierProviderBuilder verifier = new JcaX509ContentVerifierProviderBuilder().setProvider(JostleProvider.PROVIDER_NAME);
+        X509ContentVerifierProviderBuilder verifier = new JcaX509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name());
 
         CertPathValidationResult result = path.validate(new CertPathValidation[]{new ParentCertIssuedValidation(verifier), new BasicConstraintsValidation(), new KeyUsageValidation()});
 
@@ -328,18 +328,18 @@ public class CertPathValidationTest
 //        list.add(rootCrl);
 //        list.add(interCrl);
 //        CollectionCertStoreParameters ccsp = new CollectionCertStoreParameters(list);
-//        CertStore store = CertStore.getInstance("Collection", ccsp, JostleProvider.PROVIDER_NAME);
+//        CertStore store = CertStore.getInstance("Collection", ccsp, JslTestProvider.name());
 //        Calendar validDate = Calendar.getInstance();
 //        validDate.set(2008,8,4,14,49,10);
 //            //validating path
 //        List certchain = new ArrayList();
 //        certchain.add(finalCert);
 //        certchain.add(interCert);
-//        CertPath cp = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+//        CertPath cp = CertificateFactory.getInstance("X.509",JslTestProvider.name()).generateCertPath(certchain);
 //        Set trust = new HashSet();
 //        trust.add(new TrustAnchor(rootCert, null));
 //
-//        CertPathValidator cpv = CertPathValidator.getInstance("PKIX",JostleProvider.PROVIDER_NAME);
+//        CertPathValidator cpv = CertPathValidator.getInstance("PKIX",JslTestProvider.name());
 //        PKIXParameters param = new PKIXParameters(trust);
 //        param.addCertStore(store);
 //        param.setDate(validDate.getTime());
@@ -385,11 +385,11 @@ public class CertPathValidationTest
 //            certchain = new ArrayList();
 //            certchain.add(finalCert);
 //            certchain.add(interCert);
-//            cp = CertificateFactory.getInstance("X.509",JostleProvider.PROVIDER_NAME).generateCertPath(certchain);
+//            cp = CertificateFactory.getInstance("X.509",JslTestProvider.name()).generateCertPath(certchain);
 //            trust = new HashSet();
 //            trust.add(new TrustAnchor(rootCert, null));
 //
-//            cpv = CertPathValidator.getInstance("PKIX",JostleProvider.PROVIDER_NAME);
+//            cpv = CertPathValidator.getInstance("PKIX",JslTestProvider.name());
 //            param = new PKIXParameters(trust);
 //            param.addCertStore(store);
 //            param.setRevocationEnabled(false);
@@ -417,7 +417,7 @@ public class CertPathValidationTest
     public void test() throws Exception {
         // the verifier below resolves through JSL, so register it here rather than relying on
         // another test class in the run having done so first.
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
     }
@@ -430,7 +430,7 @@ public class CertPathValidationTest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new CertPathValidationTest());
     }

@@ -12,11 +12,14 @@ The JSL provider itself lives in a **separate repo**, `../openssl-jostle` (`org.
 
 ```bash
 ./gradlew assemble          # build all *-jsl jars (release 8, default JDK 17)
-./gradlew test              # run tests (412 currently; pkix 252, util 69, tls 58, pg 32, mail 1; core has none)
+./gradlew test              # run tests against JSL (412 currently; pkix 252, util 69, tls 58, pg 32, mail 1; core has none)
+./gradlew fipsTest          # run the same tests against JSLFIPS; only does anything when TEST_FIPS_LIB is set
 ./gradlew :pkix:test --tests "org.bouncycastle.jsl.test.*" --rerun-tasks
 ```
 
 JDK toolchains come from `BC_JDK8/11/17/21/25` env vars (`gradle.properties`). Tests are **JUnit 4.13.2** but most copied bc-java tests are JUnit3 style (`extends junit.framework.TestCase`).
+
+**Read `.claude/guides/testing.md` before touching how tests pick a provider.** The short version: the suite runs against JSL always and against the FIPS provider when `TEST_FIPS_LIB` names a FIPS module; tests select the provider through `JslTestProvider` (never a hardcoded `"JSL"` or `JostleProvider.PROVIDER_NAME`, both of which silently pin the FIPS run back to the non-FIPS provider); and tests needing an algorithm the FIPS module lacks gate themselves — with `assumeAlgorithm` in JUnit 4 classes, but an early `return` in `TestCase` subclasses, where an assumption is reported as a failure rather than a skip.
 
 **Artifacts.** Each module produces `bcXxx-jsl-<version>.jar` plus `-sources.jar` and `-javadoc.jar`. The main jar is an **OSGi bundle** built via the `biz.aQute.bnd.builder` plugin (7.0.0; bc-java uses 7.1.0): the root `build.gradle` sets `Bundle-*` headers + per-module `Export-Package` (the `osgiExports` map, patterns mirrored from the matching bc-java module) and a versioned `Import-Package` range `[bundle_version, maxVersion)` (`maxVersion` in `gradle.properties`); bnd computes the actual imports/`uses:`. `bundle_version` is the OSGi-legal form of `version` (snapshots → `X.Y.Z.<days-since-epoch>`).
 

@@ -8,7 +8,7 @@ import org.bouncycastle.cert.dane.DANEEntry;
 import org.bouncycastle.cert.dane.DANEEntryFactory;
 import org.bouncycastle.cert.dane.DANEException;
 import org.bouncycastle.cert.dane.TruncatingDigestCalculator;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.test.SimpleTest;
@@ -90,7 +90,7 @@ public class DANETest
     public static void main(
         String[]    args)
     {
-        Security.addProvider(new JostleProvider());
+        JslTestProvider.install();
 
         runTest(new DANETest());
     }

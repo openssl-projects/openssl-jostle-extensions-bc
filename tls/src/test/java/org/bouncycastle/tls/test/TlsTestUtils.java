@@ -51,7 +51,7 @@ import org.bouncycastle.tls.crypto.TlsCryptoParameters;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaDefaultTlsCredentialedSigner;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCrypto;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
-import org.openssl.jostle.jcajce.provider.JostleProvider;
+import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JceDefaultTlsCredentialedAgreement;
 import org.bouncycastle.tls.crypto.impl.jcajce.JceDefaultTlsCredentialedDecryptor;
 import org.bouncycastle.util.Arrays;
@@ -70,7 +70,7 @@ public class TlsTestUtils
      */
     public static JcaTlsCrypto createTestCrypto()
     {
-        return new JcaTlsCryptoProvider().setProvider(new JostleProvider()).create(new java.security.SecureRandom());
+        return new JcaTlsCryptoProvider().setProvider(JslTestProvider.provider()).create(new java.security.SecureRandom());
     }
 
     /**
