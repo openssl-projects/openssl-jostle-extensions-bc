@@ -62,9 +62,14 @@ What JSLFIPS (OpenSSL 3.1.2 FIPS module) actually has:
 | KeyGenerator | AES |
 
 Absent: **Ed25519/Ed448, ML-DSA, ML-KEM, X25519/X448**, ChaCha20, Argon2, MD5, RIPEMD, SM3, DESede,
-Camellia. Also refused by policy: **SHA-1 for signature generation**, **RSA PKCS#1 v1.5 key
-transport**, **RSA keys under 2048 bits**, and `AESWrap` is missing (a spelling gap, like the one
-already fixed for JSL).
+Camellia, and **`NONEwithECDSA`** (raw ECDSA — JSL has it; its absence is what stops the TLS
+signature tests, which reach it through `JcaTlsECDSA13Signer.generateRawSignature`). Also refused
+by policy: **SHA-1 for signature generation**, **RSA PKCS#1 v1.5 key transport**, and **RSA keys
+under 2048 bits**.
+
+Separately, and *not* FIPS-specific: AES key wrap resolves only by OID on **both** providers —
+`AESWrap`, `AESWRAP`, `AESKW`, `AES/KW/NoPadding` and the padded variants all fail on JSL as well.
+BC's CMS path wraps by OID, so it has not bitten us.
 
 Good news: BC's algorithm spelling works. `SHA-256`, `SHA256WITHRSA` and bare OIDs all resolve
 through aliases even though the module registers `SHA2-256`.

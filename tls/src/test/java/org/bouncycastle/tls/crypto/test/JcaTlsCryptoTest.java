@@ -31,7 +31,11 @@ public class JcaTlsCryptoTest
     public void testSignatures12()
         throws Exception
     {
-        if (!JslTestProvider.supports("Signature.ED25519"))
+        // the real blocker is raw ECDSA: both of these reach
+        // JcaTlsECDSA13Signer.generateRawSignature, which needs NoneWithECDSA. Naming it here
+        // rather than some other absent algorithm means these start running by themselves the
+        // moment the provider registers it.
+        if (!JslTestProvider.supports("Signature.NONEwithECDSA"))
         {
             return;
         }
@@ -42,7 +46,7 @@ public class JcaTlsCryptoTest
     public void testSignatures13()
         throws Exception
     {
-        if (!JslTestProvider.supports("Signature.ED25519"))
+        if (!JslTestProvider.supports("Signature.NONEwithECDSA"))
         {
             return;
         }
