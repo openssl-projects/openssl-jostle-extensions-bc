@@ -62,10 +62,20 @@ What JSLFIPS (OpenSSL 3.1.2 FIPS module) actually has:
 | KeyGenerator | AES |
 
 Absent: **Ed25519/Ed448, ML-DSA, ML-KEM, X25519/X448**, ChaCha20, Argon2, MD5, RIPEMD, SM3, DESede,
-Camellia, and **`NONEwithECDSA`** (raw ECDSA — JSL has it; its absence is what stops the TLS
-signature tests, which reach it through `JcaTlsECDSA13Signer.generateRawSignature`). Also refused
-by policy: **SHA-1 for signature generation**, **RSA PKCS#1 v1.5 key transport**, and **RSA keys
-under 2048 bits**.
+Camellia, and the **brainpool curves**. Also refused by policy: **SHA-1 for signature generation**,
+**RSA PKCS#1 v1.5 key transport**, and **RSA keys under 2048 bits**. `NoneWithRSA` is registered
+but is a deliberate dead end (the module has no "NONE" digest), so RSA cannot sign a
+caller-supplied digest — which is what TLS 1.2 needs. `NONEwithECDSA` *is* live as of the
+2026-08-18 provider build.
+
+**Capability reporting must be truthful, and `JcaTlsCrypto` is where that lives.** Upstream can
+answer "yes" flatly because BC's own provider carries everything; here the provider may not, and
+advertising a scheme we cannot perform fails mid-handshake rather than at negotiation. Three
+places were corrected for this: `hasCryptoHashAlgorithm` now probes the digest instead of
+returning an unconditional true, `hasSignatureAlgorithm` probes Ed25519/Ed448, and
+`isSupportedSignatureScheme` checks the curve a TLS 1.3 ECDSA scheme pins. If a test fails under
+FIPS with "resource doesn't specify a valid private key" or a handshake `internal_error`, suspect
+over-reporting here before gating the test.
 
 Separately, and *not* FIPS-specific: AES key wrap resolves only by OID on **both** providers —
 `AESWrap`, `AESWRAP`, `AESKW`, `AES/KW/NoPadding` and the padded variants all fail on JSL as well.

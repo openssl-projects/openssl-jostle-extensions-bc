@@ -559,8 +559,24 @@ public class JcaTlsCrypto
 
     public boolean hasCryptoHashAlgorithm(int cryptoHashAlgorithm)
     {
-        // TODO: expand
-        return true;
+        // Upstream answers an unconditional true, which is safe when the provider is BC's own and
+        // carries every digest. Here the provider may genuinely lack one - the FIPS module has no
+        // MD5 - and claiming a digest we cannot create makes us advertise a signature scheme that
+        // then fails mid-handshake. Probe the provider instead.
+        try
+        {
+            helper.createDigest(getDigestName(cryptoHashAlgorithm));
+            return true;
+        }
+        catch (GeneralSecurityException e)
+        {
+            return false;
+        }
+        catch (IllegalArgumentException e)
+        {
+            // getDigestName rejects an unknown CryptoHashAlgorithm
+            return false;
+        }
     }
 
     public boolean hasCryptoSignatureAlgorithm(int cryptoSignatureAlgorithm)
@@ -743,10 +759,16 @@ public class JcaTlsCrypto
     {
         switch (signatureAlgorithm)
         {
+        // Edwards is present on JSL but not on the FIPS module, so unlike the entries below this
+        // cannot be a flat "true" - same reasoning as the GOST note further down: advertising a
+        // scheme the provider cannot honour fails later, when the signer credential is loaded.
+        case SignatureAlgorithm.ed25519:
+            return isUsableSignature("Ed25519");
+        case SignatureAlgorithm.ed448:
+            return isUsableSignature("Ed448");
+
         case SignatureAlgorithm.rsa:
         case SignatureAlgorithm.ecdsa:
-        case SignatureAlgorithm.ed25519:
-        case SignatureAlgorithm.ed448:
         case SignatureAlgorithm.rsa_pss_rsae_sha256:
         case SignatureAlgorithm.rsa_pss_rsae_sha384:
         case SignatureAlgorithm.rsa_pss_rsae_sha512:
@@ -786,7 +808,8 @@ public class JcaTlsCrypto
         switch (sigAndHashAlgorithm.getHash())
         {
         case HashAlgorithm.md5:
-            return SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature);
+            return SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature)
+                && hasCryptoHashAlgorithm(CryptoHashAlgorithm.md5);
         case HashAlgorithm.sha224:
             // Somewhat overkill, but simpler for now. It's also consistent with SunJSSE behaviour.
             return !JcaUtils.isSunMSCAPIProviderActive() && hasSignatureAlgorithm(signature);
@@ -1303,11 +1326,23 @@ public class JcaTlsCrypto
             default:
             {
                 short signature = SignatureScheme.getSignatureAlgorithm(signatureScheme);
-    
+
+                // A TLS 1.3 ECDSA scheme pins one curve, and the signature algorithm being present
+                // says nothing about that curve: the FIPS module carries the NIST curves but not
+                // brainpool. Advertising a scheme whose curve we cannot use fails later, when the
+                // credential is loaded.
+                int namedGroup = SignatureScheme.getNamedGroup(signatureScheme);
+                if (NamedGroup.refersToASpecificCurve(namedGroup)
+                    && !ECUtil.isCurveSupported(this, NamedGroup.getCurveName(namedGroup)))
+                {
+                    return Boolean.FALSE;
+                }
+
                 switch (SignatureScheme.getCryptoHashAlgorithm(signatureScheme))
                 {
                 case CryptoHashAlgorithm.md5:
-                    return Boolean.valueOf(SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature));
+                    return Boolean.valueOf(SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature)
+                        && hasCryptoHashAlgorithm(CryptoHashAlgorithm.md5));
                 case CryptoHashAlgorithm.sha224:
                     // Somewhat overkill, but simpler for now. It's also consistent with SunJSSE behaviour.
                     return Boolean.valueOf(!JcaUtils.isSunMSCAPIProviderActive() && hasSignatureAlgorithm(signature));
@@ -1320,6 +1355,19 @@ public class JcaTlsCrypto
         catch (GeneralSecurityException e)
         {
             return Boolean.FALSE;
+        }
+    }
+
+    protected boolean isUsableSignature(String signatureAlgorithm)
+    {
+        try
+        {
+            helper.createSignature(signatureAlgorithm);
+            return true;
+        }
+        catch (GeneralSecurityException e)
+        {
+            return false;
         }
     }
 

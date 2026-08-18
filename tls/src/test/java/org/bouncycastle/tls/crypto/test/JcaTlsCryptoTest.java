@@ -31,12 +31,15 @@ public class JcaTlsCryptoTest
     public void testSignatures12()
         throws Exception
     {
-        // the real blocker is raw ECDSA: both of these reach
-        // JcaTlsECDSA13Signer.generateRawSignature, which needs NoneWithECDSA. Naming it here
-        // rather than some other absent algorithm means these start running by themselves the
-        // moment the provider registers it.
-        if (!JslTestProvider.supports("Signature.NONEwithECDSA"))
+        // NoneWithECDSA is registered on the FIPS module now, so this gets much further than it
+        // used to. What stops it is raw RSA: TLS 1.2 hashes the handshake itself and signs the
+        // digest through NoneWithRSA, which the FIPS module registers as a dead end (it has no
+        // "NONE" digest, so initSign fails). Whether that is right is an open question with the
+        // provider - the equivalent claim about ECDSA turned out to be false.
+        if (JslTestProvider.isFips())
         {
+            System.out.println("[skipped] " + JslTestProvider.name()
+                + " cannot sign a caller-supplied digest with RSA (NoneWithRSA is a dead registration)");
             return;
         }
 
@@ -46,8 +49,13 @@ public class JcaTlsCryptoTest
     public void testSignatures13()
         throws Exception
     {
-        if (!JslTestProvider.supports("Signature.NONEwithECDSA"))
+        // Also gets much further now. The remaining stop is a certificate whose public key the
+        // FIPS module will not decode (JcaTlsCertificate.getPublicKey -> bad_certificate, reached
+        // from supportsRSA_PSS_PSS), which is an open question with the provider.
+        if (JslTestProvider.isFips())
         {
+            System.out.println("[skipped] " + JslTestProvider.name()
+                + " will not decode one of the test certificates' public keys (RSA-PSS-PSS)");
             return;
         }
 
