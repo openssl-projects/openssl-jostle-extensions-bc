@@ -68,6 +68,21 @@ but is a deliberate dead end (the module has no "NONE" digest), so RSA cannot si
 caller-supplied digest — which is what TLS 1.2 needs. `NONEwithECDSA` *is* live as of the
 2026-08-18 provider build.
 
+**RSA-PSS certificates: the SPKI algorithm identifier does not survive key re-derivation.** A
+certificate carrying `id-RSASSA-PSS` decodes fine on both providers, but re-encoding the re-derived
+key yields plain `rsaEncryption`, losing the OID and its parameters. That matters because
+BouncyCastle decides `rsa_pss_pss` support from the *re-encoded key*, not the certificate bytes
+(`JcaTlsCertificate.getSubjectPublicKeyInfo()` is `SubjectPublicKeyInfo.getInstance(getPublicKey().getEncoded())`).
+
+As of the 2026-08-18 provider build the certificate path guards against this: a lossy import is
+discarded, so JSL keeps the JDK certificate key and `rsa_pss_pss` works there, while JSLFIPS
+refuses such certificates outright. `JcaTlsCryptoTest.testSignatures13` is gated for FIPS on
+exactly that. **The guard is at the certificate level only** — a direct
+`KeyFactory.generatePublic(new X509EncodedKeySpec(pssSpki))` still normalises to `rsaEncryption` on
+both providers, so any code path decoding an SPKI itself (there are ~22 `generatePublic` call sites
+in main code, e.g. `JcaPEMKeyConverter`, `JcaPKCS10CertificationRequest`) will still lose it.
+Preserving the source identifier is a provider-side change that has not been made yet.
+
 **Capability reporting must be truthful, and `JcaTlsCrypto` is where that lives.** Upstream can
 answer "yes" flatly because BC's own provider carries everything; here the provider may not, and
 advertising a scheme we cannot perform fails mid-handshake rather than at negotiation. Three

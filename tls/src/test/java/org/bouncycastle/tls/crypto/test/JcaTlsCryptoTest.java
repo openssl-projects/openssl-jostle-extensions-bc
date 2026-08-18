@@ -57,8 +57,9 @@ public class JcaTlsCryptoTest
         // SPKI by re-encoding the re-derived public key, and that round trip returns plain
         // rsaEncryption rather than id-RSASSA-PSS, so rsa_pss_pss support is denied. Confirmed
         // directly: a PSS-PSS SPKI put through KeyFactory("RSA") and re-encoded comes back as
-        // 1.2.840.113549.1.1.1 on both providers. Open with the provider; JSL's own run passes, so
-        // something in that path differs there.
+        // 1.2.840.113549.1.1.1 on both providers. JSL passes because its certificate path now
+        // discards a lossy import and keeps the JDK key; the bound FIPS factory has no such
+        // fallback and refuses the certificate. Preserving the identifier is still open.
         if (JslTestProvider.isFips())
         {
             System.out.println("[skipped] " + JslTestProvider.name()
