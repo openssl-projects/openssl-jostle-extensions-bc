@@ -90,13 +90,21 @@ documents this exact recovery scenario. Enabling it does not make the operation 
 deployment is in non-approved mode while it is set — so the honest handling is to enable it for the
 recovery, re-protect the data under an approved algorithm, and turn it off again.
 
-**Reading a security policy: usage scope, not algorithm scope.** Four confidently-wrong claims came
-out of this area in both directions, so if you ever reason about what a FIPS module approves, note
-that the non-approved entries are scoped by *usage*: HKDF is approved except below 112 bits,
-X963KDF except with certain PRFs, OneStep KDF except with SHAKE, HMAC except below 112 bits — while
-the ECDSA SigVer Component carries no narrowing clause at all. Judging by algorithm name alone gets
-it wrong about half the time. Do not trust a code comment here, on either side; require a quote
-from the policy.
+**Reading a security policy: usage scope, not algorithm scope.** The module's non-approved entries
+are scoped by *usage*, not by algorithm name: HKDF is approved except below 112 bits, X963KDF except
+with certain PRFs, OneStep KDF except with SHAKE, HMAC except below 112 bits — while the ECDSA
+SigVer Component carries no narrowing clause at all. Judging by the algorithm name gets it wrong
+about half the time, which is how four confident claims went wrong here in both directions.
+
+**The lesson for this side of the fence is about second-hand readings.** The provider repo owns the
+policy analysis, and we consume it. When a JSLFIPS capability claim arrives — "X is approved", "Y is
+not" — the failure mode we hit was not a claim without evidence. It came with real, accurate quotes
+from the approved-algorithms and approved-services tables; they simply were not the whole picture,
+because the non-approved tables had not been read yet. Accurate quotes are not the same as a
+complete reading. So: gate on **observed provider behaviour** (probe it, as `JslTestProvider.has` /
+`canGetCipher` do), not on a compliance conclusion, and when a gate's stated reason cites policy,
+word it around the axis most likely to move — the specific curve range or key size in question
+rather than a flat "non-approved" — so it reads correctly when the analysis is refined.
 
 **RSA-PSS certificates: the SPKI algorithm identifier does not survive key re-derivation.** A
 certificate carrying `id-RSASSA-PSS` decodes fine on both providers, but re-encoding the re-derived
