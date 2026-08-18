@@ -233,6 +233,12 @@ Lighting it up is worthwhile but is its own piece of work: the matrix covers alg
 deliberately lacks (GOST, SRP, and so on), so expect to gate or drop a large number of generated
 cases rather than a clean pass.
 
+**And note what that means for what we currently claim.** The TLS 1.2 position under FIPS —
+`rsa_pkcs1_*` neither direction, `ecdsa_*` sign but not verify, `rsa_pss_rsae_*` both — rests on
+unit-level probes and code reading, not on a handshake. It is believed on both sides of the fence
+and nobody has watched it happen. Confirming that table is one of the first things enabling the
+matrix would buy, so treat it as a thing to establish rather than a thing already established.
+
 ## Known gaps / follow-up
 
 - **Three classic CMS classes are gated wholesale under FIPS**: `NewSignedDataTest`,
