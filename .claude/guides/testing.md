@@ -68,6 +68,36 @@ but is a deliberate dead end (the module has no "NONE" digest), so RSA cannot si
 caller-supplied digest — which is what TLS 1.2 needs. `NONEwithECDSA` *is* live as of the
 2026-08-18 provider build.
 
+**The SHA-1 X9.63 KDF is gone from JSLFIPS, and that reaches further than algorithm choice.** The
+policy lists X963KDF with a SHA-1 PRF as not allowed, so `ECDHWITHSHA1KDF` / OID
+`1.3.133.16.840.63.0.2` no longer resolve there (SHA-224 upward are unaffected). Nothing in this
+repo defaults to it, and the one test that names it — `NewEnvelopedDataTest.testStaticStaticDHAgreement`
+— sits inside a class already gated for FIPS, so the suite does not go red. That is an absence of
+coverage, not a pass.
+
+Two consequences worth knowing, because they are consumer-facing rather than test-facing:
+
+- `CMSAlgorithm.ECDH_SHA1KDF` / `ECCDH_SHA1KDF`, `CMSEnvelopedGenerator.ECDH_SHA1KDF` and
+  `SMIMEEnvelopedGenerator.ECDH_SHA1KDF` are **published API** here. Any caller naming one gets
+  `NoSuchAlgorithmException` against JSLFIPS.
+- More importantly it is not only a forward choice. `JceKeyAgreeRecipient` keeps a
+  `possibleOldMessages` set (`dhSinglePass_stdDH_sha1kdf_scheme`, `mqvSinglePass_sha1kdf_scheme`)
+  used on the pre-RFC 5753 fallback, so **a JSLFIPS deployment cannot decrypt archived
+  enveloped-data protected with that KDF**, whatever it would choose today.
+
+The provider's `unapproved_services=true` config key is the supported escape hatch, and its Javadoc
+documents this exact recovery scenario. Enabling it does not make the operation approved — the
+deployment is in non-approved mode while it is set — so the honest handling is to enable it for the
+recovery, re-protect the data under an approved algorithm, and turn it off again.
+
+**Reading a security policy: usage scope, not algorithm scope.** Four confidently-wrong claims came
+out of this area in both directions, so if you ever reason about what a FIPS module approves, note
+that the non-approved entries are scoped by *usage*: HKDF is approved except below 112 bits,
+X963KDF except with certain PRFs, OneStep KDF except with SHAKE, HMAC except below 112 bits — while
+the ECDSA SigVer Component carries no narrowing clause at all. Judging by algorithm name alone gets
+it wrong about half the time. Do not trust a code comment here, on either side; require a quote
+from the policy.
+
 **RSA-PSS certificates: the SPKI algorithm identifier does not survive key re-derivation.** A
 certificate carrying `id-RSASSA-PSS` decodes fine on both providers, but re-encoding the re-derived
 key yields plain `rsaEncryption`, losing the OID and its parameters. That matters because
