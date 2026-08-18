@@ -31,15 +31,18 @@ public class JcaTlsCryptoTest
     public void testSignatures12()
         throws Exception
     {
-        // NoneWithECDSA is registered on the FIPS module now, so this gets much further than it
-        // used to. What stops it is raw RSA: TLS 1.2 hashes the handshake itself and signs the
-        // digest through NoneWithRSA, which the FIPS module registers as a dead end (it has no
-        // "NONE" digest, so initSign fails). Whether that is right is an open question with the
-        // provider - the equivalent claim about ECDSA turned out to be false.
+        // TLS 1.2 hashes the handshake itself and signs the digest, which BouncyCastle does
+        // through NoneWithRSA. That does not work on the FIPS module today, and the reason is
+        // NOT that raw RSA signing is non-approved - the security policy lists the RSA Signature
+        // Primitive as an approved algorithm and service. It is unresolved: the validated
+        // primitive is constrained to k=2048 with a CRT private key, whereas the provider's RSA
+        // keygen serves 2048-16384, and whether that service covers PKCS#1 v1.5 padding of a
+        // caller-supplied digest is a compliance reading still with the provider's owner.
         if (JslTestProvider.isFips())
         {
             System.out.println("[skipped] " + JslTestProvider.name()
-                + " cannot sign a caller-supplied digest with RSA (NoneWithRSA is a dead registration)");
+                + ": raw RSA signing is unresolved pending a compliance decision (k=2048 and"
+                + " padding semantics of the RSA Signature Primitive)");
             return;
         }
 
@@ -49,13 +52,17 @@ public class JcaTlsCryptoTest
     public void testSignatures13()
         throws Exception
     {
-        // Also gets much further now. The remaining stop is a certificate whose public key the
-        // FIPS module will not decode (JcaTlsCertificate.getPublicKey -> bad_certificate, reached
-        // from supportsRSA_PSS_PSS), which is an open question with the provider.
+        // The PSS-PSS certificate key now decodes (provider fix), so this travels further than it
+        // did. It stops at validateRSA_PSS_PSS: for an X.509 certificate the TLS layer derives the
+        // SPKI by re-encoding the re-derived public key, and that round trip returns plain
+        // rsaEncryption rather than id-RSASSA-PSS, so rsa_pss_pss support is denied. Confirmed
+        // directly: a PSS-PSS SPKI put through KeyFactory("RSA") and re-encoded comes back as
+        // 1.2.840.113549.1.1.1 on both providers. Open with the provider; JSL's own run passes, so
+        // something in that path differs there.
         if (JslTestProvider.isFips())
         {
             System.out.println("[skipped] " + JslTestProvider.name()
-                + " will not decode one of the test certificates' public keys (RSA-PSS-PSS)");
+                + ": re-deriving a PSS-PSS certificate key loses id-RSASSA-PSS, so rsa_pss_pss is denied");
             return;
         }
 
