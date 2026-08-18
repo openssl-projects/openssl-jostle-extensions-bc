@@ -192,8 +192,19 @@ public class CMSTestUtil
 
             // DH is now provided by JSL; reuse the DSA prime/generator as the DH group
             // (matching bc-java), which is a valid 2048-bit finite-field group.
+            //
+            // The FIPS module will not accept an explicit (p, g): it requires the subgroup order q
+            // and generates no parameters of its own, so it is driven by key size instead and picks
+            // an approved named group internally.
             dhKpg = KeyPairGenerator.getInstance("DH", JslTestProvider.name());
-            dhKpg.initialize(new DHParameterSpec(dsaSpec.getP(), dsaSpec.getG()), new SecureRandom());
+            if (JslTestProvider.isFips())
+            {
+                dhKpg.initialize(2048, new SecureRandom());
+            }
+            else
+            {
+                dhKpg.initialize(new DHParameterSpec(dsaSpec.getP(), dsaSpec.getG()), new SecureRandom());
+            }
 
             ecDsaKpg = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
             ecDsaKpg.initialize(256, new SecureRandom());
@@ -312,20 +323,7 @@ public class CMSTestUtil
 
     public static KeyPair makeDhKeyPair()
     {
-        try
-        {
-            return dhKpg.generateKeyPair();
-        }
-        catch (RuntimeException e)
-        {
-            // the DH group here is derived from the DSA parameters above; the FIPS module will not
-            // generate against it. Null lets the calling class initialise and its DH tests opt out.
-            if (JslTestProvider.isFips())
-            {
-                return null;
-            }
-            throw e;
-        }
+        return dhKpg.generateKeyPair();
     }
 
     public static KeyPair makeEcGostKeyPair()
