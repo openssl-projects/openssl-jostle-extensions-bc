@@ -106,20 +106,14 @@ complete reading. So: gate on **observed provider behaviour** (probe it, as `Jsl
 word it around the axis most likely to move — the specific curve range or key size in question
 rather than a flat "non-approved" — so it reads correctly when the analysis is refined.
 
-**RSA-PSS certificates: the SPKI algorithm identifier does not survive key re-derivation.** A
-certificate carrying `id-RSASSA-PSS` decodes fine on both providers, but re-encoding the re-derived
-key yields plain `rsaEncryption`, losing the OID and its parameters. That matters because
-BouncyCastle decides `rsa_pss_pss` support from the *re-encoded key*, not the certificate bytes
-(`JcaTlsCertificate.getSubjectPublicKeyInfo()` is `SubjectPublicKeyInfo.getInstance(getPublicKey().getEncoded())`).
-
-As of the 2026-08-18 provider build the certificate path guards against this: a lossy import is
-discarded, so JSL keeps the JDK certificate key and `rsa_pss_pss` works there, while JSLFIPS
-refuses such certificates outright. `JcaTlsCryptoTest.testSignatures13` is gated for FIPS on
-exactly that. **The guard is at the certificate level only** — a direct
-`KeyFactory.generatePublic(new X509EncodedKeySpec(pssSpki))` still normalises to `rsaEncryption` on
-both providers, so any code path decoding an SPKI itself (there are ~22 `generatePublic` call sites
-in main code, e.g. `JcaPEMKeyConverter`, `JcaPKCS10CertificationRequest`) will still lose it.
-Preserving the source identifier is a provider-side change that has not been made yet.
+**RSA-PSS certificates.** These were a long-running trap and are now fixed provider-side: a key
+decoded from an `id-RSASSA-PSS` SPKI re-encodes as `id-RSASSA-PSS` with its parameters, byte
+identically, on both providers (as of the 2026-08-18 build, jar `2f24fb8f…`). It matters because
+BouncyCastle decides `rsa_pss_pss` support from the *re-encoded key*, not the certificate bytes —
+`JcaTlsCertificate.getSubjectPublicKeyInfo()` is `SubjectPublicKeyInfo.getInstance(getPublicKey().getEncoded())`
+— so while the encoding normalised to `rsaEncryption`, every PSS-PSS certificate was rejected.
+`JcaTlsCryptoTest.testSignatures13` needed no gate once that landed. If you see
+`certificate_unknown(46); No support for rsa_pss_pss` again, check that round trip first.
 
 **Capability reporting must be truthful, and `JcaTlsCrypto` is where that lives.** Upstream can
 answer "yes" flatly because BC's own provider carries everything; here the provider may not, and
@@ -215,6 +209,29 @@ result XML rather than the exit code, and use `--rerun`.
 
 `failOnNoDiscoveredTests = false` is set because `core` has no tests of its own but still compiles
 the shared support class.
+
+## The TLS handshake matrix does not run at all
+
+`TlsTestSuite` builds the full matrix — SSLv3 through TLS 1.3, both crypto backends on each side,
+the auth variants — from a JUnit3 `public static Test suite()` factory. **Gradle never calls it.**
+`TlsTestCase` and `DTLSTestCase` each report exactly one test, `testDummy`, whose own comment says
+it exists to "avoid 'No tests found' warning from junit". So the 58 tests counted in `tls` are the
+unit-level classes plus the four `Jca*Protocol*` classes (KEM, hybrid, XDH, raw keys), and **no
+end-to-end handshake is exercised on either provider**.
+
+This is the same family of trap as `SimpleTest` needing an `@Test` bridge, one level up: a
+`suite()` factory needs `@RunWith(AllTests.class)` (or equivalent) to be discovered.
+
+Consequences to keep in mind before trusting a green tls run:
+
+- There is **no TLS 1.2 ECDSA negotiation coverage**, so nothing in this repo would catch the raw
+  `NoneWithECDSA` verification being refused under FIPS. That behaviour is real — probed directly —
+  but our suite is silent on it, and no gate is needed precisely because no test reaches it.
+- There is no DTLS coverage, no version-negotiation or fallback coverage, and no cipher-suite matrix.
+
+Lighting it up is worthwhile but is its own piece of work: the matrix covers algorithms this fork
+deliberately lacks (GOST, SRP, and so on), so expect to gate or drop a large number of generated
+cases rather than a clean pass.
 
 ## Known gaps / follow-up
 
