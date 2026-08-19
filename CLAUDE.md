@@ -33,11 +33,11 @@ JDK toolchains come from `BC_JDK8/11/17/21/25` env vars (`gradle.properties`). T
 ## Conventions
 
 - **Provider OID aliases** (in `../openssl-jostle` `Prov*` classes): register with `provider.addAlias(type, name, new ASN1ObjectIdentifier("<oid>"))` — the `ASN1ObjectIdentifier` overload registers both the bare and `OID.`-prefixed forms. Do not add a String-based helper.
-- **Tests** install JSL directly: `Security.addProvider(new JostleProvider())`, and use `JostleProvider.PROVIDER_NAME` (often via a `private static final String BC = JostleProvider.PROVIDER_NAME;` shim) wherever bc-java used `"BC"`.
+- **Tests select the provider through `JslTestProvider`**, never directly: `JslTestProvider.install()` to register it and `JslTestProvider.name()` wherever bc-java used `"BC"`. Writing `Security.addProvider(new JostleProvider())` or `JostleProvider.PROVIDER_NAME` in a test pins the run to the non-FIPS provider, and it fails silently — `fipsTest` still passes while exercising JSL.
 
 ## Migrating bc-java tests (ongoing)
 
-Copying tests from `../bc-java/pkix/src/test` into `pkix/src/test`. Rules: drop tests/imports depending on `*.bc.*`; replace `BouncyCastleProvider`→`JostleProvider`, `"BC"`→`JostleProvider.PROVIDER_NAME`. Tests are either JUnit3 (`extends TestCase`) or BC `SimpleTest` (`performTest()`, not discovered by gradle — add a JUnit `@Test` bridge calling `perform()`). JUnit3 `@Ignore` does NOT work — skip a failing test by renaming `testXxx`→`DISABLED_testXxx` (globally, incl. `main()`/`suite()` call sites); if all methods get disabled, drop the class. Isolated-compile each candidate before adding it (a non-compiling file breaks the whole module). Full workflow + progress + per-package failure causes: memory `jostle-pkix-test-migration`.
+Copying tests from `../bc-java/pkix/src/test` into `pkix/src/test`. Rules: drop tests/imports depending on `*.bc.*`; replace `BouncyCastleProvider`→`JslTestProvider.provider()`, `"BC"`→`JslTestProvider.name()`. Tests are either JUnit3 (`extends TestCase`) or BC `SimpleTest` (`performTest()`, not discovered by gradle — add a JUnit `@Test` bridge calling `perform()`). JUnit3 `@Ignore` does NOT work — skip a failing test by renaming `testXxx`→`DISABLED_testXxx` (globally, incl. `main()`/`suite()` call sites); if all methods get disabled, drop the class. Isolated-compile each candidate before adding it (a non-compiling file breaks the whole module). Full workflow, including the isolated-compile classpath: the `port-from-bc-java` skill.
 
 ## State of the JSL provider work (this is what the provider can do for CMS/certs)
 
