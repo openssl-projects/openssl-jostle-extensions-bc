@@ -41,10 +41,17 @@ Copying tests from `../bc-java/pkix/src/test` into `pkix/src/test`. Rules: drop 
 
 ## State of the JSL provider work (this is what the provider can do for CMS/certs)
 
-ML-DSA, SLH-DSA, ML-KEM, EC, RSA, AES (incl. GCM + RFC 3394/5649 key-wrap) work today. Recently added in `../openssl-jostle`: SPKI OID aliases for ML-DSA/SLH-DSA/ML-KEM (KeyFactory + Signature); `KeyInfoCanonicalizer` (strips a non-conformant NULL `parameters` from SPKI/PKCS8 AlgorithmIdentifiers before OpenSSL — FIPS 203/204/205 require absent params); `validateKeyAlg` accepts key-wrap-spelled key labels (`AESWrap`); `MLKEMKTSCipherSpi` + `GCMAlgorithmParameters` enabling the **CMS ML-KEM KEMRecipientInfo** path (RFC 9629). Details/design: memory `jostle-mlkem-cms-kts-design`, `jostle-mldsa-spki-encoding-gap`, `jostle-provider-aes-oid-gap`.
+ML-DSA, SLH-DSA, ML-KEM, EC, RSA, AES (incl. GCM + RFC 3394/5649 key-wrap) work today. Recently added in `../openssl-jostle`: SPKI OID aliases for ML-DSA/SLH-DSA/ML-KEM (KeyFactory + Signature); `KeyInfoCanonicalizer` (strips a non-conformant NULL `parameters` from SPKI/PKCS8 AlgorithmIdentifiers before OpenSSL — FIPS 203/204/205 require absent params); `validateKeyAlg` accepts key-wrap-spelled key labels (`AESWrap`); `MLKEMKTSCipherSpi` + `GCMAlgorithmParameters` enabling the **CMS ML-KEM KEMRecipientInfo** path (RFC 9629). Current provider gap status: `.claude/guides/provider-gaps.md`.
 
 ## More context
 
-The `memory/` directory holds detailed project notes (build recipe, core-closure analysis, ML-KEM/ML-DSA design, test migration, conventions). `build-analysis/` was a one-time jdeps scratch dir and has been deleted — regenerate via the jdeps step in `jostle-libs-core-closure` if needed.
+`.claude/guides/` holds the current reference, written for model consumption:
+
+- `project.md` — layout, build, what `core` is, and the deliberate divergences from bc-java that a resync must not revert
+- `testing.md` — provider selection, the two runs, gating, and a symptom index of exact error strings
+- `conventions.md` — working rules, each one traceable to a specific problem
+- `provider-gaps.md` — JSL capability gaps, open and closed, with probe dates
+
+`memory/` holds the older session notes those guides were distilled from. Several are stale — they record provider gaps since fixed and file counts since changed — so prefer the guides, and re-probe anything in `memory/` before acting on it.
 
 Porting anything from `../bc-java` (source, refactor or test)? Use the **`port-from-bc-java`** skill (`.claude/skills/port-from-bc-java/SKILL.md`) — it covers diff-then-classify, which dependencies do not exist here, the local JSL adaptations a resync must not revert, and the verification order.

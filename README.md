@@ -23,10 +23,12 @@ through the JSL provider via standard JCA/JCE.
 ### The minimized `core`
 
 `core` is **not** a full `bcprov`. It has been pruned to the closure of classes
-the satellite libraries and the JSL provider actually reach. There is still a bit
-of bloat here, but the plan is eventually any cryptography connected classes will
-be removed so that all cryptographic services requested across the extension APIs
-will go through the JSL provider.
+the satellite libraries and the JSL provider actually reach, and then stripped of
+algorithm implementations entirely: `crypto.engines`, `crypto.digests`,
+`crypto.macs`, `crypto.generators` and `crypto.prng` are all gone, along with
+`pqc.*`, `jce.provider.*` and the `BcXXX` builders. What remains under `crypto.*`
+is interfaces, parameter and config holders, and registrar plumbing — no algorithm
+is implemented here. Every cryptographic service goes through the JSL provider.
 
 JSL supplies the actual algorithms: AES (including GCM and RFC 3394/5649 key
 wrap), RSA, EC, EdDSA, ML-DSA, SLH-DSA, ML-KEM (including the CMS
@@ -70,7 +72,8 @@ variables (see `gradle.properties`). Sources are compiled with `--release 8`.
 
 ```bash
 ./gradlew assemble          # build all *-jsl jars
-./gradlew test              # run tests (pkix/tls/pg/mail; core/util have none)
+./gradlew test              # run the suite against JSL (412 tests; core has none)
+./gradlew fipsTest          # run the same suite against JSLFIPS
 
 # run a single test set
 ./gradlew :pkix:test --tests "org.bouncycastle.jsl.test.*" --rerun-tasks
@@ -86,20 +89,28 @@ jars. The main jar is an OSGi bundle (built with the bnd plugin): per-module
 
 Tests are migrated from bc-java (also an ongoing effort). They run under JUnit 4.13.2,
 though most are JUnit3-style (`extends junit.framework.TestCase`) or BC `SimpleTest` classes
-bridged with a JUnit `@Test` method. Migrated tests install JSL directly:
+bridged with a JUnit `@Test` method.
+
+The suite runs twice: always against JSL, and against the FIPS provider (`JSLFIPS`) when the
+`TEST_FIPS_LIB` environment variable names an OpenSSL FIPS module. Tests therefore never name a
+provider directly — they go through `JslTestProvider`, which installs whichever one is under test:
 
 ```java
-private static final String BC = JostleProvider.PROVIDER_NAME;
-
-static {
-    Security.addProvider(new JostleProvider());
-}
+JslTestProvider.install();                       // register the provider under test
+... .setProvider(JslTestProvider.name());        // use it by name
 ```
+
+Do **not** write `Security.addProvider(new JostleProvider())` or `JostleProvider.PROVIDER_NAME` in
+a test. Both pin the run to the non-FIPS provider, and the failure is silent — the FIPS task
+appears to pass while actually exercising JSL.
+
+The FIPS module is a smaller surface than JSL, so a test needing something it lacks gates itself on
+a probe of the provider rather than on a compliance judgement. See `.claude/guides/testing.md`.
 
 ## Versioning
 
 - Library version: `version` in `gradle.properties` (tracks the bc-java
-  release line it was rebuilt from, e.g. `1.85.0-SNAPSHOT`).
+  release line it was rebuilt from, e.g. `1.86.0-SNAPSHOT`).
 - Provider version: `jostleVersion` in `gradle.properties` (tracks the
   `openssl-jostle` artifact in `libs/`).
 
