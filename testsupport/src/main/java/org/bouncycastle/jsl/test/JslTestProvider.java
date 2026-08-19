@@ -143,6 +143,85 @@ public final class JslTestProvider
         }
     }
 
+    /** cache: these probes generate keys, so do each combination once per JVM */
+    private static final java.util.Map<String, Boolean> PROBES =
+        new java.util.concurrent.ConcurrentHashMap<String, Boolean>();
+
+    /**
+     * Whether the provider under test can actually SIGN with this transformation.
+     * <p>
+     * A service lookup is not enough. A provider may register a signature and then refuse it at
+     * {@code initSign} - JSLFIPS registers {@code NoneWithRSA} as a deliberate dead end, and refuses
+     * SHA-1 signature generation while still serving SHA-1 verification. Only a real sign attempt
+     * separates "registered" from "usable".
+     */
+    public static boolean canSign(String signatureAlgorithm, String keyAlgorithm, int keySize)
+    {
+        String key = name() + "|" + signatureAlgorithm + "|" + keyAlgorithm + "|" + keySize;
+
+        Boolean cached = PROBES.get(key);
+        if (null != cached)
+        {
+            return cached.booleanValue();
+        }
+
+        boolean usable;
+        try
+        {
+            Provider p = install();
+            java.security.KeyPairGenerator kpg = java.security.KeyPairGenerator.getInstance(keyAlgorithm, p);
+            kpg.initialize(keySize);
+            java.security.Signature s = java.security.Signature.getInstance(signatureAlgorithm, p);
+            s.initSign(kpg.generateKeyPair().getPrivate());
+            s.update(new byte[8]);
+            s.sign();
+            usable = true;
+        }
+        catch (Exception e)
+        {
+            usable = false;
+        }
+
+        PROBES.put(key, Boolean.valueOf(usable));
+
+        return usable;
+    }
+
+    /**
+     * Whether the provider under test can actually INITIALISE this cipher transformation.
+     * <p>
+     * {@link #canGetCipher} is not enough for a mode: {@code Cipher.getInstance("AES/OCB/NoPadding")}
+     * succeeds against JSLFIPS and only fails at {@code init}, when OpenSSL cannot fetch the mode.
+     */
+    public static boolean canInitCipher(String transformation)
+    {
+        String key = name() + "|init|" + transformation;
+
+        Boolean cached = PROBES.get(key);
+        if (null != cached)
+        {
+            return cached.booleanValue();
+        }
+
+        boolean usable;
+        try
+        {
+            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance(transformation, install());
+            c.init(javax.crypto.Cipher.ENCRYPT_MODE,
+                new javax.crypto.spec.SecretKeySpec(new byte[32], "AES"),
+                new javax.crypto.spec.IvParameterSpec(new byte[12]));
+            usable = true;
+        }
+        catch (Exception e)
+        {
+            usable = false;
+        }
+
+        PROBES.put(key, Boolean.valueOf(usable));
+
+        return usable;
+    }
+
     /**
      * Skip the calling test unless a FIPS module is configured and selected.
      */

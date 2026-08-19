@@ -10,8 +10,7 @@ Match the error first. Each row gives the cause and the action.
 | symptom | cause | action |
 |---|---|---|
 | `no such algorithm: <X> for provider JSLFIPS` | FIPS module lacks `<X>` | Gate the test. See **Which gate to use**. |
-| `NoSuchAlgorithmException` for `ECDHWITHSHA1KDF` or OID `1.3.133.16.840.63.0.2` on JSLFIPS | X963KDF with SHA-1 PRF is not allowed by policy | Gate. For archive recovery use `unapproved_services=true`. |
-| `raw ECDSA verification is not available: the ECDSA SigVer Component is a non-approved service` | JSLFIPS registers `NoneWithECDSA` sign-only | Use a hashed transformation (`SHA256withECDSA`). TLS 1.2 raw verify has no workaround. |
+| `KeyStore.store` fails on JSLFIPS with a bare `PKCS12` keystore | traditional PKCS#12 MAC needs `PKCS12KDF`, which the FIPS provider does not have | Use `PKCS12-PBMAC1` explicitly. It uses PBKDF2 and interoperates with JSL both ways. |
 | `InvalidKeyException` from `initSign` naming `digest not allowed` | SHA-1 signature *generation* refused (verification is allowed) | Sign with SHA-256. See **Prefer adapting over skipping**. |
 | `RSA key size 1024 is out of range [2048, 16384]` | FIPS minimum modulus | Use 2048 under FIPS. |
 | `padding PKCS1Padding not supported` | RSA PKCS#1 v1.5 key transport not approved | Gate. No workaround. |
@@ -71,72 +70,50 @@ provider sits earlier in the list. A JSL private key given to a JSLFIPS operator
 
 ## What JSLFIPS can do
 
-Provider is the OpenSSL 3.1.2 FIPS module. Facts below are probed, not inferred.
+**The premise changed on 2026-08-19 (jar `c236fdf9`).** JSLFIPS no longer asserts any concept of
+FIPS approval. Its surface is what the OpenSSL FIPS *module serves*. Whether a given use is
+approved is the operator's determination, not the provider's.
+
+Two consequences for gating:
+
+- Do not gate on "is this approved". Gate on "does this work", probed.
+- The module already labels its own algorithms (`fips=yes` / `fips=no`), so anything marked
+  `fips=no` is unfetchable without any Java-side list.
+
+Facts below are probed against jar `c236fdf9`. Re-probe rather than trusting them.
 
 | engine | JSLFIPS |
 |---|---|
-| KeyPairGenerator / KeyFactory | DH, DSA, EC, RSA only |
-| Signature | RSA / DSA / ECDSA with SHA1, SHA2, SHA3; RSASSA-PSS |
+| KeyPairGenerator / KeyFactory | DH, DSA, EC, RSA, **X25519, X448** |
+| Signature | RSA / DSA / ECDSA with SHA1, SHA2, SHA3; RSASSA-PSS; **NoneWithECDSA both directions** |
 | MessageDigest | SHA1, SHA2-\*, SHA3-\*, SHAKE |
-| KeyAgreement | DH, ECDH and SHA-224-and-up KDF variants |
+| KeyAgreement | DH, ECDH with **all** X9.63 KDF variants including SHA-1, X25519, X448 |
 | KeyGenerator | AES |
+| KeyStore | PKCS12, PKCS12-PBMAC1, PKCS12-AES256-AES128, PKCS12-3DES-3DES |
 
-Absent: Ed25519, Ed448, ML-DSA, ML-KEM, X25519, X448, ChaCha20, Argon2, MD5, RIPEMD, SM3, DESede,
-Camellia, brainpool curves, `ECDHWITHSHA1KDF`.
+**Absent**, because the module marks them `fips=no` or does not carry them: Ed25519, Ed448, DESede,
+MD5, RIPEMD, SM3, BLAKE2, ARIA, Camellia, SM4, ChaCha20, Poly1305, scrypt, Argon2, all PQC
+(ML-DSA, ML-KEM, SLH-DSA), OCB mode, brainpool curves.
 
-Refused by policy: SHA-1 signature *generation* (verification is allowed), RSA PKCS#1 v1.5 key
-transport, RSA keys under 2048 bits, OCB mode.
+**Present but unusable**, which a service lookup will not tell you:
 
-Direction-specific restrictions. These are the subtle ones:
-
-- `NoneWithRSA` is registered but is a deliberate dead end. The module has no "NONE" digest, so
-  `initSign` fails. RSA cannot sign a caller-supplied digest, which is what TLS 1.2 needs.
-  Status: unresolved, pending a compliance decision on the `k=2048` CRT constraint and whether the
-  RSA Signature Primitive covers PKCS#1 v1.5 padding of a caller-supplied digest.
-- `NoneWithECDSA` is **sign-only**. Signing is approved and works. `initVerify` is refused with
-  `raw ECDSA verification is not available: the ECDSA SigVer Component is a non-approved service of
-  the loaded FIPS module; verify with a hashed transformation such as SHA256withECDSA`.
-  Cert #4985 approves the SigGen Component and lists the SigVer Component as non-approved.
-  Status: a question is with the module owner on whether that is curve-wide or an artefact of a
-  tested range spanning sub-112-bit curves. If it is the latter, P-256 and above may become
-  approved. Word any gate around the curve question, not around a flat "non-approved".
+- `NoneWithRSA` registers and then fails at `initSign`. The module has no "NONE" digest. RSA cannot
+  sign a caller-supplied digest, which is what TLS 1.2 needs. The raw-RSA compliance question is
+  with the module owner and is about approval, not exposure.
+- **SHA-1 signature generation** is refused; SHA-1 *verification* works. This is the module, not an
+  approval filter, and it did not change with the premise.
+- Bare **`PKCS12`** keystores resolve and then fail at `store`. The traditional PKCS#12 MAC needs
+  `PKCS12KDF`, which OpenSSL registers only in its default provider. Use **`PKCS12-PBMAC1`**, which
+  uses PBKDF2 and interoperates with JSL in both directions.
+- **`RSA/ECB/PKCS1Padding`** is unregistered deliberately. The module serves PKCS#1 v1.5 decrypt,
+  but Jostle's implicit-rejection guard refuses to initialise without the Bleichenbacher mitigation,
+  which 3.1.2 cannot provide. That is a security decision, not an approval filter.
+- **Explicit DH parameters** are refused; the module generates none of its own. Initialise DH by key
+  size and let it pick an approved named group.
 
 Working as expected, do not "fix": BC's algorithm spelling resolves through aliases, so `SHA-256`,
-`SHA256WITHRSA` and bare OIDs all work even though the module registers `SHA2-256`. AES key wrap
+`SHA256WITHRSA` and bare OIDs work even though the module registers `SHA2-256`. AES key wrap
 resolves by name and by OID on both providers.
-
-### unapproved_services
-
-Config key on `JostleFIPSProvider`. Registers services the module implements but the policy does
-not approve. Syntax is comma-separated:
-
-```java
-new JostleFIPSProvider("fips_module='" + lib + "',unapproved_services=true")
-```
-
-Space, semicolon and newline separators are rejected.
-
-Enabling it does not make an operation approved. The deployment is in non-approved mode while it
-is set.
-
-### The SHA-1 KDF reaches beyond algorithm choice
-
-`ECDHWITHSHA1KDF` and OID `1.3.133.16.840.63.0.2` do not resolve on JSLFIPS. SHA-224 and up are
-unaffected. Nothing in this repo defaults to it.
-
-Two consequences are consumer-facing, not test-facing:
-
-- `CMSAlgorithm.ECDH_SHA1KDF`, `CMSAlgorithm.ECCDH_SHA1KDF`, `CMSEnvelopedGenerator.ECDH_SHA1KDF`
-  and `SMIMEEnvelopedGenerator.ECDH_SHA1KDF` are published API. A caller naming one gets
-  `NoSuchAlgorithmException` against JSLFIPS.
-- `JceKeyAgreeRecipient` holds a `possibleOldMessages` set
-  (`dhSinglePass_stdDH_sha1kdf_scheme`, `mqvSinglePass_sha1kdf_scheme`) used on the pre-RFC 5753
-  fallback. A JSLFIPS deployment therefore **cannot decrypt archived enveloped-data** protected
-  with that KDF, whatever it would choose today. `unapproved_services=true` is the supported
-  recovery route.
-
-The one test naming it, `NewEnvelopedDataTest.testStaticStaticDHAgreement`, sits in a class already
-gated for FIPS. The suite does not go red. That is absence of coverage, not a pass.
 
 ### RSA-PSS certificates
 
@@ -202,6 +179,33 @@ protected void runTest() throws Throwable
     super.runTest();
 }
 ```
+
+### Probe, do not ask isFips()
+
+**Rule: gate on a probe of the behaviour, never on `isFips()`, wherever a probe is possible.**
+
+A probed gate lifts by itself when the provider gains the capability. An `isFips()` gate does not,
+and nothing tells you it has gone stale — the test simply keeps skipping something that works.
+
+This was demonstrated, not theorised. When JSLFIPS gained X25519, `JcaTlsProtocolXDHTest` resumed on
+its own because it gated on `supports("KeyAgreement.X25519")`. The `isFips()` gates in the same run
+had to be found and converted by hand.
+
+Use the strongest probe the question needs:
+
+| question | use |
+|---|---|
+| is the service registered | `has(type, alg)` / `supports(...)` / `assumeAlgorithm(...)` |
+| can this cipher transformation be built | `canGetCipher(...)` |
+| can it be *initialised* | `canInitCipher(...)` |
+| can this signature actually sign | `canSign(sigAlg, keyAlg, keySize)` |
+
+`canSign` exists because registration is not usability: JSLFIPS registers `NoneWithRSA` and refuses
+it at `initSign`, and refuses SHA-1 signing while serving SHA-1 verification. `canInitCipher` exists
+because `Cipher.getInstance("AES/OCB/NoPadding")` succeeds and only `init` fails.
+
+`isFips()` remains correct for genuinely structural differences — key sizes, choosing a different
+digest — where there is nothing to probe.
 
 ### Probing rules
 

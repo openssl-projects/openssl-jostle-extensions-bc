@@ -21,6 +21,31 @@ minimized. **A verbatim copy is almost always wrong.** Work through the steps be
 The provider itself is a **separate repo** (`../openssl-jostle`), consumed as the prebuilt jar
 `libs/openssl-jostle-0.1-SNAPSHOT.jar`. Do not try to fix provider bugs from this repo.
 
+## 0. Classify mechanically first — do not read 400 diffs
+
+For a bulk resync, do not start by reading diffs. For each differing file, ask whether its current
+bytes appear anywhere in upstream's history for that path:
+
+```bash
+git -C <upstream> log --format=%H -- <path>            # commits touching it
+git -C <upstream> cat-file --batch-check=%(objectname) # blob per <commit>:<path>
+git -C <upstream> hash-object <local file>             # compare against this
+```
+
+- **Blob found** — the local file is unmodified upstream text from an older commit. Taking `main`
+  verbatim is provably lossless. No reading required.
+- **Blob not found** — the file carries a real local edit. Three-way merge it against its closest
+  upstream ancestor (the historical blob with the smallest diff to local), then resolve by hand.
+
+In the 1.85→1.86 resync this split 436 differing files into 376 mechanical and 60 needing thought.
+It also makes "no local adaptation was silently reverted" checkable rather than a promise.
+
+**Do not bulk-resolve conflicts with `git merge-file --ours`.** It keeps local in the conflicted
+hunks but still takes upstream's non-conflicting hunks. That produced files mixing upstream imports
+with local bodies; one was not syntactically valid. When a file's only upstream drift is something
+this fork rejects anyway — GOST branches, software crypto, helper indirection — keep the local file
+whole and record it.
+
 ## 1. Diff before you copy — classify every hunk
 
 If the file already exists here, never overwrite it blind:
@@ -100,6 +125,15 @@ filename. A mismatch makes the provider silently drop off the classpath; failure
 
 Mechanical transform: `BouncyCastleProvider` → `JostleProvider`, `"BC"` →
 `JostleProvider.PROVIDER_NAME`, and add the import. Then:
+
+Isolated-compile each candidate before adding it. One non-compiling file breaks the whole module's
+test compilation. Classpath:
+
+```
+core/build/classes/java/main:util/build/classes/java/main:pkix/build/classes/java/main:
+pkix/build/resources/main:libs/openssl-jostle-<version>.jar:<junit-4.13.2>:<hamcrest-core-1.3>:
+pkix/src/test/java
+```
 
 - **JUnit3** (`extends junit.framework.TestCase`) runs directly, but `@Ignore` does **not** work.
   Skip a test by renaming `testXxx` → `DISABLED_testXxx` *globally* (declaration and every

@@ -31,18 +31,13 @@ public class JcaTlsCryptoTest
     public void testSignatures12()
         throws Exception
     {
-        // TLS 1.2 hashes the handshake itself and signs the digest, which BouncyCastle does
-        // through NoneWithRSA. That does not work on the FIPS module today, and the reason is
-        // NOT that raw RSA signing is non-approved - the security policy lists the RSA Signature
-        // Primitive as an approved algorithm and service. It is unresolved: the validated
-        // primitive is constrained to k=2048 with a CRT private key, whereas the provider's RSA
-        // keygen serves 2048-16384, and whether that service covers PKCS#1 v1.5 padding of a
-        // caller-supplied digest is a compliance reading still with the provider's owner.
-        if (JslTestProvider.isFips())
+        // TLS 1.2 hashes the handshake itself and signs the digest through NoneWithRSA. JSLFIPS
+        // registers that but refuses it at initSign, so a service lookup would wrongly say yes -
+        // probe an actual signature. This lifts by itself if raw RSA signing is ever enabled.
+        if (!JslTestProvider.canSign("NoneWithRSA", "RSA", 2048))
         {
-            System.out.println("[skipped] " + JslTestProvider.name()
-                + ": raw RSA signing is unresolved pending a compliance decision (k=2048 and"
-                + " padding semantics of the RSA Signature Primitive)");
+            System.out.println("[skipped] " + JslTestProvider.name() + " cannot sign a caller-supplied"
+                + " digest with RSA (raw RSA signing unresolved pending a compliance decision)");
             return;
         }
 

@@ -467,10 +467,11 @@ public class PGPDSATest
     public void testGeneratedDsaKeyPairSignVerify()
         throws Exception
     {
-        // DSA here signs with SHA-1, which the FIPS module refuses for signature generation.
-        if (JslTestProvider.isFips())
+        // this signs with SHA-1, which the FIPS module refuses for signature generation while
+        // still serving SHA-1 verification. Probed, so it lifts by itself if that changes.
+        if (!JslTestProvider.canSign("SHA1withDSA", "DSA", 2048))
         {
-            System.out.println("[skipped] " + JslTestProvider.name() + " does not allow SHA-1 DSA signing");
+            System.out.println("[skipped] " + JslTestProvider.name() + " will not sign with SHA-1");
             return;
         }
         // Fresh DSA key + full OpenPGP one-pass sign/verify round trip. Uses 2048-bit params
