@@ -10,7 +10,7 @@ Match the error first. Each row gives the cause and the action.
 | symptom | cause | action |
 |---|---|---|
 | `no such algorithm: <X> for provider JSLFIPS` | FIPS module lacks `<X>` | Gate the test. See **Which gate to use**. |
-| `KeyStore.store` fails on JSLFIPS with a bare `PKCS12` keystore | traditional PKCS#12 MAC needs `PKCS12KDF`, which the FIPS provider does not have | Use `PKCS12-PBMAC1` explicitly. It uses PBKDF2 and interoperates with JSL both ways. |
+| `KeyStoreException` for any `PKCS12*` type on JSLFIPS | PKCS#12 is withdrawn from JSLFIPS entirely | Use JSL for keystores. There is no FIPS keystore. |
 | `InvalidKeyException` from `initSign` naming `digest not allowed` | SHA-1 signature *generation* refused (verification is allowed) | Sign with SHA-256. See **Prefer adapting over skipping**. |
 | `RSA key size 1024 is out of range [2048, 16384]` | FIPS minimum modulus | Use 2048 under FIPS. |
 | `padding PKCS1Padding not supported` | RSA PKCS#1 v1.5 key transport not approved | Gate. No workaround. |
@@ -89,7 +89,7 @@ Facts below are probed against jar `c236fdf9`. Re-probe rather than trusting the
 | MessageDigest | SHA1, SHA2-\*, SHA3-\*, SHAKE |
 | KeyAgreement | DH, ECDH with **all** X9.63 KDF variants including SHA-1, X25519, X448 |
 | KeyGenerator | AES |
-| KeyStore | PKCS12, PKCS12-PBMAC1, PKCS12-AES256-AES128, PKCS12-3DES-3DES |
+| KeyStore | **none** — see below |
 
 **Absent**, because the module marks them `fips=no` or does not carry them: Ed25519, Ed448, DESede,
 MD5, RIPEMD, SM3, BLAKE2, ARIA, Camellia, SM4, ChaCha20, Poly1305, scrypt, Argon2, all PQC
@@ -102,9 +102,14 @@ MD5, RIPEMD, SM3, BLAKE2, ARIA, Camellia, SM4, ChaCha20, Poly1305, scrypt, Argon
   with the module owner and is about approval, not exposure.
 - **SHA-1 signature generation** is refused; SHA-1 *verification* works. This is the module, not an
   approval filter, and it did not change with the premise.
-- Bare **`PKCS12`** keystores resolve and then fail at `store`. The traditional PKCS#12 MAC needs
-  `PKCS12KDF`, which OpenSSL registers only in its default provider. Use **`PKCS12-PBMAC1`**, which
-  uses PBKDF2 and interoperates with JSL in both directions.
+- **PKCS#12 is withdrawn from JSLFIPS entirely** (jar `eb072f16`). Every `PKCS12*` type throws
+  `KeyStoreException`. The reason is capability, not approval: verifying the traditional PKCS#12 MAC
+  needs `PKCS12KDF`, and OpenSSL registers that only in its default provider. The FIPS provider's
+  KDFs are HKDF, TLS13-KDF, SSKDF, PBKDF2, SSHKDF, X963KDF, X942KDF, TLS1-PRF, KBKDF and CTR-DRBG.
+  A FIPS keystore could therefore not **read** a conventional `.p12` at all — not one written by
+  JSL, not one written by BouncyCastle — only RFC 9579 PBMAC1 keystores, which are rare. A service
+  that fails on nearly every keystore a caller already has is worse than its absence. **Use JSL for
+  keystores.** Do not re-add this on the assumption it was an approval exclusion.
 - **`RSA/ECB/PKCS1Padding`** is unregistered deliberately. The module serves PKCS#1 v1.5 decrypt,
   but Jostle's implicit-rejection guard refuses to initialise without the Bleichenbacher mitigation,
   which 3.1.2 cannot provide. That is a security decision, not an approval filter.
