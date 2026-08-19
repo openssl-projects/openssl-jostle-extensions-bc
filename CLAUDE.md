@@ -52,6 +52,4 @@ ML-DSA, SLH-DSA, ML-KEM, EC, RSA, AES (incl. GCM + RFC 3394/5649 key-wrap) work 
 - `conventions.md` — working rules, each one traceable to a specific problem
 - `provider-gaps.md` — JSL capability gaps, open and closed, with probe dates
 
-`memory/` holds the older session notes those guides were distilled from. Several are stale — they record provider gaps since fixed and file counts since changed — so prefer the guides, and re-probe anything in `memory/` before acting on it.
-
 Porting anything from `../bc-java` (source, refactor or test)? Use the **`port-from-bc-java`** skill (`.claude/skills/port-from-bc-java/SKILL.md`) — it covers diff-then-classify, which dependencies do not exist here, the local JSL adaptations a resync must not revert, and the verification order.

@@ -98,7 +98,7 @@ add a *provider seam* instead. The worked precedent is Argon2: upstream `PGPUtil
 `Argon2BytesGenerator`; here `PGPUtil` takes a `PGPS2KCalculator`, and `JcePGPS2KCalculator` routes
 to `SecretKeyFactory.getInstance("ARGON2")`. That let `Blake2bDigest` and the whole software Argon2
 be deleted while leaving the feature reachable the moment JSL grows the service. See
-`memory/jostle-pg-argon2-provider-gap.md`.
+`.claude/guides/provider-gaps.md`.
 
 If a needed class lives in bc-java's `prov` module, copy it into `core` here — and strip any
 software-crypto coupling on the way in (e.g. `Argon2KeySpec`'s constants were inlined so it no longer
@@ -107,7 +107,7 @@ imports `Argon2Parameters`).
 ## 3. Verify, in this order
 
 1. **Tests only:** isolated-compile the candidate first — one non-compiling test file breaks the
-   whole module's test compilation. Classpath is recorded in `memory/jostle-pkix-test-migration.md`.
+   whole module's test compilation. Classpath is in section 4 below.
 2. `./gradlew :<module>:compileJava`
 3. `./gradlew assemble`
 4. `./gradlew test` — pkix/tls/pg/mail have tests; core/util have none. Compare counts against the
@@ -144,14 +144,14 @@ pkix/src/test/java
   `CMSTestUtil`) throws at class-load and cannot be method-skipped — drop it.
 
 Full workflow, the exact classpath, and the per-package record of what was migrated vs dropped:
-`memory/jostle-pkix-test-migration.md`.
+`.claude/guides/testing.md`.
 
 ## 5. Finishing
 
 - Say plainly what you skipped and why — dropped test methods, omitted upstream hunks, paths that now
   throw. Silent narrowing is the failure mode that hurts most here.
-- Prefer deleting a dead upstream dependency over porting it (`memory/prefer-deleting-deprecated-over-rewriting.md`).
+- Prefer deleting a dead upstream dependency over porting it (`.claude/guides/conventions.md`).
   Before deleting, use import/FQN reachability, not bare-token grep — comments and same-name classes
-  in other packages produce false hits both ways (`memory/dead-code-sweep-method.md`).
+  in other packages produce false hits both ways (`.claude/guides/conventions.md`).
 - Commit only when asked. Short lowercase subject, body explaining *why*.
-  **No `Co-Authored-By` or other AI-attribution trailer** (`memory/no-co-authored-by-trailer.md`).
+  **No `Co-Authored-By` or other AI-attribution trailer** (`.claude/guides/conventions.md`).
