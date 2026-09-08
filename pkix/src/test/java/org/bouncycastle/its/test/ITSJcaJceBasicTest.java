@@ -281,7 +281,7 @@ public class ITSJcaJceBasicTest
         TestCase.assertTrue(valid);
     }
 
-    public void DISABLED_testSelfSignedCA()
+    public void testSelfSignedCA()
         throws Exception
     {
         ensureProvider();

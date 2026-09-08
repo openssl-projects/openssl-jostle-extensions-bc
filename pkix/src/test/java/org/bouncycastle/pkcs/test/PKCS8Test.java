@@ -100,6 +100,8 @@ public class PKCS8Test
         JslTestProvider.install();
     }
 
+        // DISABLED: CMS OID-lookup gap: no SecretKeyFactory for the PBKDF2 OID
+        // 1.2.840.113549.1.5.12.
     public void DISABLED_testSHA256()
         throws Exception
     {
@@ -139,6 +141,7 @@ public class PKCS8Test
         assertTrue(Arrays.areEqual(scryptKey, pkInfo.getEncoded()));
     }
 
+        // DISABLED: Undiagnosed: IllegalStateException "cannot encode privateKeyInfo".
     public void DISABLED_testSHA256Encryption()
         throws Exception
     {
@@ -166,6 +169,7 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+        // DISABLED: Undiagnosed: IllegalStateException "cannot encode privateKeyInfo".
     public void DISABLED_testSHA3_256Encryption()
         throws Exception
     {
@@ -193,6 +197,8 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+        // DISABLED: CMS OID-lookup gap: no SecretKeyFactory for the PBKDF2 OID
+        // 1.2.840.113549.1.5.12.
     public void DISABLED_testKWPEncryption()
         throws Exception
     {
@@ -220,6 +226,7 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+        // DISABLED: CMS OID-lookup gap: no encryptor for 2.16.840.1.101.3.4.1.27.
     public void DISABLED_testCCMEncryption()
         throws Exception
     {
@@ -247,6 +254,8 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+        // DISABLED: CMS OID-lookup gap: no SecretKeyFactory for the PBKDF2 OID
+        // 1.2.840.113549.1.5.12.
     public void DISABLED_testGCMEncryption()
         throws Exception
     {

@@ -120,9 +120,9 @@ import org.bouncycastle.util.io.Streams;
 //   - KEM variants: ML-KEM KTS supports only X9.44 KDF3 (these use other KDF OIDs); RSA-KEM
 //     (ISO 18033, 1.0.18033.*) is absent.
 //   - EC/agreement variants: ECMQV, ECKA-EG, X25519/X448 CMS key-agreement; the EC-key-agree
-//     vectors (need plain "ECDH" by name); testECKeyAgree agrees fine but asserts a specific curve OID.
+//     vectors (need plain "ECDH" by name); DISABLED_testECKeyAgree agrees fine but asserts a specific curve OID.
 //   - misc: AEAD KEK with non-standard GCM tag len 11 (JDK GCMParameters rejects); OAEP params
-//     carried in-cert (testKeyTransOAEPInCert); 3DES-short / alg-mapping edge cases.
+//     carried in-cert (DISABLED_testKeyTransOAEPInCert); 3DES-short / alg-mapping edge cases.
 // GOST/SM2/Bc-operator and PBE-password methods were dropped at migration (not migratable).
 public class NewEnvelopedDataTest
     extends TestCase
@@ -761,6 +761,8 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: KTS-KDF gap: the ML-KEM KTS cipher accepts X9.44 KDF3 only; CMS asks for HKDF
+        // 1.2.840.113549.1.9.16.3.28. Probed 2026-09-08, all three configurations.
     public void DISABLED_testMLKem512()
         throws Exception
     {
@@ -806,6 +808,8 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: KTS-KDF gap: as DISABLED_testMLKem512 - HKDF 1.2.840.113549.1.9.16.3.28 refused, KDF3
+        // only.
     public void DISABLED_testMLKem768()
         throws Exception
     {
@@ -851,6 +855,8 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: KTS-KDF gap: as DISABLED_testMLKem512 - HKDF 1.2.840.113549.1.9.16.3.28 refused, KDF3
+        // only.
     public void DISABLED_testMLKem1024()
         throws Exception
     {
@@ -903,7 +909,7 @@ public class NewEnvelopedDataTest
      * The KEMRecipientInfo flow (RFC 9629) carries the RSA encapsulation in {@code kemct}
      * and the AES-wrapped CEK in {@code encryptedKey}.
      */
-    public void DISABLED_testRsaKemKdf3Sha256Aes128Wrap()
+    public void testRsaKemKdf3Sha256Aes128Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(
@@ -911,7 +917,7 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES128_WRAP);
     }
 
-    public void DISABLED_testRsaKemKdf3Sha512Aes256Wrap()
+    public void testRsaKemKdf3Sha512Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(
@@ -919,6 +925,7 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
+        // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses KDF2 1.3.133.16.840.9.44.1.1, KDF3 only.
     public void DISABLED_testRsaKemKdf2Sha256Aes256Wrap()
         throws Exception
     {
@@ -927,6 +934,8 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
+        // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses HKDF 1.2.840.113549.1.9.16.3.28, KDF3
+        // only. The three KDF3 variants of this test DO pass.
     public void DISABLED_testRsaKemHkdfSha256Aes256Wrap()
         throws Exception
     {
@@ -940,7 +949,7 @@ public class NewEnvelopedDataTest
      * Exercises that the KEM path's {@code getJceKey(algId, ...)} hook performs the
      * HKDF derivation transparently.
      */
-    public void DISABLED_testRsaKemWithCekHkdfSha256()
+    public void testRsaKemWithCekHkdfSha256()
         throws Exception
     {
         byte[] data = "WallaWallaWashington".getBytes();
@@ -1278,6 +1287,8 @@ public class NewEnvelopedDataTest
         doTestKeyTransOAEPDefaultNamed(digest, digest, _reciCert_2048, _reciKP_2048);
     }
 
+        // DISABLED: Undiagnosed: CMSException "exception wrapping content key: unable to encrypt
+        // contents key". RSA-OAEP by name round-trips fine.
     public void DISABLED_testKeyTransOAEPInCert()
         throws Exception
     {
@@ -1324,7 +1335,7 @@ public class NewEnvelopedDataTest
         assertTrue(collection.iterator().next() instanceof RecipientInformation);
     }
 
-    public void DISABLED_testKeyTransWithAlgMapping()
+    public void testKeyTransWithAlgMapping()
         throws Exception
     {
         byte[] data = "WallaWallaWashington".getBytes();
@@ -1620,6 +1631,8 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: Undiagnosed: CMSException "key invalid in message". Fails on JSL, where
+        // Triple-DES encrypt works, so it is not the FIPS decrypt-only limit.
     public void DISABLED_testKeyTransDESEDE3Short()
         throws Exception
     {
@@ -1806,6 +1819,8 @@ public class NewEnvelopedDataTest
         tryKekAlgorithm(CMSTestUtil.makeRC2128Key(), new ASN1ObjectIdentifier("1.2.840.113549.1.9.16.3.7"));
     }
 
+        // DISABLED: Undiagnosed: IllegalArgumentException "Invalid ICV length: 11". Not a lookup
+        // failure.
     public void DISABLED_testAES128KEK()
         throws Exception
     {
@@ -2059,6 +2074,8 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: Test-side: asserts curve OID 1.2.840.10045.3.1.4 (P-384) but the fixture yields
+        // 1.2.840.10045.3.1.7 (P-256).
     public void DISABLED_testECKeyAgree()
         throws Exception
     {
@@ -2088,6 +2105,8 @@ public class NewEnvelopedDataTest
         assertEquals(X9ObjectIdentifiers.prime239v1, recInfo.getOriginator().getOriginatorKey().getAlgorithm().getParameters());
     }
 
+        // DISABLED: CMS OID-lookup gap: no KeyAgreement for the BSI ECKA-EG OID
+        // 0.4.0.127.0.7.1.1.5.1.1.3. Probably out of scope for this provider.
     public void DISABLED_testEckaEgX963Kdf()
         throws Exception
     {
@@ -2149,6 +2168,7 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: CMS OID-lookup gap: no Cipher registered for 1.2.840.113549.1.9.16.3.6.
     public void DISABLED_testKeyWrapAlgorithmIdentifiers()
         throws Exception
     {
@@ -2269,6 +2289,7 @@ public class NewEnvelopedDataTest
         }
     }
 
+        // DISABLED: CMS OID-lookup gap: no KeyAgreement for the X9.63 OID 1.3.133.16.840.63.0.3.
     public void DISABLED_testKDFAgreements()
         throws Exception
     {
@@ -2360,6 +2381,8 @@ public class NewEnvelopedDataTest
         assertEquals(count, recipients.getRecipients().size());
     }
 
+        // DISABLED: Test-side: calls KeyFactory.getInstance("ECDH"); ECDH is registered as a
+        // KeyAgreement only. Use "EC" - the same BC-ism as "ECDSA".
     public void DISABLED_testECKeyAgreeVectors()
         throws Exception
     {
@@ -2476,6 +2499,8 @@ public class NewEnvelopedDataTest
 
 
     // Regression test for https://github.com/bcgit/bc-java/issues/1845 - RFC 8418 X25519/X448 in CMS.
+        // DISABLED: CMS OID-lookup gap: no KeyAgreement for the RFC 8418 OID
+        // 1.2.840.113549.1.9.16.3.19. X25519/X448 agreement itself works by name.
     public void DISABLED_testRFC8418X25519AndX448()
         throws Exception
     {

@@ -70,7 +70,7 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         CMSAuthEnvelopedDataStreamGeneratorTest test = new CMSAuthEnvelopedDataStreamGeneratorTest();
         test.setUp();
         test.DISABLED_testGCMCCM();
-        test.DISABLED_testNoAuthAttributes();
+        test.testNoAuthAttributes();
         test.testNoAttributes();
 
     }
@@ -135,6 +135,7 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         init();
     }
 
+        // DISABLED: CMS OID-lookup gap: no KeyGenerator for 2.16.840.1.101.3.4.1.7.
     public void DISABLED_testGCMCCMZeroLength()
         throws Exception
     {
@@ -145,6 +146,9 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         GCMCCMtest(CMSAlgorithm.AES128_CCM, true, new byte[0]);
     }
 
+        // DISABLED: DEFECT CANDIDATE, reported: OpenSSLException "ossl_gcm_stream_update: cipher
+        // operation failed" mid-stream. The cipher resolves and then fails, so it is not a lookup
+        // problem.
     public void DISABLED_testGCMCCM()
         throws Exception
     {
@@ -279,7 +283,7 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         ep.close();
     }
 
-    public void DISABLED_testNoAuthAttributes()
+    public void testNoAuthAttributes()
         throws Exception
     {
         ASN1ObjectIdentifier oid = CMSAlgorithm.AES128_GCM;

@@ -210,6 +210,12 @@ public abstract class TlsCryptoTest
         }};
     }
 
+    // DISABLED: passes on JSL, fails on JSLFIPS with a 3.5.8 module. The binary sect* curves
+    // whose cofactor is not 1 - sect233k1, sect233r1, sect283k1, sect409k1, sect571k1 -
+    // generate keys and then fail the ECDH derive with OpenSSL
+    // "ecdh_plain_derive: cofactor required". Probed per curve 2026-09-08; JSL performs all
+    // of them. Reported as a defect candidate: the provider advertises and creates keys for a
+    // curve it cannot then agree on.
     public void DISABLED_testECDomain() throws Exception
     {
         if (!crypto.hasECDHAgreement())

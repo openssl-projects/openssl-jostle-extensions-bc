@@ -81,9 +81,18 @@ public class InvalidMessagesTest
         }
     }
 
-    public void DISABLED_testBadProtection()
+    public void testBadProtection()
         throws Exception
     {
+        // Needs DSA key GENERATION, which a FIPS module installed -pedantic refuses
+        // (dsa-sign-disabled=1) with a typed ProviderException while DSA import and verification
+        // stay available. Probe by attempting, since it depends on the fipsinstall configuration
+        // rather than the module version.
+        if (!JslTestProvider.canSign("SHA256withDSA", "DSA", 2048))
+        {
+            return;
+        }
+
         KeyPairGenerator dsaKpGen = KeyPairGenerator.getInstance("DSA", JslTestProvider.name());
 
         DSAParameters dsaParams = (DSAParameters)CryptoServicesRegistrar.getSizedProperty(CryptoServicesRegistrar.Property.DSA_DEFAULT_PARAMS, 2048);
@@ -132,7 +141,7 @@ public class InvalidMessagesTest
         }
     }
 
-    public void DISABLED_testBadTypeSequenceVsChoice()
+    public void testBadTypeSequenceVsChoice()
         throws Exception
     {
         try

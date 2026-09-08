@@ -52,7 +52,7 @@ public class MultipartParserTest
      *
      * @throws Exception
      */
-    public void DISABLED_testParseContentTypeHeader_wellformed()
+    public void testParseContentTypeHeader_wellformed()
         throws Exception
     {
         String value = "multipart/alternative;\n" +
@@ -96,7 +96,7 @@ public class MultipartParserTest
      *
      * @throws Exception
      */
-    public void DISABLED_testParseContentTypeHeader_broken()
+    public void testParseContentTypeHeader_broken()
         throws Exception
     {
 
@@ -139,7 +139,7 @@ public class MultipartParserTest
         TestCase.assertEquals("{boundary=\"cats\", micalg=\"\"}", headers.getContentTypeAttributes().toString());
     }
 
-    public void DISABLED_testSignedMultipart()
+    public void testSignedMultipart()
         throws Exception
     {
         final ArrayList<Object> results = new ArrayList<Object>();
@@ -199,7 +199,7 @@ public class MultipartParserTest
         assertTrue(dataParsed.isDone());
     }
 
-    public void DISABLED_testInvalidSha256SignedMultipart()
+    public void testInvalidSha256SignedMultipart()
         throws Exception
     {
         final ArrayList<Object> results = new ArrayList<Object>();
@@ -254,7 +254,7 @@ public class MultipartParserTest
         });
     }
 
-    public void DISABLED_testEmbeddedMultipart()
+    public void testEmbeddedMultipart()
         throws Exception
     {
         final ArrayList<Object> results = new ArrayList<Object>();
@@ -308,7 +308,7 @@ public class MultipartParserTest
         });
     }
 
-    public void DISABLED_testMultipartAlternative()
+    public void testMultipartAlternative()
         throws Exception
     {
         final ArrayList<Object> results = new ArrayList<Object>();
@@ -382,7 +382,7 @@ public class MultipartParserTest
      *
      * @throws IOException
      */
-    public void DISABLED_testMimeMultipart()
+    public void testMimeMultipart()
         throws Exception
     {
         final ArrayList<Object> results = new ArrayList<Object>();

@@ -94,6 +94,36 @@ false "absent" readings that hid real capabilities: RSA-KEM is `Cipher RSA-KTS-K
 counts at jar `050298a8` are JSL 340, JSLFIPS 188 on a 3.1.2 module and 274 on a 3.5.8 one, which
 match jostle's own `SERVICES.md`.
 
+**A functional probe must do what the CALLER does.** Supply the parameter set, the spec, the mode,
+the transformation, and the same NAME FORM the caller uses - or its "no" is the probe's omission,
+not the provider's refusal. Four false "absent" readings on 2026-09-08 came from this one mistake:
+
+| probe as written | what it reported | what the caller does |
+|---|---|---|
+| `getService("Cipher", "DESede/CBC/PKCS5Padding")` | absent | providers register the base name; only a functional probe answers |
+| guessed service names | RSA-KEM, CBC-CTS, 3 KDF families absent | enumerate `provider.getServices()` first |
+| `KeyPairGenerator("ML-DSA").generateKeyPair()` | registered-but-refusing | `initialize(MLDSAParameterSpec.ml_dsa_65)` first; family names need a parameter set |
+| `KeyAgreement("ECDHWITHSHA256KDF")…generateSecret("AES")` | absent | `JceKeyAgreeRecipient` passes the key-wrap **OID**, not a name |
+
+| probing `Cipher.getInstance("AESWRAP")` for a CMS test | usable, so ungate | CMS resolves by **OID** from the message, not by JCA name |
+
+**The caller is whoever actually performs the lookup.** For CMS and PKCS#8 that is the layer
+resolving an algorithm by OID out of the message, so a probe by JCA name asks the wrong caller
+entirely. That mistake put 22 tests on an ungate list they could not pass: `AESWRAP`,
+`AES/CCM`, `RSA-OAEP` and ECDH-with-KDF all work by name, while `Cipher 1.2.840.113549.1.9.16.3.6`,
+`KeyGenerator 2.16.840.1.101.3.4.1.7`, `SecretKeyFactory 1.2.840.113549.1.5.12` and three
+`KeyAgreement` OIDs are not registered. When the test drives a layer, probe through the layer or
+read what the layer looks up.
+
+The OID one cost 22 tests ungated and re-disabled; the `generateSecret("AES")` one cost a reported
+provider defect that did not exist. Read the caller before writing the probe.
+
+Probe each DIRECTION separately where they can differ. A 3.5.8 module serves Triple-DES for
+decryption and refuses encryption with a typed `InvalidKeyException`, so "is DESede there" has no
+single answer. The no-argument `canInitCipher` hardcodes a 32-byte AES key and a 12-byte IV, so it
+answers "no" for any algorithm shaped differently - give the probe the key and IV sizes the
+algorithm actually takes.
+
 **Report registration and usability separately.** `REG/REFUSED` is a real state here - see
 **Raw RSA on JSLFIPS**.
 

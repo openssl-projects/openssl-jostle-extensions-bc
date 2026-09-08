@@ -124,7 +124,7 @@ public class ITSCertLoadTest
 //    }
 
 
-    public void DISABLED_testLoadAllCerts()
+    public void testLoadAllCerts()
         throws Exception
     {
         for (String name : certNames)
