@@ -131,13 +131,6 @@ public class NewSignedDataTest
     protected void runTest()
         throws Throwable
     {
-        if (JslTestProvider.isFips())
-        {
-            System.out.println("[skipped] " + getName() + ": classic CMS, needs SHA-1 signing / "
-                + "PKCS#1 v1.5 key transport / DESede, none approved by " + JslTestProvider.name());
-            return;
-        }
-
         super.runTest();
     }
     private static final String BC = JslTestProvider.name();
@@ -1009,9 +1002,91 @@ public class NewSignedDataTest
         verifySignatures(s, null);
     }
 
+    /*
+     * Per-test capability gates, replacing the class-level isFips() gate this class used to carry.
+     * That gate named three real causes - SHA-1 signing, PKCS#1 v1.5 key transport, DESede - and
+     * applied them to all 79 tests, of which 52 pass on a 3.5.8 module and 48 on a 3.1.2 one.
+     * Measured 2026-09-08 by removing it and running both modules.
+     *
+     * Each gate probes; none asks isFips(), and none matches on a message. The message for one
+     * cause differs between modules - Triple-DES reads "encryption is not supported" on 3.5.8 and
+     * surfaces as a missing OID lookup on 3.1.2 - so message text cannot key a gate.
+     *
+     * A TestCase subclass cannot use Assume (JUnit38ClassRunner reports it as a failure), so these
+     * return early and print, which is what the leg summary's silent-skip count reads.
+     */
+    private boolean requireSha1Signing()
+    {
+        if (JslTestProvider.canSign("SHA1withRSA", "RSA", 2048))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": SHA-1 signature generation refused by "
+            + JslTestProvider.name());
+        return false;
+    }
+
+    private boolean requireSha1DsaSigning()
+    {
+        if (JslTestProvider.canSign("SHA1withDSA", "DSA", 2048))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": SHA-1 DSA signature generation refused by "
+            + JslTestProvider.name());
+        return false;
+    }
+
+    private boolean requireSha1EcdsaSigning()
+    {
+        if (JslTestProvider.canSign("SHA1withECDSA", "EC", 256))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": SHA-1 ECDSA signature generation refused by "
+            + JslTestProvider.name());
+        return false;
+    }
+
+    private boolean requireSignature(String algorithm)
+    {
+        // has(), not supports(): supports() prints its own "[skipped]" line, which would double
+        // every gated execution in the leg summary's silent-skip count.
+        if (JslTestProvider.has("Signature", algorithm))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not implement Signature." + algorithm);
+        return false;
+    }
+
+    /**
+     * A fixture key pair the provider could not generate is null, following CMSTestUtil's
+     * optionalKpg convention. Guarding here rather than in each caller covers every signature
+     * algorithm the module refuses - DSA where dsa-sign-disabled is set, Ed25519/Ed448 on a 3.1.2
+     * module - without a per-algorithm list to keep in step.
+     */
+    private boolean haveKeyPair(KeyPair pair)
+    {
+        if (null != pair)
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName()
+            + ": the fixture key pair is null, so " + JslTestProvider.name()
+            + " could not generate a key of that type");
+        return false;
+    }
+
     public void testDetachedVerification()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         byte[]              data = "Hello World!".getBytes();
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray(data);
@@ -1075,6 +1150,11 @@ public class NewSignedDataTest
     public void testSHA1AndMD5WithRSAEncapsulatedRepeated()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List              certList = new ArrayList();
         CMSTypedData      msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -1175,6 +1255,11 @@ public class NewSignedDataTest
     public void testWithDefiniteLength()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List              certList = new ArrayList();
         CMSTypedData      msg = new CMSProcessableByteArray("Hello world!".getBytes());
 
@@ -1239,6 +1324,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSANoAttributes()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List              certList = new ArrayList();
         CMSTypedData      msg = new CMSProcessableByteArray("Hello world!".getBytes());
     
@@ -1271,6 +1361,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSANoAttributesSimple()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List              certList = new ArrayList();
         CMSTypedData      msg = new CMSProcessableByteArray("Hello world!".getBytes());
 
@@ -1300,6 +1395,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSAAndOtherRevocation()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List              certList = new ArrayList();
         CMSTypedData      msg = new CMSProcessableByteArray("Hello world!".getBytes());
 
@@ -1351,6 +1451,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSAAndAttributeTableSimple()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         MessageDigest       md = MessageDigest.getInstance("SHA1", BC);
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello world!".getBytes());
@@ -1397,6 +1502,11 @@ public class NewSignedDataTest
     public void testCMSAlgorithmProtection()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello world!".getBytes());
 
@@ -1504,6 +1614,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSAAndAttributeTable()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         MessageDigest       md = MessageDigest.getInstance("SHA1", BC);
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello world!".getBytes());
@@ -1554,6 +1669,11 @@ public class NewSignedDataTest
     public void testRemoveAttribute()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         MessageDigest       md = MessageDigest.getInstance("SHA1", BC);
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello world!".getBytes());
@@ -1604,6 +1724,11 @@ public class NewSignedDataTest
     public void testSignerInformationExtension()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello world!".getBytes());
 
@@ -1735,18 +1860,33 @@ public class NewSignedDataTest
     public void testSHA1WithRSAEncapsulated()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         encapsulatedTest(_signKP, _signCert, "SHA1withRSA");
     }
 
     public void testSHA1WithRSAEncapsulatedSubjectKeyID()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         subjectKeyIDTest(_signKP, _signCert, "SHA1withRSA");
     }
 
     public void testSHA1WithRSADigest()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         rsaDigestTest("SHA1withRSA");
     }
 
@@ -1801,6 +1941,11 @@ public class NewSignedDataTest
     public void testEd25519()
         throws Exception
     {
+        if (!haveKeyPair(_signEd25519KP))
+        {
+            return;
+        }
+
         /*
          * RFC 8419 3.1. When signing with Ed25519, the digestAlgorithm MUST be id-sha512, and the algorithm
          * parameters field MUST be absent.
@@ -1818,6 +1963,11 @@ public class NewSignedDataTest
     public void testEd448()
         throws Exception
     {
+        if (!haveKeyPair(_signEd448KP))
+        {
+            return;
+        }
+
         /*
          * RFC 8419 3.1. When signing with Ed448, the digestAlgorithm MUST be id-shake256-len, the algorithm
          * parameters field MUST be present, and the parameter MUST contain 512, encoded as a positive integer
@@ -1836,12 +1986,22 @@ public class NewSignedDataTest
     public void testEd25519WithNoAttr()
         throws Exception
     {
+        if (!haveKeyPair(_signEd25519KP))
+        {
+            return;
+        }
+
         directSignatureTest(_signEd25519KP, _signEd25519Cert, "Ed25519", new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha512));
     }
 
     public void testEd448WithNoAttr()
         throws Exception
     {
+        if (!haveKeyPair(_signEd448KP))
+        {
+            return;
+        }
+
         directSignatureTest(_signEd448KP, _signEd448Cert, "Ed448", new AlgorithmIdentifier(NISTObjectIdentifiers.id_shake256));
     }
 
@@ -1886,12 +2046,22 @@ public class NewSignedDataTest
     public void testECDSAEncapsulated()
         throws Exception
     {
+        if (!requireSha1EcdsaSigning())
+        {
+            return;
+        }
+
         encapsulatedTest(_signEcDsaKP, _signEcDsaCert, "SHA1withECDSA");
     }
 
     public void testECDSAEncapsulatedSubjectKeyID()
         throws Exception
     {
+        if (!requireSha1EcdsaSigning())
+        {
+            return;
+        }
+
         subjectKeyIDTest(_signEcDsaKP, _signEcDsaCert, "SHA1withECDSA");
     }
 
@@ -1899,36 +2069,74 @@ public class NewSignedDataTest
     public void testDSAEncapsulated()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+        if (!requireSha1DsaSigning())
+        {
+            return;
+        }
+
         encapsulatedTest(_signDsaKP, _signDsaCert, "SHA1withDSA");
     }
 
     public void testDSAEncapsulatedSubjectKeyID()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+        if (!requireSha1DsaSigning())
+        {
+            return;
+        }
+
         subjectKeyIDTest(_signDsaKP, _signDsaCert, "SHA1withDSA");
     }
 
     public void testSHA3_224WithDSAEncapsulated()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+
         encapsulatedTest(_signDsaKP, _signDsaCert, "SHA3-224withDSA", NISTObjectIdentifiers.id_dsa_with_sha3_224);
     }
 
     public void testSHA3_256WithDSAEncapsulated()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+
         encapsulatedTest(_signDsaKP, _signDsaCert, "SHA3-256withDSA", NISTObjectIdentifiers.id_dsa_with_sha3_256);
     }
 
     public void testSHA3_384WithDSAEncapsulated()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+
         encapsulatedTest(_signDsaKP, _signDsaCert, "SHA3-384withDSA", NISTObjectIdentifiers.id_dsa_with_sha3_384);
     }
 
     public void testSHA3_512WithDSAEncapsulated()
         throws Exception
     {
+        if (!haveKeyPair(_signDsaKP))
+        {
+            return;
+        }
+
         encapsulatedTest(_signDsaKP, _signDsaCert, "SHA3-512withDSA", NISTObjectIdentifiers.id_dsa_with_sha3_512);
     }
 
@@ -2024,6 +2232,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSACounterSignature()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         List                crlList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
@@ -2075,6 +2288,11 @@ public class NewSignedDataTest
     public void testNestedCounterSignature()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List certList = new ArrayList();
         CMSTypedData msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -2152,6 +2370,11 @@ public class NewSignedDataTest
     public void testSHA1WithRSACounterSignatureAndVerifierProvider()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         List                crlList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
@@ -2247,6 +2470,11 @@ public class NewSignedDataTest
     public void testAddDigestAlgorithm()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         List                crlList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
@@ -3096,6 +3324,11 @@ public class NewSignedDataTest
     public void testNullContentWithSigner()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
 
         certList.add(_origCert);
@@ -3121,6 +3354,11 @@ public class NewSignedDataTest
     public void testWithAttributeCertificate()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3180,6 +3418,11 @@ public class NewSignedDataTest
     public void testCertStoreReplacement()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List         certList = new ArrayList();
         CMSTypedData msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3218,6 +3461,11 @@ public class NewSignedDataTest
     public void testEncapsulatedCertStoreReplacement()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3256,6 +3504,11 @@ public class NewSignedDataTest
     public void testCertOrdering1()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List            certList = new ArrayList();
         CMSTypedData    msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3286,6 +3539,11 @@ public class NewSignedDataTest
     public void testCertOrdering2()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List               certList = new ArrayList();
         CMSTypedData       msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3316,6 +3574,11 @@ public class NewSignedDataTest
     public void testSignerStoreReplacement()
         throws Exception
     {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
         List                  certList = new ArrayList();
         CMSTypedData        msg = new CMSProcessableByteArray("Hello World!".getBytes());
 
@@ -3547,6 +3810,11 @@ public class NewSignedDataTest
     public void testMSPKCS7()
         throws Exception
     {
+        if (!requireSignature("MD5WITHRSA"))
+        {
+            return;
+        }
+
         byte[] data = getInput("SignedMSPkcs7.sig");
 
         CMSSignedData sData = new CMSSignedData(data);
@@ -3646,18 +3914,33 @@ public class NewSignedDataTest
     public void testVerifySignedDataMLDsa44()
         throws Exception
     {
+        if (!requireSignature("ML-DSA-44"))
+        {
+            return;
+        }
+
         implTestVerifySignedData(signedData_mldsa44, SampleCredentials.ML_DSA_44());
     }
 
     public void testVerifySignedDataMLDsa65()
         throws Exception
     {
+        if (!requireSignature("ML-DSA-65"))
+        {
+            return;
+        }
+
         implTestVerifySignedData(signedData_mldsa65, SampleCredentials.ML_DSA_65());
     }
 
     public void testVerifySignedDataMLDsa87()
         throws Exception
     {
+        if (!requireSignature("ML-DSA-87"))
+        {
+            return;
+        }
+
         implTestVerifySignedData(signedData_mldsa87, SampleCredentials.ML_DSA_87());
     }
 

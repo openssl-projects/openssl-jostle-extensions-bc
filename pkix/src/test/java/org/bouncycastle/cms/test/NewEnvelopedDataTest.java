@@ -141,13 +141,6 @@ public class NewEnvelopedDataTest
     protected void runTest()
         throws Throwable
     {
-        if (JslTestProvider.isFips())
-        {
-            System.out.println("[skipped] " + getName() + ": classic CMS, needs SHA-1 signing / "
-                + "PKCS#1 v1.5 key transport / DESede, none approved by " + JslTestProvider.name());
-            return;
-        }
-
         super.runTest();
     }
     private static final String BC = JslTestProvider.name();
@@ -674,9 +667,59 @@ public class NewEnvelopedDataTest
         return new CMSTestSetup(new TestSuite(NewEnvelopedDataTest.class));
     }
 
+    /*
+     * Per-test capability gates, replacing the class-level isFips() gate. See the equivalent block
+     * in NewSignedDataTest for why these probe rather than ask isFips(), and why a gate cannot key
+     * on the failure message.
+     */
+    private boolean requireDesedeEncrypt()
+    {
+        if (JslTestProvider.canEncrypt("DESEDE/CBC/PKCS5Padding", "DESEDE", 24, 8))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " cannot ENCRYPT with Triple-DES (a 3.5.8 module decrypts only; a 3.1.2 module has none)");
+        return false;
+    }
+
+    /**
+     * Triple-DES merely RESOLVING, which is a weaker requirement than encrypting with it.
+     * testErroneousKEK passes on a 3.5.8 module, where Triple-DES resolves and refuses encryption,
+     * and fails only on a 3.1.2 module where it is absent altogether - so gating it on
+     * canEncrypt would skip it on 3.5.8 for a capability it does not need. Measured: the
+     * encrypt gate over-gated exactly this one test.
+     */
+    private boolean requireDesedePresent()
+    {
+        if (JslTestProvider.canGetCipher("DESEDE/CBC/PKCS5Padding"))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not serve Triple-DES at all");
+        return false;
+    }
+
+    private boolean requirePkcs1KeyTransport()
+    {
+        if (JslTestProvider.canGetCipher("RSA/NONE/PKCS1Padding"))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not serve RSA PKCS#1 v1.5 key transport (NoSuchPaddingException at getInstance)");
+        return false;
+    }
+
     public void testUnprotectedAttributes()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -728,6 +771,11 @@ public class NewEnvelopedDataTest
     public void testContentType()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1032,6 +1080,11 @@ public class NewEnvelopedDataTest
     public void testKeyTrans()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1082,6 +1135,11 @@ public class NewEnvelopedDataTest
     public void testKeyTransWithHKDF()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1133,6 +1191,11 @@ public class NewEnvelopedDataTest
     public void testKeyTransOAEPDefault()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1180,36 +1243,66 @@ public class NewEnvelopedDataTest
     public void testKeyTransOAEPSHA1()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed("SHA-1");
     }
 
     public void testKeyTransOAEPSHA224()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed("SHA-224");
     }
 
     public void testKeyTransOAEPSHA256()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed("SHA-256");
     }
 
     public void testKeyTransOAEPSHA384()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed("SHA-384");
     }
 
     public void testKeyTransOAEPSHA512()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed_2048("SHA-512");
     }
 
     public void testKeyTransOAEPSHA1AndSHA256()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         doTestKeyTransOAEPDefaultNamed("SHA-1", "SHA-256");
     }
 
@@ -1338,6 +1431,11 @@ public class NewEnvelopedDataTest
     public void testKeyTransWithAlgMapping()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1409,6 +1507,11 @@ public class NewEnvelopedDataTest
     public void testOriginatorInfoGeneration()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1600,6 +1703,11 @@ public class NewEnvelopedDataTest
     public void testKeyTransSmallAES()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         byte[] data = new byte[]{0, 1, 2, 3};
 
         CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
@@ -1688,18 +1796,33 @@ public class NewEnvelopedDataTest
     public void testKeyTransAES128()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         tryKeyTrans(CMSAlgorithm.AES128_CBC, NISTObjectIdentifiers.id_aes128_CBC, 16, DEROctetString.class);
     }
 
     public void testKeyTransAES192()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         tryKeyTrans(CMSAlgorithm.AES192_CBC, NISTObjectIdentifiers.id_aes192_CBC, 24, DEROctetString.class);
     }
 
     public void testKeyTransAES256()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         tryKeyTrans(CMSAlgorithm.AES256_CBC, NISTObjectIdentifiers.id_aes256_CBC, 32, DEROctetString.class);
     }
 
@@ -1779,6 +1902,11 @@ public class NewEnvelopedDataTest
     public void testErroneousKEK()
         throws Exception
     {
+        if (!requireDesedePresent())
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
         SecretKey kek = new SecretKeySpec(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, "AES");
 
@@ -1847,6 +1975,11 @@ public class NewEnvelopedDataTest
     public void testAES192KEK()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         tryKekAlgorithm(CMSTestUtil.makeAESKey(192), NISTObjectIdentifiers.id_aes192_wrap);
         tryKekAlgorithmWithHKdf(CMSTestUtil.makeAESKey(192), NISTObjectIdentifiers.id_aes192_wrap);
     }
@@ -1854,6 +1987,11 @@ public class NewEnvelopedDataTest
     public void testAES256KEK()
         throws Exception
     {
+        if (!requireDesedeEncrypt())
+        {
+            return;
+        }
+
         tryKekAlgorithm(CMSTestUtil.makeAESKey(256), NISTObjectIdentifiers.id_aes256_wrap);
     }
 

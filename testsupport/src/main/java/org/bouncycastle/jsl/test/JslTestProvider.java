@@ -244,6 +244,59 @@ public final class JslTestProvider
     }
 
     /**
+     * Whether the provider under test can actually ENCRYPT with this transformation, given a key
+     * and IV of the sizes the algorithm requires.
+     * <p>
+     * The no-argument {@link #canInitCipher} hardcodes a 32-byte AES key and a 12-byte IV, so it
+     * answers "no" for any algorithm shaped differently even where that algorithm works.
+     * <p>
+     * DIRECTION matters, which is why this probes encryption specifically. A 3.5.8 FIPS module
+     * serves Triple-DES for DECRYPTION and refuses encryption with a typed InvalidKeyException,
+     * so "is DESede there" has no single answer. A 3.1.2 module has no Triple-DES at all, and the
+     * failure then surfaces as a missing OID lookup instead - which is exactly why a gate must key
+     * on a probe and never on the message text.
+     */
+    public static boolean canEncrypt(String transformation, String keyAlgorithm, int keyBytes,
+        int ivBytes)
+    {
+        String key = name() + "|enc|" + transformation + "|" + keyAlgorithm + "|" + keyBytes
+            + "|" + ivBytes;
+
+        Boolean cached = PROBES.get(key);
+        if (null != cached)
+        {
+            return cached.booleanValue();
+        }
+
+        boolean usable;
+        try
+        {
+            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance(transformation, install());
+            javax.crypto.SecretKey k =
+                new javax.crypto.spec.SecretKeySpec(new byte[keyBytes], keyAlgorithm);
+            if (ivBytes > 0)
+            {
+                c.init(javax.crypto.Cipher.ENCRYPT_MODE, k,
+                    new javax.crypto.spec.IvParameterSpec(new byte[ivBytes]));
+            }
+            else
+            {
+                c.init(javax.crypto.Cipher.ENCRYPT_MODE, k);
+            }
+            c.doFinal(new byte[keyBytes]);
+            usable = true;
+        }
+        catch (Exception e)
+        {
+            usable = false;
+        }
+
+        PROBES.put(key, Boolean.valueOf(usable));
+
+        return usable;
+    }
+
+    /**
      * Skip the calling test unless a FIPS module is configured and selected.
      */
     public static void assumeFips()

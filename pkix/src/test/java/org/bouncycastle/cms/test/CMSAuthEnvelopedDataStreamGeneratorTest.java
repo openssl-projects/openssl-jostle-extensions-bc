@@ -55,13 +55,6 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
     protected void runTest()
         throws Throwable
     {
-        if (JslTestProvider.isFips())
-        {
-            System.out.println("[skipped] " + getName() + ": classic CMS, needs SHA-1 signing / "
-                + "PKCS#1 v1.5 key transport / DESede, none approved by " + JslTestProvider.name());
-            return;
-        }
-
         super.runTest();
     }
     public static void main(String[] args)
@@ -283,9 +276,28 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         ep.close();
     }
 
+    /*
+     * Per-test capability gate, replacing the class-level isFips() gate. See NewSignedDataTest.
+     */
+    private boolean requirePkcs1KeyTransport()
+    {
+        if (JslTestProvider.canGetCipher("RSA/NONE/PKCS1Padding"))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not serve RSA PKCS#1 v1.5 key transport (NoSuchPaddingException at getInstance)");
+        return false;
+    }
+
     public void testNoAuthAttributes()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         ASN1ObjectIdentifier oid = CMSAlgorithm.AES128_GCM;
         if (!CMSTestUtil.isAeadAvailable())
         {
@@ -357,6 +369,11 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
     public void testNoAttributes()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         ASN1ObjectIdentifier oid = CMSAlgorithm.AES128_GCM;
         if (!CMSTestUtil.isAeadAvailable())
         {

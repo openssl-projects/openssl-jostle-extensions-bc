@@ -49,6 +49,57 @@ replayed cached one.
 
 Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing module.
 
+## State of the disabled tests
+
+62 tests are renamed `DISABLED_testXxx` and run on no configuration, so they are outside every
+count the legs report. Each now carries a one-line reason measured on 2026-09-08. What they are:
+
+| cause | tests | item |
+|---|---|---|
+| CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
+| the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 5 | MT-73 |
+| `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |
+| JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | 1 | MT-71 |
+| the Spi-less `SecureRandom` NPE (`FixedSecureRandom`) | 4 | MT-69 |
+| algorithms absent on every configuration — SEED, CAST5, RC2, RC4, Twofish, GOST, ECMQV, Camellia `KeyGenerator` | 30 | — |
+| test-side work, not capability | 12 | — |
+
+The seven OIDs behind MT-72, resolved from the constants this repo ships rather than from memory —
+`id_aes128_CCM` `2.16.840.1.101.3.4.1.7`, `id_aes192_CCM` `…1.27`, `id_PBKDF2`
+`1.2.840.113549.1.5.12`, `id_alg_CMS3DESwrap` `1.2.840.113549.1.9.16.3.6`,
+`dhSinglePass_cofactorDH_sha1kdf_scheme` `1.3.133.16.840.63.0.3`,
+`dhSinglePass_stdDH_hkdf_sha256_scheme` `1.2.840.113549.1.9.16.3.19`, and the BSI ECKA-EG arc
+`0.4.0.127.0.7.1.1.5.1.1.3`, which this core carries no constant for.
+
+**Name an OID precisely or not at all.** Writing `1.3.133.16.840.63.0.3` as "the X9.63 OID" was
+enough for a reader downstream to fill the gap wrongly, as `stdDH-sha256kdf` — a different scheme,
+different KDF and no cofactor. `dhSinglePass_stdDH_hkdf_sha256_scheme` is a DIFFERENT arc,
+`…1.9.16.3.19`. To resolve one, reflect over the `ASN1ObjectIdentifier` constants in the shipped
+`core` (538 of them) rather than searching bc-java's sources, which build OIDs by branching so a
+literal search finds nothing.
+
+## Gating a class, and why not to
+
+`NewSignedDataTest`, `NewEnvelopedDataTest` and `CMSAuthEnvelopedDataStreamGeneratorTest` each
+carried a class-level `runTest()` gate keyed on `isFips()`, hiding 107 tests on both FIPS legs.
+
+**Its stated reason was accurate; only its scope was wrong.** The three causes it named — SHA-1
+signature generation, RSA PKCS#1 v1.5 key transport, Triple-DES — account for 46 of the 55 failures
+measured when the gate is removed. What was wrong is that it applied three true reasons to all 107
+tests, including the 52 that pass. A gate that is right about the cause and wrong about the scope
+still costs the same coverage as one that is simply wrong, which is the point worth remembering.
+
+Removing it recovered 52 executions on a 3.5.8 module and 48 on a 3.1.2 one. The replacements are
+per-test probes, and two lessons came out of building them:
+
+- **A test can fail for DIFFERENT reasons on different modules, so one gate may not be enough.**
+  `testDSAEncapsulated` finds a null DSA fixture on a `-pedantic` 3.5.8 module, where keygen is
+  refused, and refused SHA-1 DSA signing on a 3.1.2 module, where keygen works. It needs both gates.
+- **Check that a probe fires only where it should.** Gating `testErroneousKEK` on Triple-DES
+  ENCRYPTION skipped it on 3.5.8, where it passes: it needs Triple-DES only to RESOLVE. A probe
+  that fires more widely than the dependency is a class gate wearing a new hat.
+
+
 ## Reading a leg summary
 
 Each leg prints one line per module:
