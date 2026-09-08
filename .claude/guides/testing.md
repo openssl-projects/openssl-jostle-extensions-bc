@@ -19,7 +19,11 @@ Match the error first. Each row gives the cause and the action.
 | handshake `internal_error(80)` under FIPS | Same as above | Same as above. |
 | `NoClassDefFoundError` on a whole test class | Missing algorithm inside a `static { }` block | See **Static initialisers**. |
 | `AssumptionViolatedException` reported as a failure | Class extends `junit.framework.TestCase` | Use an early `return`, not an assumption. |
+| `ProviderException: DSA key generation is not supported` | Module config refuses DSA generation (e.g. 3.5.x `-pedantic`); import/verify still work | Catch the typed refusal or probe with `canSign`. Config-dependent, not version-dependent. **`CMSTestUtil.makeDsaKeyPair()` catches `ProviderException` broadly and returns null, so a genuine DSA keygen DEFECT reads as "not generatable here" too** - if DSA coverage goes quiet unexpectedly, look at the exception before trusting the null. |
+| `NoSuchAlgorithmException` for X25519/X448 on JSLFIPS | 3.5.x module loaded; XDH registration is probed per module | Gate on `supports("KeyAgreement.X25519")`. Intended contract. |
 | `private key was created by a different Jostle provider` | Both Jostle providers registered at once | Only one is installed per run. See **One provider per run**. |
+| `private key was created by a different Jostle provider instance` | A SECOND instance of the SAME provider - something removed it and `install()` built another, while a cached key generator kept making keys for the first | `JslTestProvider` holds one instance per JVM and re-registers that one. See **One instance per JVM**. |
+| `InvalidKeyException` from `initSign`/`initVerify` on JSLFIPS `NoneWithRSA`, often as TLS 1.3 `internal_error(80)` | Deliberate: raw RSA is non-approved, so JSLFIPS registers the name against an SPI that cannot resolve. See **Raw RSA on JSLFIPS**. | Probe with `canSign("NoneWithRSA", "RSA", 2048)` and use another credential. Do not file it as a gap. |
 | FIPS suite passes in milliseconds | Gradle replayed a cached result | `TEST_FIPS_LIB` must be a task input. See **Gradle**. |
 
 ## The two runs
@@ -34,8 +38,11 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state: JSL 412 tests / 0 failures. JSLFIPS 412 tests / 0 failures.
-About 259 of the FIPS tests do real work. The rest gate themselves out.
+Current state, against jar `050298a8` on 2026-09-08: JSL 412 / 0 failures / 0 skipped;
+JSLFIPS 412 / 0 failures, skipping 5 with a 3.5.8 module and 16 with a 3.1.2 one. Run BOTH
+modules - they skip different tests, in both directions, and a green run on one proves
+nothing about the other. Differing skip counts are also how you tell a real FIPS run from a
+replayed cached one.
 
 Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing module.
 
@@ -68,6 +75,55 @@ Registering both breaks the FIPS run quietly. An unpinned lookup takes its key f
 provider sits earlier in the list. A JSL private key given to a JSLFIPS operator fails with
 `private key was created by a different Jostle provider`.
 
+### One instance per JVM
+
+And one INSTANCE of it. A Jostle key is bound to the provider instance that created it, public
+keys included, so two instances registered under the same name are not interchangeable: an
+operator looked up through the second refuses the first's keys with `private key was created by a
+different Jostle provider instance`.
+
+That is easy to walk into without registering two providers. The `junit.extensions.TestSetup`
+wrappers copied from bc-java call `Security.removeProvider(...)` in `tearDown`, while static key
+generators - `CMSTestUtil`'s, for one - outlive the class that first built them. `install()` used
+to key off `Security.getProvider(name)`, so the next class after a teardown built a fresh
+`JostleProvider`, and every cached generator was then producing keys that no newly looked-up
+Signature would accept. It cost 4 failures and 99 unrun tests in `pkix`, and the exception
+surfaced in `JcaContentSignerBuilder.build`, nowhere near the teardown that caused it.
+
+So `install()` now holds the instance and re-registers THAT one. Do not replace it, and do not
+call `Security.addProvider(new JostleProvider())` anywhere - already forbidden for provider
+selection, and now a key-lifetime bug as well.
+
+This is not test-only: any application that re-registers the provider, or registers it in two
+places, orphans the keys it made earlier.
+
+### Raw RSA on JSLFIPS
+
+`Signature.getInstance("NoneWithRSA", "JSLFIPS")` RESOLVES and then refuses at `initSign` and
+`initVerify`, with a fallback-eligible `InvalidKeyException` carrying
+`inner_evp_generic_fetch:unsupported ... Algorithm (NONE : 0)`. Identical on the 3.1.2 and 3.5.8
+modules, so it is neither module- nor `fipsmodule.cnf`-dependent.
+
+This is on purpose, and the provider says so at the registration site: JSLFIPS builds the base
+`RSASignatureSpi` with digest `"NONE"`, not the `RSASignatureSpi$None` subclass JSL uses, precisely
+because the module has no `NONE` digest - init fails and the non-approved raw path is never
+reached. A test on that side pins it, so it will not change quietly. Contrast `NoneWithECDSA`,
+which signs on both providers and both modules: a NONE digest is not refused in general, only this
+registration declines to reach one.
+
+Two consequences here:
+
+- A `getService` hit proves nothing, and neither does `getInstance`. This is the sharpest example
+  of **Prefer a functional probe**: only `canSign` separates registered from usable.
+- It makes bc-java's TLS 1.3 mock servers unusable as written under JSLFIPS - they sign
+  CertificateVerify with an `rsa_pkcs1` credential, which `JcaTlsRSASigner` performs through this
+  name, and bc-java's own `TODO[tls13]` admits that is wrong for 1.3. `JslTls13ServerCredentials`
+  probes and substitutes an ECDSA credential.
+
+A registered-but-unusable service is worth recognising by shape, because it looks identical to a
+provider defect from outside. It was reported as one; the intent was in the source, not in
+`SERVICES.md`, which lists the name with nothing saying it refuses.
+
 ## What JSLFIPS can do
 
 **The premise changed on 2026-08-19 (jar `c236fdf9`).** JSLFIPS no longer asserts any concept of
@@ -80,14 +136,39 @@ Two consequences for gating:
 - The module already labels its own algorithms (`fips=yes` / `fips=no`), so anything marked
   `fips=no` is unfetchable without any Java-side list.
 
-Facts below are probed against jar `c236fdf9`. Re-probe rather than trusting them.
+**Since jar `e6f9fd00` (23 Aug 2026), one JSLFIPS build serves multiple FIPS module versions and
+configurations, and its surface varies with the loaded module.** Suite verified green against
+3.1.2 (CMVP cert #4985) and 3.5.7 installed `-pedantic`. Two axes of variation:
+
+- **Module version**: X25519/X448 registration is probed at provider construction. A 3.1.2 module
+  serves them; under 3.5.x they are absent and `getInstance` throws `NoSuchAlgorithmException`.
+  This is the intended contract, not a bug. `JcaTlsProtocolXDHTest` handles it with its
+  `supports("KeyAgreement.X25519")` probe.
+- **fipsinstall configuration, not version**: most strictness lives in the module's
+  `fipsmodule.cnf`. A `-pedantic` install sets `dsa-sign-disabled`, `rsa-pkcs15-pad-disabled`,
+  `hmac-key-check`, `signature-digest-check` to 1; a plain install leaves them 0, so a
+  default-configured 3.5.x module signs DSA and permits SHA-1 signing. **Assert the contract
+  (works OR refused-typed), never one answer**, and read the cnf before calling a difference
+  version-related.
+
+Where the module declines DSA, the refusal is now typed: `generateKeyPair()` and
+`AlgorithmParameterGenerator.generateParameters()` throw `ProviderException` ("DSA key generation
+is not supported..."), `Signature.initSign()` throws `InvalidKeyException` ("DSA signature
+generation is not supported..."). DSA key import and signature verification always work.
+Previously this surfaced as an opaque `OpenSSLException` or "OpenSSL Error: null".
+`CMSTestUtil.makeDsaKeyPair()` returns null on the typed refusal (the null-certificate pattern);
+`canSign` probes catch it as any other `Exception`. `JostleFIPSProvider.moduleDescription()`
+exists for diagnostics only — do not branch on it.
+
+Facts below are probed against jar `e6f9fd00` with the 3.1.2 module. Re-probe rather than
+trusting them.
 
 | engine | JSLFIPS |
 |---|---|
-| KeyPairGenerator / KeyFactory | DH, DSA, EC, RSA, **X25519, X448** |
+| KeyPairGenerator / KeyFactory | DH, DSA, EC, RSA, **X25519, X448 (3.1.2 module only, see above)** |
 | Signature | RSA / DSA / ECDSA with SHA1, SHA2, SHA3; RSASSA-PSS; **NoneWithECDSA both directions** |
 | MessageDigest | SHA1, SHA2-\*, SHA3-\*, SHAKE |
-| KeyAgreement | DH, ECDH with **all** X9.63 KDF variants including SHA-1, X25519, X448 |
+| KeyAgreement | DH, ECDH with **all** X9.63 KDF variants including SHA-1, X25519, X448 (3.1.2 only) |
 | KeyGenerator | AES |
 | KeyStore | **none** — see below |
 

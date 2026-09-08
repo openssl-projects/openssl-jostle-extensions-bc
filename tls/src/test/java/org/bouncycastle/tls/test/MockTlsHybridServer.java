@@ -70,7 +70,8 @@ class MockTlsHybridServer
          */
         if (TlsUtils.isTLSv13(context))
         {
-            return getRSASignerCredentials();
+            // JSL: not necessarily RSA - JSLFIPS cannot raw-sign. See JslTls13ServerCredentials.
+            return JslTls13ServerCredentials.load(context);
         }
 
         return super.getCredentials();

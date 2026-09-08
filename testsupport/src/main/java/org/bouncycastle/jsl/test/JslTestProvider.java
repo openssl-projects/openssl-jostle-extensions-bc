@@ -64,6 +64,11 @@ public final class JslTestProvider
     }
 
     /**
+     * The one provider instance this JVM uses. Never replaced once built - see {@link #install()}.
+     */
+    private static Provider instance;
+
+    /**
      * Register the provider under test and return it. Idempotent - the FIPS module's native
      * initialisation is one-shot per JVM, so an already-registered provider is reused rather than
      * replaced.
@@ -74,12 +79,21 @@ public final class JslTestProvider
      * a JSL private key to a JSLFIPS operator fails with "private key was created by a different
      * Jostle provider". Keeping one installed means every lookup, pinned or not, lands on the
      * provider actually under test.
+     * <p>
+     * And exactly ONE INSTANCE of it, for the lifetime of the JVM. A Jostle key is bound to the
+     * provider instance that created it, public keys included, so a second instance under the same
+     * name is not interchangeable with the first: an operator looked up through it refuses the
+     * older instance's keys with "private key was created by a different Jostle provider
+     * instance". That is easy to walk into here, because the {@code junit.extensions.TestSetup}
+     * wrappers copied from bc-java remove the provider in {@code tearDown} while static key
+     * generators - {@code CMSTestUtil}'s, for one - outlive the class that first built them. So
+     * re-register the instance we already have rather than constructing another.
      */
     public static synchronized Provider install()
     {
         String want = name();
 
-        if (null == Security.getProvider(want))
+        if (null == instance)
         {
             if (JSLFIPS.equals(want))
             {
@@ -90,22 +104,29 @@ public final class JslTestProvider
                         + " but " + FIPS_LIB_ENV + " is not set");
                 }
                 // a set-but-broken path must fail loudly rather than silently skipping
-                Security.addProvider(new JostleFIPSProvider("fips_module='" + lib + "'"));
+                instance = new JostleFIPSProvider("fips_module='" + lib + "'");
             }
             else
             {
-                Security.addProvider(new JostleProvider());
+                instance = new JostleProvider();
             }
         }
 
-        Provider p = Security.getProvider(want);
-        if (null == p)
+        if (instance != Security.getProvider(want))
+        {
+            // either nothing is registered under that name, or something else is; in both cases
+            // the run must end up with OUR instance registered
+            Security.removeProvider(want);
+            Security.addProvider(instance);
+        }
+
+        if (null == Security.getProvider(want))
         {
             throw new IllegalStateException("provider " + want + " requested via "
                 + SELECT_PROPERTY + " but it is not available");
         }
 
-        return p;
+        return instance;
     }
 
     /**

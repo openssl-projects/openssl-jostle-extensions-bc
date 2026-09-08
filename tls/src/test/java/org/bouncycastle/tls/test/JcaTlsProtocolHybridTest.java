@@ -1,26 +1,15 @@
 package org.bouncycastle.tls.test;
 
-import org.bouncycastle.jsl.test.JslTestProvider;
-
 public class JcaTlsProtocolHybridTest
     extends TlsProtocolHybridTest
 {
-
-    /**
-     * the hybrid groups need ML-KEM, so the FIPS module does not carry it. A junit.framework.TestCase
-     * subclass cannot skip via Assume - JUnit38ClassRunner turns that into a failure -
-     * so gate the whole class here and return early instead.
+    /*
+     * No class-level gate. Each hybrid group needs both of its halves, and which halves exist
+     * depends on the loaded FIPS module in both directions - a 3.1.2 module serves X25519 but no
+     * ML-KEM, a 3.5.x module the reverse - so the base class asks the crypto per group and skips
+     * just that group. The TLS 1.3 server credential is chosen the same way; see
+     * JslTls13ServerCredentials.
      */
-    protected void runTest()
-        throws Throwable
-    {
-        if (!JslTestProvider.supports("KeyPairGenerator.ML-KEM-768"))
-        {
-            return;
-        }
-
-        super.runTest();
-    }
     public JcaTlsProtocolHybridTest()
     {
         super(TlsTestUtils.createTestCrypto());

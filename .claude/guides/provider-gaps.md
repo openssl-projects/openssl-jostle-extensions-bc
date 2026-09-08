@@ -1,9 +1,17 @@
 # JSL provider gaps
 
-Status of capability gaps in the **JSL** (non-FIPS) provider, as consumed from
+Status of capability gaps in the Jostle providers, as consumed from
 `libs/openssl-jostle-${jostleVersion}.jar`.
 
-For **JSLFIPS**, see `testing.md`. Its restrictions are policy-driven and different in kind.
+Mostly **JSL** (non-FIPS). JSLFIPS's *policy* restrictions - what the loaded module will and will
+not serve, and what the provider declines on purpose - belong in `testing.md` instead. A JSLFIPS
+entry here would mean a defect: something the module can do and the provider still cannot reach.
+
+**Before filing one, read the registration.** JSLFIPS `NoneWithRSA` looked exactly like a defect
+from the outside - registered, refusing at `initSign`, and its JSL twin signing fine through a
+different SPI class - and it is deliberate, with the reason in a comment at the registration site
+(`ProvFIPSRSA`) and a test pinning it. A probe tells you the behaviour; only the source tells you
+the intent.
 
 All statuses below were re-probed on 2026-08-19 against jar `0eaec46c`. Do not trust an older note;
 re-probe before acting.

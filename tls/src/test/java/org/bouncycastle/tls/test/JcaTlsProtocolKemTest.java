@@ -1,26 +1,14 @@
 package org.bouncycastle.tls.test;
 
-import org.bouncycastle.jsl.test.JslTestProvider;
-
 public class JcaTlsProtocolKemTest
     extends TlsProtocolKemTest
 {
-
-    /**
-     * ML-KEM is not an approved algorithm, so the FIPS module does not carry it. A junit.framework.TestCase
-     * subclass cannot skip via Assume - JUnit38ClassRunner turns that into a failure -
-     * so gate the whole class here and return early instead.
+    /*
+     * No class-level gate. ML-KEM is not absent from JSLFIPS as a matter of policy - it is served
+     * or not by the loaded FIPS module (a 3.5.x module serves it, a 3.1.2 one does not), so the
+     * base class asks the crypto per group and skips just that group. The TLS 1.3 server
+     * credential is chosen the same way; see JslTls13ServerCredentials.
      */
-    protected void runTest()
-        throws Throwable
-    {
-        if (!JslTestProvider.supports("KeyPairGenerator.ML-KEM-768"))
-        {
-            return;
-        }
-
-        super.runTest();
-    }
     public JcaTlsProtocolKemTest()
     {
         super(TlsTestUtils.createTestCrypto());

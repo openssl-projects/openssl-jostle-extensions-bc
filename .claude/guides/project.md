@@ -100,6 +100,9 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 
 ## Current state
 
-- Both suites green: JSL 412 / 0 failures, JSLFIPS 412 / 0 failures.
-- Branch `resync-1.86` carries the 1.86 resync and the FIPS test work. Unmerged.
+- All three legs green against jar `050298a8`: JSL 412 / 0 failures / 0 skipped; JSLFIPS 412 / 0
+  failures on both modules, skipping 5 with a 3.5.8 module and 16 with a 3.1.2 one. One JSLFIPS
+  number means nothing without saying which module produced it - see `testing.md`.
+- Branch `resync-1.86` is at `main`; its resync and FIPS test work are already in. Nothing pending
+  on it.
 - The TLS handshake matrix has never run. See `testing.md`.

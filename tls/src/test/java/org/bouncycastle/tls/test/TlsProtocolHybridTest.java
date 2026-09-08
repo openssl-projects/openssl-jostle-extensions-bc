@@ -90,8 +90,29 @@ public abstract class TlsProtocolHybridTest
         implTestClientServer(NamedGroup.X25519MLKEM768);
     }
 
+    // JSL addition: a hybrid group needs BOTH halves, and the halves are served independently.
+    private boolean supportsGroup(int namedGroup)
+    {
+        if (NamedGroup.refersToASpecificHybrid(namedGroup))
+        {
+            return crypto.hasNamedGroup(NamedGroup.getHybridFirst(namedGroup))
+                && crypto.hasNamedGroup(NamedGroup.getHybridSecond(namedGroup));
+        }
+        return crypto.hasNamedGroup(namedGroup);
+    }
+
     private void implTestClientServer(int hybridGroup) throws Exception
     {
+        if (!supportsGroup(hybridGroup))
+        {
+            // JSL: which named groups exist depends on the provider, and under JSLFIPS on the
+            // loaded FIPS module - a 3.1.2 module has no ML-KEM, a 3.5.x module no X25519 - so ask
+            // the crypto rather than naming either column. Same early return, for the same runner
+            // reason, as testCurveSM2MLKEM768 above; TlsProtocolHybridKemTest guards this way too.
+            System.out.println("Skipping unsupported group " + NamedGroup.getText(hybridGroup));
+            return;
+        }
+
         PipedInputStream clientRead = TlsTestUtils.createPipedInputStream();
         PipedInputStream serverRead = TlsTestUtils.createPipedInputStream();
         PipedOutputStream clientWrite = new PipedOutputStream(serverRead);

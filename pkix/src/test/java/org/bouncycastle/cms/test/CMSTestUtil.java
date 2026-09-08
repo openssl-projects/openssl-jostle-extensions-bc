@@ -8,6 +8,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
+import java.security.ProviderException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.cert.X509CRL;
@@ -301,7 +302,19 @@ public class CMSTestUtil
 
     public static KeyPair makeDsaKeyPair()
     {
-        return dsaKpg.generateKeyPair();
+        // The FIPS module may refuse DSA key generation (e.g. a 3.5.x module installed with
+        // -pedantic, where dsa-sign-disabled=1); the refusal is a typed ProviderException while
+        // key import and signature verification stay available. Whether it fires depends on the
+        // fipsinstall configuration, not the module version, so probe by attempting rather than
+        // asking. Null means "not generatable here", mirroring optionalKpg.
+        try
+        {
+            return dsaKpg.generateKeyPair();
+        }
+        catch (ProviderException e)
+        {
+            return null;
+        }
     }
 
     public static KeyPair makeEd25519KeyPair()

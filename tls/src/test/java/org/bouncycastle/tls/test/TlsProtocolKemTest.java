@@ -80,6 +80,14 @@ public abstract class TlsProtocolKemTest
 
     private void implTestClientServer(int kemGroup) throws Exception
     {
+        if (!crypto.hasNamedGroup(kemGroup))
+        {
+            // JSL: ML-KEM is served or not depending on the loaded FIPS module, so ask the crypto.
+            // See the equivalent guard in TlsProtocolHybridTest.
+            System.out.println("Skipping unsupported group " + NamedGroup.getText(kemGroup));
+            return;
+        }
+
         PipedInputStream clientRead = TlsTestUtils.createPipedInputStream();
         PipedInputStream serverRead = TlsTestUtils.createPipedInputStream();
         PipedOutputStream clientWrite = new PipedOutputStream(serverRead);
