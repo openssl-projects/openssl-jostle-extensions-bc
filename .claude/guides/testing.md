@@ -25,6 +25,9 @@ Match the error first. Each row gives the cause and the action.
 | `private key was created by a different Jostle provider instance` | A SECOND instance of the SAME provider - something removed it and `install()` built another, while a cached key generator kept making keys for the first | `JslTestProvider` holds one instance per JVM and re-registers that one. See **One instance per JVM**. |
 | `InvalidKeyException` from `initSign`/`initVerify` on JSLFIPS `NoneWithRSA`, often as TLS 1.3 `internal_error(80)` | Deliberate: raw RSA is non-approved, so JSLFIPS registers the name against an SPI that cannot resolve. See **Raw RSA on JSLFIPS**. | Probe with `canSign("NoneWithRSA", "RSA", 2048)` and use another credential. Do not file it as a gap. |
 | FIPS suite passes in milliseconds | Gradle replayed a cached result | `TEST_FIPS_LIB` must be a task input. See **Gradle**. |
+| A leg reports 0 failures but the work looks absent | JUnit3 gates return early, which counts as a PASS | Read the `silent-skips` figure in the leg summary. See **Reading a leg summary**. |
+| `--tests` run fails tests that pass in a full run | The filtered subset loses the provider registration other classes' `TestSetup` performs | Never measure from a filtered run. Run the whole task. |
+| `Test data directory bc-test-data not found` | `TestResourceFinder` walks UP from the working directory, and `BC_TEST_DATA_HOME` is not wired into `build.gradle` | Run from inside the tree, or put a `bc-test-data` symlink in a parent. Bites in a git worktree. |
 
 ## The two runs
 
@@ -45,6 +48,54 @@ nothing about the other. Differing skip counts are also how you tell a real FIPS
 replayed cached one.
 
 Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing module.
+
+## Reading a leg summary
+
+Each leg prints one line per module:
+
+```
+pkix fipsTest: tests=252 failures=0 reported-skips=4 silent-skips=104 (silent-skips = gated executions, not distinct tests)
+```
+
+**`silent-skips` is the number that matters.** A gate in a `junit.framework.TestCase` subclass
+returns early, and JUnit records that as a PASS, so `tests=252 failures=0` is equally true of a
+module doing its work and of one gated almost entirely out. Measured on 2026-09-08: the JSLFIPS leg
+reported 5 skips on a 3.5.8 module and 16 on a 3.1.2 one, while 108 and 125 tests respectively had
+been gated silently. JSL gates nothing, so its `silent-skips` is 0 and any non-zero value there is
+worth reading.
+
+Two limits, both deliberate:
+
+- It counts `[skipped]` MARKER LINES, so it measures gated executions, not distinct tests. Gradle
+  writes `<system-out>` at suite level rather than per `<testcase>`, so per-test attribution cannot
+  be recovered from the XML. The line says so itself.
+- Every gate must therefore print `[skipped]`. A gate that returns silently is invisible to this
+  and to everything else. If you add one, print.
+
+The summary is wired with `finalizedBy`, not `doLast`, because a `Test` task throws on failure
+inside its own action - `doLast` would be skipped exactly when the numbers matter. The `fipsTest`
+summary mirrors the leg's `onlyIf`, so it cannot report a previous run's XML as though it were this
+one's.
+
+## Probing a capability
+
+The rules below each cost a wrong answer on 2026-09-08.
+
+**A `Cipher` TRANSFORMATION never has a `getService` entry.** Providers register the base algorithm
+(`AES`, `DESEDE`, `CAMELLIA`), so `getService("Cipher", "DESede/CBC/PKCS5Padding")` is null even
+where the cipher works perfectly. For a transformation, only a functional probe answers. Reading
+that null as "absent" reported Triple-DES and Camellia as missing from JSL when both work.
+
+**Enumerate the provider's services before probing, never guess names.** Guessed names produced
+false "absent" readings that hid real capabilities: RSA-KEM is `Cipher RSA-KTS-KEM-KWS`, CBC-CTS is
+`Cipher AES/CTS/NOPADDING`, the KDFs are per-digest (`KBKDF-HMAC-SHA256`, `SSKDF-SHA256`,
+`SSHKDF-SHA256`), and the X9.63 agreements are `KeyAgreement ECDHWITHSHA256KDF`. Walk
+`provider.getServices()` first. As a cross-check that you are probing the intended jar, the service
+counts at jar `050298a8` are JSL 340, JSLFIPS 188 on a 3.1.2 module and 274 on a 3.5.8 one, which
+match jostle's own `SERVICES.md`.
+
+**Report registration and usability separately.** `REG/REFUSED` is a real state here - see
+**Raw RSA on JSLFIPS**.
 
 ## Provider selection
 

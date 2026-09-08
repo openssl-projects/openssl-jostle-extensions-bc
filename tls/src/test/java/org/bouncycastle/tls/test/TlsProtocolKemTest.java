@@ -84,7 +84,7 @@ public abstract class TlsProtocolKemTest
         {
             // JSL: ML-KEM is served or not depending on the loaded FIPS module, so ask the crypto.
             // See the equivalent guard in TlsProtocolHybridTest.
-            System.out.println("Skipping unsupported group " + NamedGroup.getText(kemGroup));
+            System.out.println("[skipped] unsupported group " + NamedGroup.getText(kemGroup));
             return;
         }
 

@@ -96,7 +96,7 @@ public abstract class TlsProtocolHybridKemTest
     {
         if (!supportsGroup(namedGroup))
         {
-            System.out.println("Skipping unsupported group " + NamedGroup.getText(namedGroup));
+            System.out.println("[skipped] unsupported group " + NamedGroup.getText(namedGroup));
             return;
         }
 

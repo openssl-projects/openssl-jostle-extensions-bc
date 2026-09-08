@@ -117,6 +117,64 @@ subprojects {
         failOnNoDiscoveredTests = false
     }
 
+    // Each leg is followed by a gate summary. A junit.framework.TestCase gate returns early and
+    // JUnit records that as a PASS, so a JSLFIPS leg reads as "412 tests, 0 failures" while a large
+    // fraction of them did nothing - measured 2026-09-08 as 108 of 412 on a 3.5.8 module and 125 on
+    // a 3.1.2 one, against 5 and 16 reported skips. Every gate prints a "[skipped]" line, so
+    // counting those beside the skips Gradle reports makes the gap visible without reading the XML.
+    //
+    // Two deliberate choices. It is wired with finalizedBy rather than doLast, because a Test task
+    // throws on failure inside its own action and doLast would then be skipped - exactly when the
+    // summary matters most. And the count is of MARKER LINES, i.e. gated executions rather than
+    // distinct tests: Gradle writes <system-out> at suite level, not per <testcase>, so per-test
+    // attribution is not recoverable from the XML. The line says so rather than implying precision
+    // it does not have.
+    ['test', 'fipsTest'].each { legName ->
+        def summary = tasks.register("${legName}GateSummary") {
+            description = "Counts gated executions beside reported skips for ${legName}."
+            def xmlDir = layout.buildDirectory.dir("test-results/${legName}")
+            def moduleName = project.name
+
+            // Mirror the leg's own onlyIf. Without this, a run with TEST_FIPS_LIB unset skips
+            // fipsTest but the summary still finds the PREVIOUS run's XML and reports it as though
+            // this run had produced it.
+            if (legName == 'fipsTest')
+            {
+                onlyIf { System.getenv('TEST_FIPS_LIB') != null }
+            }
+
+            doLast {
+                def dir = xmlDir.get().asFile
+                if (!dir.isDirectory())
+                {
+                    return
+                }
+
+                int tests = 0, failed = 0, skips = 0, silent = 0
+                dir.listFiles()?.each { f ->
+                    if (!f.name.endsWith('.xml'))
+                    {
+                        return
+                    }
+                    def suite = new groovy.xml.XmlSlurper().parse(f)
+                    tests  += ((suite.@tests.text() ?: '0') as int)
+                    failed += ((suite.@failures.text() ?: '0') as int) + ((suite.@errors.text() ?: '0') as int)
+                    skips  += ((suite.@skipped.text() ?: '0') as int)
+                    silent += f.text.count('[skipped]')
+                }
+
+                if (tests > 0)
+                {
+                    logger.lifecycle("${moduleName} ${legName}: tests=${tests} failures=${failed}" +
+                        " reported-skips=${skips} silent-skips=${silent}" +
+                        " (silent-skips = gated executions, not distinct tests)")
+                }
+            }
+        }
+
+        tasks.named(legName).configure { finalizedBy(summary) }
+    }
+
     // The compat artifact name carries the -jsl qualifier (bccore-jsl, bcutil-jsl, ...).
     ext.artifactBaseName = "bc${project.name == 'core' ? 'core' : project.name}-jsl"
 

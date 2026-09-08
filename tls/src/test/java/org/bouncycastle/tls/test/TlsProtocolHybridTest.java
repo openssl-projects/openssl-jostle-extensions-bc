@@ -109,7 +109,7 @@ public abstract class TlsProtocolHybridTest
             // loaded FIPS module - a 3.1.2 module has no ML-KEM, a 3.5.x module no X25519 - so ask
             // the crypto rather than naming either column. Same early return, for the same runner
             // reason, as testCurveSM2MLKEM768 above; TlsProtocolHybridKemTest guards this way too.
-            System.out.println("Skipping unsupported group " + NamedGroup.getText(hybridGroup));
+            System.out.println("[skipped] unsupported group " + NamedGroup.getText(hybridGroup));
             return;
         }
 
