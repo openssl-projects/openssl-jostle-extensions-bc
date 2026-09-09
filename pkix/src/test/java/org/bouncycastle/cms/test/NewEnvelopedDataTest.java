@@ -725,6 +725,22 @@ public class NewEnvelopedDataTest
         return false;
     }
 
+    /**
+     * ML-KEM at one parameter set. A 3.1.2 FIPS module serves no ML-KEM, and CMSTestUtil's
+     * optionalKpg returns null there, so the _reciMLKemNNN fields are null and an ungated row
+     * would NPE. Checked per parameter set: the three sizes register independently.
+     */
+    private boolean requireMLKem(String paramSet)
+    {
+        if (JslTestProvider.has("KeyPairGenerator", paramSet))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not serve " + paramSet + " (a 3.1.2 module has no ML-KEM; a 3.5.8 module does)");
+        return false;
+    }
+
     public void testUnprotectedAttributes()
         throws Exception
     {
@@ -822,11 +838,14 @@ public class NewEnvelopedDataTest
         }
     }
 
-        // DISABLED: KTS-KDF gap: the ML-KEM KTS cipher accepts X9.44 KDF3 only; CMS asks for HKDF
-        // 1.2.840.113549.1.9.16.3.28. Probed 2026-09-08, all three configurations.
-    public void DISABLED_testMLKem512()
+    public void testMLKem512()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-512"))
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         // Send response with encrypted certificate
@@ -869,11 +888,14 @@ public class NewEnvelopedDataTest
         }
     }
 
-        // DISABLED: KTS-KDF gap: as DISABLED_testMLKem512 - HKDF 1.2.840.113549.1.9.16.3.28 refused, KDF3
-        // only.
-    public void DISABLED_testMLKem768()
+    public void testMLKem768()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         // Send response with encrypted certificate
@@ -916,11 +938,14 @@ public class NewEnvelopedDataTest
         }
     }
 
-        // DISABLED: KTS-KDF gap: as DISABLED_testMLKem512 - HKDF 1.2.840.113549.1.9.16.3.28 refused, KDF3
-        // only.
-    public void DISABLED_testMLKem1024()
+    public void testMLKem1024()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-1024"))
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
 
         // Send response with encrypted certificate
@@ -986,8 +1011,7 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses KDF2 1.3.133.16.840.9.44.1.1, KDF3 only.
-    public void DISABLED_testRsaKemKdf2Sha256Aes256Wrap()
+    public void testRsaKemKdf2Sha256Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(
@@ -995,9 +1019,7 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses HKDF 1.2.840.113549.1.9.16.3.28, KDF3
-    // only. The three KDF3 variants of this test DO pass.
-    public void DISABLED_testRsaKemHkdfSha256Aes256Wrap()
+    public void testRsaKemHkdfSha256Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(CMSAlgorithm.SHA256_HKDF, CMSAlgorithm.AES256_WRAP);
@@ -1005,33 +1027,31 @@ public class NewEnvelopedDataTest
 
     /*
      * The rows below widen MT-73's coverage past the one digest each shape happens to be exercised
-     * with. Before these, the only gated KDFs were KDF2 with SHA-256 and HKDF with SHA-256, so a
+     * with. Before these, the only KDFs covered were KDF2 with SHA-256 and HKDF with SHA-256, so a
      * provider could satisfy every test here and still refuse HKDF-SHA384/512 or KDF2 with any
-     * other digest. They are gated on MT-73 with the same reference as the rows above and ungate
-     * with them.
+     * other digest.
      *
      * The two shapes matter and are both represented: KDF2 names the KDF in the OID and carries
      * the digest as an AlgorithmIdentifier in the parameters, while the HKDF OIDs bake the digest
      * into the OID and carry no parameters at all.
      *
-     * Each was run once with the gate lifted, on jar 1df49922, to prove it fails on the KDF and
-     * not on a mistake in the test. The provider names the OID it refused:
+     * Each was run once with the gate lifted, on jar 1df49922 and so before MT-73, to prove it
+     * failed on the KDF and not on a mistake in the test. The provider named the OID it refused:
      *
      *   RSA-KTS  InvalidAlgorithmParameterException: unsupported KDF 1.3.133.16.840.9.44.1.1;
      *            RSA-KTS-KEM-KWS supports KDF3 (1.3.133.16.840.9.44.1.2)
      *   ML-KEM   InvalidAlgorithmParameterException: unsupported KDF (only X9.44 KDF3 supported):
      *            1.2.840.113549.1.9.16.3.29
      *
-     * Note the refusal reads the parameterless HKDF AlgorithmIdentifier and reports its OID
-     * without tripping over the absent parameters, so the two-shape problem is confined to the
-     * accept path MT-73 adds, not the reject path that exists.
+     * Note that refusal read the parameterless HKDF AlgorithmIdentifier and reported its OID
+     * without tripping over the absent parameters, so the two-shape problem was confined to the
+     * accept path MT-73 adds, not the reject path that already existed.
      *
-     * One caveat on the pair of KDF2 rows: today they fail identically, because the refusal is on
-     * the KDF OID before the digest is looked at. Their digests only become distinguishable once
-     * MT-73 makes KDF2 acceptable, which is the point of adding them now.
+     * The two KDF2 rows became distinguishable only once MT-73 made KDF2 acceptable: before that
+     * both failed on the KDF OID, before the digest was ever looked at.
      */
 
-    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testRsaKemKdf2Sha256Aes256Wrap, with SHA-384.
+    // As testRsaKemKdf2Sha256Aes256Wrap, with SHA-384.
     //
     // This row is a JSL round trip ONLY, and cannot become a cross-writer pin. BC's own
     // RSA-KTS-KEM-KWS refuses SHA-384 for both KDF2 and KDF3 - "unrecognized digest OID:
@@ -1040,7 +1060,7 @@ public class NewEnvelopedDataTest
     // three. So there is no BC-produced artefact to check ourselves against for this one cell;
     // jostle covers it against BC's low-level generator in its own agreement test instead. That
     // BC refusal is an upstream note, not a jostle defect.
-    public void DISABLED_testRsaKemKdf2Sha384Aes256Wrap()
+    public void testRsaKemKdf2Sha384Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(
@@ -1048,8 +1068,8 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testRsaKemKdf2Sha256Aes256Wrap, with SHA-512.
-    public void DISABLED_testRsaKemKdf2Sha512Aes256Wrap()
+    // As testRsaKemKdf2Sha256Aes256Wrap, with SHA-512.
+    public void testRsaKemKdf2Sha512Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(
@@ -1057,39 +1077,48 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap, MT-73: HKDF 1.2.840.113549.1.9.16.3.29, parameters absent.
-    public void DISABLED_testRsaKemHkdfSha384Aes256Wrap()
+    // HKDF 1.2.840.113549.1.9.16.3.29, parameters absent.
+    public void testRsaKemHkdfSha384Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(CMSAlgorithm.SHA384_HKDF, CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap, MT-73: HKDF 1.2.840.113549.1.9.16.3.30, parameters absent.
-    public void DISABLED_testRsaKemHkdfSha512Aes256Wrap()
+    // HKDF 1.2.840.113549.1.9.16.3.30, parameters absent.
+    public void testRsaKemHkdfSha512Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(CMSAlgorithm.SHA512_HKDF, CMSAlgorithm.AES256_WRAP);
     }
 
-    // DISABLED: KTS-KDF gap, MT-73: the ML-KEM KTS cipher with HKDF
-    // 1.2.840.113549.1.9.16.3.29. The KEM is held at ML-KEM-768 so the KDF is the only variable.
-    public void DISABLED_testMLKemHkdfSha384()
+    // The ML-KEM KTS cipher with HKDF 1.2.840.113549.1.9.16.3.29. The KEM is held at ML-KEM-768
+    // so the KDF is the only variable.
+    public void testMLKemHkdfSha384()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         doMLKemRoundTrip(CMSAlgorithm.SHA384_HKDF);
     }
 
-    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testMLKemHkdfSha384, with HKDF
-    // 1.2.840.113549.1.9.16.3.30.
-    public void DISABLED_testMLKemHkdfSha512()
+    // As testMLKemHkdfSha384, with HKDF 1.2.840.113549.1.9.16.3.30.
+    public void testMLKemHkdfSha512()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         doMLKemRoundTrip(CMSAlgorithm.SHA512_HKDF);
     }
 
     /**
      * ML-KEM-768 KEMRecipientInfo round trip with the KDF as the only variable. Written as a helper
-     * because the three DISABLED_testMLKem512/768/1024 rows above are 45 duplicated lines each;
+     * because the three testMLKem512/768/1024 rows above are 45 duplicated lines each;
      * doRsaKemRoundTrip already sets this precedent for the RSA-KEM rows in this file.
      */
     private void doMLKemRoundTrip(AlgorithmIdentifier kdfAlg)
@@ -2912,23 +2941,21 @@ public class NewEnvelopedDataTest
     // Ported verbatim from upstream at 7301038b. checkMalformed is the pin for the
     // CMSEnvelopedDataParser "Malformed content." guard taken in b30b16f: it asserts BOTH the
     // in-memory constructor and the streaming parser reject a malformed KEMRecipientInfo,
-    // and nothing else in the suite exercised the parser half.
+    // and nothing else in the suite exercised the parser half. The fixture needs ML-KEM, so these
+    // four skip on a 3.1.2 module and the parser half of that guard is unexercised there.
 
     /**
      * RFC 9629 section 3: "Implementations MUST confirm that the value provided is consistent with
      * the key-encryption algorithm identified in the wrap field below."
      */
-    // DISABLED: KTS-KDF gap, MT-73. Not the parser assertion failing - the FIXTURE cannot be
-    // built: mlKem768Enveloped() calls setKDF(CMSAlgorithm.SHA256_HKDF) and the ML-KEM KTS cipher
-    // accepts X9.44 KDF3 only, so this dies at "unsupported KDF (only X9.44 KDF3 supported)"
-    // before checkMalformed() is ever reached. Measured 2026-09-09 on jar 1df49922.
-    //
-    // These four are the ONLY upstream pins for the CMSEnvelopedDataParser "Malformed content."
-    // guard taken in b30b16f, via checkMalformed()'s second half. So that guard stays unexercised
-    // until the MT-73 jar, and ungating these is what closes it.
-    public void DISABLED_testKemKekLengthAgainstWrap()
+    public void testKemKekLengthAgainstWrap()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         byte[] data = "WallaWallaWashington".getBytes();
         byte[] enveloped = mlKem768Enveloped(data);
         ASN1Encodable[] elements = kemRecipientInfoElements(enveloped);
@@ -2966,17 +2993,14 @@ public class NewEnvelopedDataTest
      * RFC 9629: kekLength INTEGER (1..65535). A value too large for an int must still take the
      * range check's path - the parse is behind the declared throws CMSException of the ctor.
      */
-    // DISABLED: KTS-KDF gap, MT-73. Not the parser assertion failing - the FIXTURE cannot be
-    // built: mlKem768Enveloped() calls setKDF(CMSAlgorithm.SHA256_HKDF) and the ML-KEM KTS cipher
-    // accepts X9.44 KDF3 only, so this dies at "unsupported KDF (only X9.44 KDF3 supported)"
-    // before checkMalformed() is ever reached. Measured 2026-09-09 on jar 1df49922.
-    //
-    // These four are the ONLY upstream pins for the CMSEnvelopedDataParser "Malformed content."
-    // guard taken in b30b16f, via checkMalformed()'s second half. So that guard stays unexercised
-    // until the MT-73 jar, and ungating these is what closes it.
-    public void DISABLED_testKemOversizedKekLength()
+    public void testKemOversizedKekLength()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         byte[] enveloped = mlKem768Enveloped("WallaWallaWashington".getBytes());
         ASN1Encodable[] elements = kemRecipientInfoElements(enveloped);
 
@@ -2989,17 +3013,14 @@ public class NewEnvelopedDataTest
      * RFC 9629: ukm is the optional [0] element, so the sequence size and the presence of the tag
      * have to agree - otherwise wrap and encryptedKey are read at the wrong index.
      */
-    // DISABLED: KTS-KDF gap, MT-73. Not the parser assertion failing - the FIXTURE cannot be
-    // built: mlKem768Enveloped() calls setKDF(CMSAlgorithm.SHA256_HKDF) and the ML-KEM KTS cipher
-    // accepts X9.44 KDF3 only, so this dies at "unsupported KDF (only X9.44 KDF3 supported)"
-    // before checkMalformed() is ever reached. Measured 2026-09-09 on jar 1df49922.
-    //
-    // These four are the ONLY upstream pins for the CMSEnvelopedDataParser "Malformed content."
-    // guard taken in b30b16f, via checkMalformed()'s second half. So that guard stays unexercised
-    // until the MT-73 jar, and ungating these is what closes it.
-    public void DISABLED_testKemUkmSizeMismatch()
+    public void testKemUkmSizeMismatch()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         byte[] enveloped = mlKem768Enveloped("WallaWallaWashington".getBytes());
         ASN1Encodable[] elements = kemRecipientInfoElements(enveloped);
 
@@ -3023,17 +3044,14 @@ public class NewEnvelopedDataTest
      * RFC 9629 leaves the wrap algorithm identifier open-ended, so a KEMRecipientInfo naming one
      * BC has no KEK size for is an ordinary condition to report through the declared contract.
      */
-    // DISABLED: KTS-KDF gap, MT-73. Not the parser assertion failing - the FIXTURE cannot be
-    // built: mlKem768Enveloped() calls setKDF(CMSAlgorithm.SHA256_HKDF) and the ML-KEM KTS cipher
-    // accepts X9.44 KDF3 only, so this dies at "unsupported KDF (only X9.44 KDF3 supported)"
-    // before checkMalformed() is ever reached. Measured 2026-09-09 on jar 1df49922.
-    //
-    // These four are the ONLY upstream pins for the CMSEnvelopedDataParser "Malformed content."
-    // guard taken in b30b16f, via checkMalformed()'s second half. So that guard stays unexercised
-    // until the MT-73 jar, and ungating these is what closes it.
-    public void DISABLED_testKemUnsupportedWrapAlgorithm()
+    public void testKemUnsupportedWrapAlgorithm()
         throws Exception
     {
+        if (!requireMLKem("ML-KEM-768"))
+        {
+            return;
+        }
+
         byte[] enveloped = mlKem768Enveloped("WallaWallaWashington".getBytes());
         ASN1Encodable[] elements = kemRecipientInfoElements(enveloped);
 

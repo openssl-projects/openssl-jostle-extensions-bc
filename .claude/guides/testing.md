@@ -42,13 +42,13 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `3bd494a0` on 2026-09-09 (sha256 `3bd494a0d751f90e54f876f076bf8d2f1ab9a077d0aad24fb283dd65c96500e4`, from openssl-jostle `cea9f9e`):
+Current state, against jar `f74cadcf` on 2026-09-09 (sha256 `f74cadcf00ee53a173cac9b18428980ee59974b251410e275179b243e8f7b413`, from openssl-jostle `8d8cf1e`):
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 490 | 0 | 0 | 0 | 490 |
-| JSLFIPS 3.5.8 | 490 | 0 | 5 | 64 | 421 |
-| JSLFIPS 3.1.2 | 490 | 0 | 16 | 95 | 379 |
+| JSL | 505 | 0 | 0 | 0 | 505 |
+| JSLFIPS 3.5.8 | 505 | 0 | 5 | 64 | 436 |
+| JSLFIPS 3.1.2 | 505 | 0 | 16 | 104 | 385 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -59,20 +59,24 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-61 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
-every count the legs report. 61 is the count of DECLARATIONS; grepping the prefix loosely finds
+46 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
+every count the legs report. 46 is the count of DECLARATIONS; grepping the prefix loosely finds
 more lines, because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
 noted. What they are:
 
 | cause | tests | item |
 |---|---|---|
 | CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
-| the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 15 | MT-73 |
 | `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | 4 | MT-80 |
 | `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |
 | JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | 1 | MT-71 |
 | the fork ships no `CertPathValidator` SPI, so a test asserting a BC path-validation message cannot pass | 1 | — |
 | algorithms absent on every configuration — SEED, CAST5, RC2, RC4, Twofish, GOST, ECMQV, Camellia `KeyGenerator` | 30 | — |
+
+MT-73 closed on 2026-09-09 with jostle `8d8cf1e`, ungating 15 rows. One limit worth knowing: four
+of them (`testKem*` in `NewEnvelopedDataTest`) are the only pins for the `CMSEnvelopedDataParser`
+"Malformed content." guard, and their fixture needs ML-KEM - so on a 3.1.2 module they gate and
+that guard is exercised on JSL and a 3.5.8 module only.
 
 The count and this table must agree at every commit. Recount with
 `grep -rh 'public void DISABLED_test' --include="*.java" */src/test | wc -l` rather than trusting
@@ -178,7 +182,7 @@ false "absent" readings that hid real capabilities: RSA-KEM is `Cipher RSA-KTS-K
 `Cipher AES/CTS/NOPADDING`, the KDFs are per-digest (`KBKDF-HMAC-SHA256`, `SSKDF-SHA256`,
 `SSHKDF-SHA256`), and the X9.63 agreements are `KeyAgreement ECDHWITHSHA256KDF`. Walk
 `provider.getServices()` first. As a cross-check that you are probing the intended jar, the service
-counts at jar `3bd494a0` are JSL 346, JSLFIPS 191 on a 3.1.2 module and 277 on a 3.5.8 one, and they
+counts at jar `f74cadcf` are JSL 346, JSLFIPS 191 on a 3.1.2 module and 277 on a 3.5.8 one, and they
 should match jostle's own `SERVICES.md` for the commit the jar came from.
 
 **A functional probe must do what the CALLER does.** Supply the parameter set, the spec, the mode,

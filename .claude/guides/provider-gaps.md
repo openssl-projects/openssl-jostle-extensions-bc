@@ -32,6 +32,7 @@ Kept because a stale "still broken" note is worse than none. Re-probed and confi
 
 | former gap | resolution |
 |---|---|
+| ML-KEM and RSA-KEM KTS ciphers accepted X9.44 KDF3 only | Fixed in jostle `8d8cf1e` (jar `f74cadcf`), probed 2026-09-09 on JSL and both FIPS modules. KDF2 and HKDF-SHA256/384/512 now round trip on `RSA-KTS-KEM-KWS` and the ML-KEM KTS cipher. KDF2/KDF3 with no digest parameter, and HKDF carrying parameters, are refused with typed messages. Ungated 15 tests (MT-73). |
 | AES not aliased to CMS content and wrap OIDs | Fixed. `Cipher.getInstance("2.16.840.1.101.3.4.1.46")` resolves. This had blocked CMS `EnvelopedData`. |
 | No `AlgorithmParameters` for GCM | Fixed. `init(ENCRYPT, key)` with no params auto-generates a 12-byte IV and `getParameters()` returns it. |
 | No native AES key wrap | Fixed. RFC 3394 and RFC 5649 both implemented. |
