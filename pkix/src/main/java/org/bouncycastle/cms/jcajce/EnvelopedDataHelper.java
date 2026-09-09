@@ -631,6 +631,20 @@ public class EnvelopedDataHelper
                     throw new CMSException("parameters generation error: " + e, e);
                 }
             }
+            else
+            {
+                // Without this the generator uses a default SecureRandom for the IV/nonce and the
+                // caller's rand is ignored. Taken from upstream as future-proofing, NOT as a live
+                // fix: this branch is unreachable on JSL today, because the provider serves only
+                // two AlgorithmParameterGenerator algorithms (DH and DSA), so
+                // createAlgorithmParameterGenerator throws for every content cipher,
+                // generateParameters returns null from its catch, and
+                // JceCMSContentEncryptorBuilder falls to its "second guess" path, which inits the
+                // Cipher with the caller's rand instead. It becomes live the day the provider
+                // grows an AlgorithmParameterGenerator for a content cipher - which
+                // ContentEncryptorRandomTest exists to catch.
+                pGen.init(getStrengthInBits(encKey), rand);
+            }
 
             return pGen.generateParameters();
         }
@@ -642,6 +656,15 @@ public class EnvelopedDataHelper
         {
             throw new CMSException("exception creating algorithm parameter generator: " + e, e);
         }
+    }
+
+    // Strength is ignored by the symmetric parameter generators; the fall-back only avoids an NPE
+    // for a key with no encoding, such as a hardware key.
+    private static int getStrengthInBits(SecretKey encKey)
+    {
+        byte[] keyBytes = encKey.getEncoded();
+
+        return (keyBytes != null) ? keyBytes.length * 8 : 256;
     }
 
     AlgorithmIdentifier getAlgorithmIdentifier(ASN1ObjectIdentifier encryptionOID, AlgorithmParameters params)
