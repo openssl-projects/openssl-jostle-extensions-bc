@@ -38,17 +38,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testClientSendsExtensionButServerDoesNotSupportIt(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                 CertificateType.X509,
                 (short) -1,
                 new short[]{ CertificateType.RawPublicKey, CertificateType.X509 },
                 null,
-                createCrypto(),
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.X509,
                 (short) -1,
                 null,
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
     }
@@ -66,17 +66,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testExtensionsAreOmittedIfSpecifiedButOnlyContainX509(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
-                CertificateType.X509,
-                CertificateType.X509,
-                new short[]{ CertificateType.X509 },
-                new short[]{ CertificateType.X509 },
                 createCrypto(),
+                CertificateType.X509,
+                CertificateType.X509,
+                new short[]{ CertificateType.X509 },
+                new short[]{ CertificateType.X509 },
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.X509,
                 CertificateType.X509,
                 new short[]{ CertificateType.X509 },
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
 
@@ -101,17 +101,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testBothSidesUseRawKey(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
-                CertificateType.RawPublicKey,
-                CertificateType.RawPublicKey,
-                new short[]{ CertificateType.RawPublicKey },
-                new short[]{ CertificateType.RawPublicKey },
                 createCrypto(),
+                CertificateType.RawPublicKey,
+                CertificateType.RawPublicKey,
+                new short[]{ CertificateType.RawPublicKey },
+                new short[]{ CertificateType.RawPublicKey },
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.RawPublicKey,
                 CertificateType.RawPublicKey,
                 new short[]{ CertificateType.RawPublicKey },
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
     }
@@ -129,17 +129,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testServerUsesRawKeyAndClientIsAnonymous(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                 CertificateType.RawPublicKey,
                 (short) -1,
                 new short[]{ CertificateType.RawPublicKey },
                 null,
-                createCrypto(),
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.RawPublicKey,
                 (short) -1,
                 null,
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
     }
@@ -157,17 +157,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testServerUsesRawKeyAndClientUsesX509(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                 CertificateType.RawPublicKey,
                 CertificateType.X509,
                 new short[]{ CertificateType.RawPublicKey },
                 null,
-                createCrypto(),
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.RawPublicKey,
                 CertificateType.X509,
                 null,
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
     }
@@ -185,17 +185,17 @@ public abstract class TlsRawKeysProtocolTest
     private void testServerUsesX509AndClientUsesRawKey(ProtocolVersion tlsVersion) throws Exception
     {
         MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                 CertificateType.X509,
                 CertificateType.RawPublicKey,
                 null,
                 new short[]{ CertificateType.RawPublicKey },
-                createCrypto(),
                 tlsVersion);
         MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                 CertificateType.X509,
                 CertificateType.RawPublicKey,
                 new short[]{ CertificateType.RawPublicKey },
-                createCrypto(),
                 tlsVersion);
         pumpData(client, server);
     }
@@ -215,17 +215,17 @@ public abstract class TlsRawKeysProtocolTest
         try
         {
             MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                     CertificateType.X509,
                     CertificateType.RawPublicKey,
                     null,
                     new short[]{ CertificateType.RawPublicKey },
-                    createCrypto(),
                     tlsVersion);
             MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                     CertificateType.X509,
                     CertificateType.X509,
                     new short[]{ CertificateType.X509 },
-                    createCrypto(),
                     tlsVersion);
             pumpData(client, server);
             fail("Should have caused unsupported_certificate alert");
@@ -251,17 +251,17 @@ public abstract class TlsRawKeysProtocolTest
         try
         {
             MockRawKeysTlsClient client = new MockRawKeysTlsClient(
+                createCrypto(),
                     CertificateType.RawPublicKey,
                     CertificateType.RawPublicKey,
                     new short[]{ CertificateType.RawPublicKey },
                     null,
-                    createCrypto(),
                     tlsVersion);
             MockRawKeysTlsServer server = new MockRawKeysTlsServer(
+                createCrypto(),
                     CertificateType.X509,
                     CertificateType.RawPublicKey,
                     new short[]{ CertificateType.RawPublicKey },
-                    createCrypto(),
                     tlsVersion);
             pumpData(client, server);
             fail("Should have caused unsupported_certificate alert");
