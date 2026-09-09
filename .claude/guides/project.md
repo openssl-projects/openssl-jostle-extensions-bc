@@ -109,6 +109,13 @@ list of reason comments that had already been written, and six fixture tests rec
 after they had been done. **Before scheduling any item from an audit or plan file, grep the tree for
 it first.**
 
+**One file is deliberately held for the NEXT resync**, and it must be taken as a pair with a
+decision, not on its own: `tls/.../jsse/provider/BouncyCastleJsseProvider.java`. Upstream's version
+needs the new `ProviderInfoSuffix` seam AND bumps `PROVIDER_VERSION` to 1.0025 / "Version 1.0.25",
+a change attributed to bc-java `35e8ebf0c9` "Move to the 1.86 release". Taking it would advertise
+this fork's own shipped JSSE provider as 1.0.25 as a side effect of a resync, which is a release
+decision. Held with the 1.86 move.
+
 Method, and the one thing that bites: classify each differing file by whether its exact bytes appear
 anywhere in upstream's history for that path (see the `port-from-bc-java` skill, and memory
 `bc-java-resync-blob-history-method`). Then ask separately whether upstream has MOVED the file since
