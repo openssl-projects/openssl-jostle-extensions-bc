@@ -201,7 +201,8 @@ public class JcePBMac1CalculatorBuilder
             
             SecretKeyFactory secFact = helper.createSecretKeyFactory("PBKDF2");
 
-            final SecretKey key = secFact.generateSecret(new PBKDF2KeySpec(password, salt, iterationCount, keySize, prf));
+            final SecretKey key = JceUtils.derivePbkdf2(helper, secFact, password, salt,
+                iterationCount, keySize, prf);
 
             mac.init(key);
 

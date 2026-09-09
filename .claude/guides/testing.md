@@ -41,7 +41,7 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `a84702c8` on 2026-09-08 (sha256 `a84702c8b3c093405d45a9b350dbd7ea4e2f66a102c92cb861633cc623306551`, from openssl-jostle `a9a47fb`, which carries MT-69): JSL 412 / 0 failures / 0 skipped;
+Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591c1948cb9db759edd7cf684f6fca57958a1343417559a5`, from openssl-jostle `64f2bc1`): JSL 412 / 0 failures / 0 skipped;
 JSLFIPS 412 / 0 failures, skipping 5 with a 3.5.8 module and 16 with a 3.1.2 one. Run BOTH
 modules - they skip different tests, in both directions, and a green run on one proves
 nothing about the other. Differing skip counts are also how you tell a real FIPS run from a

@@ -128,7 +128,8 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         init();
     }
 
-        // DISABLED: CMS OID-lookup gap: no KeyGenerator for 2.16.840.1.101.3.4.1.7.
+    // DISABLED: As PKCS8Test.testCCMEncryption: the CCM OID resolves, then init throws "CCM
+    // requires a GCMParameterSpec (tagLen + nonce)" where GCM auto-generates its own.
     public void DISABLED_testGCMCCMZeroLength()
         throws Exception
     {

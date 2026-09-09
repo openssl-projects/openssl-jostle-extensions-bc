@@ -1,5 +1,6 @@
 package org.bouncycastle.pkcs.jcajce;
 
+import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.util.HashMap;
@@ -7,11 +8,16 @@ import java.util.Map;
 
 import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jcajce.spec.PBKDF2KeySpec;
 import org.bouncycastle.jcajce.util.JcaJceHelper;
 
 class JceUtils
@@ -86,6 +92,53 @@ class JceUtils
         }
 
         return helper.createCipher(algorithm.getId());
+    }
+
+    /**
+     * Derive a PBKDF2 key for an EXPLICIT prf, naming the per-digest factory rather than relying on
+     * the provider to read the prf out of a key spec.
+     * <p>
+     * A provider reached by the bare "PBKDF2" name or by the id-PBKDF2 OID is handed a
+     * {@code PBKDF2KeySpec} and may not recognise it: it is a {@code PBEKeySpec} subclass, and a
+     * provider that only understands its own spec type falls back to the RFC 8018 sec. A.2 default
+     * of HMAC-SHA1 - silently deriving the WRONG KEY for every other prf. Measured on JSL
+     * 2026-09-09: the OID and bare-name factories both returned the HMAC-SHA1 key whether the spec
+     * said SHA-1 or SHA-256. The caller then finds out at BadPaddingException, or not at all where
+     * the same wrong key is used to both write and verify.
+     * <p>
+     * Naming the factory removes the question. This is what
+     * {@code JcePKCSPBEOutputEncryptorBuilder} already does on the encrypt side and what
+     * {@code cms.jcajce.EnvelopedDataHelper} does for CMS; the PBES2 decrypt path and PBMAC1 were
+     * the two outliers.
+     * <p>
+     * The fallback keeps the previous behaviour for a provider that serves ONLY the OID or bare
+     * name and does honour the spec, so nothing that worked before stops working. An unmappable
+     * prf lands there too, which is why IllegalStateException is caught: {@link #getAlgorithm}
+     * throws it rather than returning null.
+     *
+     * @param fallback the factory the caller already resolved, used only if the named one is absent.
+     */
+    static SecretKey derivePbkdf2(JcaJceHelper helper, SecretKeyFactory fallback, char[] password,
+        byte[] salt, int iterationCount, int keySizeInBits, AlgorithmIdentifier prf)
+        throws GeneralSecurityException
+    {
+        try
+        {
+            SecretKeyFactory named = helper.createSecretKeyFactory(getAlgorithm(prf.getAlgorithm()));
+
+            return named.generateSecret(new PBEKeySpec(password, salt, iterationCount, keySizeInBits));
+        }
+        catch (NoSuchAlgorithmException e)
+        {
+            // the provider does not serve the per-digest name; fall through
+        }
+        catch (IllegalStateException e)
+        {
+            // getAlgorithm has no mapping for this prf; fall through
+        }
+
+        return fallback.generateSecret(
+            new PBKDF2KeySpec(password, salt, iterationCount, keySizeInBits, prf));
     }
 
     static String getAlgorithm(ASN1ObjectIdentifier algorithm)

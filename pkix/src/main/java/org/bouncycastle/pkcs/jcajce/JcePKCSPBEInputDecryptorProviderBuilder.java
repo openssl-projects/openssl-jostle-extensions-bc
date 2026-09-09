@@ -171,7 +171,8 @@ public class JcePKCSPBEInputDecryptorProviderBuilder
                             }
                             else
                             {
-                                key = keyFact.generateSecret(new PBKDF2KeySpec(password, func.getSalt(), iterationCount, keySizeProvider.getKeySize(encScheme), func.getPrf()));
+                                key = JceUtils.derivePbkdf2(helper, keyFact, password, func.getSalt(),
+                                    iterationCount, keySizeProvider.getKeySize(encScheme), func.getPrf());
                             }
                         }
 
