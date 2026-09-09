@@ -94,6 +94,12 @@ Walk the upstream file's imports. Anything in these groups is **absent here**:
 - Most of `org.bouncycastle.crypto.{engines,digests,generators,macs,modes,prng}` — the software
   primitives. Check what actually survives before assuming; the tree is pruned continuously.
 
+**"Not in a banned package" is not "present here."** The lists above say what was deliberately
+removed; they are not a whitelist for everything else. `core` is pruned to the closure the
+satellites actually reach, so a class in a perfectly ordinary package can still be absent. Check the
+file exists before assuming an import resolves — and check the METHOD exists, not just the class,
+because members were trimmed too.
+
 **Never reintroduce software crypto to satisfy a port.** If the upstream code needs a primitive,
 add a *provider seam* instead. The worked precedent is Argon2: upstream `PGPUtil` derives it with
 `Argon2BytesGenerator`; here `PGPUtil` takes a `PGPS2KCalculator`, and `JcePGPS2KCalculator` routes
@@ -111,12 +117,17 @@ imports `Argon2Parameters`).
    whole module's test compilation. Classpath is in section 4 below.
 2. `./gradlew :<module>:compileJava`
 3. `./gradlew assemble`
-4. `./gradlew test` — pkix/tls/pg/mail have tests; core/util have none. Compare counts against the
-   numbers in the memory notes; a suite that shrinks silently is a regression.
+4. `./gradlew test` — pkix/tls/pg/mail have tests; core/util have none. Compare counts against
+   `.claude/guides/testing.md` **Current state**; a suite that shrinks silently is a regression.
 5. **Probe changed runtime paths.** A green suite proves little when no test covers the path you
    touched. Write a throwaway `main()` in the scratchpad, compile it against
    `*/build/libs/*.jar` + `libs/openssl-jostle-0.1-SNAPSHOT.jar`, and confirm the behaviour — in
    particular that an unsupported path fails with a clean, explanatory exception rather than an NPE.
+
+**Read the build status before the test results.** A failed compile leaves the previous run's
+report sitting on disk, and `build/test-results/` holds only the LAST run of each task — so a
+`fipsTest` directory after two modules shows the second one's numbers, not both. Check `BUILD
+SUCCESSFUL` first, then read counts, and copy the XML aside per leg if you need to compare legs.
 
 **Gotcha:** `jostleVersion` in `gradle.properties` must match the `libs/openssl-jostle-*.jar`
 filename. A mismatch makes the provider silently drop off the classpath; failures look like
@@ -154,5 +165,8 @@ Full workflow, the exact classpath, and the per-package record of what was migra
 - Prefer deleting a dead upstream dependency over porting it (`.claude/guides/conventions.md`).
   Before deleting, use import/FQN reachability, not bare-token grep — comments and same-name classes
   in other packages produce false hits both ways (`.claude/guides/conventions.md`).
+  **Then grep the unqualified name across its own package.** Same-package callers need no import, so
+  an import-based sweep reports zero references for a class that is still used next door. Check both
+  before concluding anything is dead.
 - Commit only when asked. One single lowercase sentence as the subject: no body, no trailers,
   no author tags (`.claude/guides/conventions.md`).
