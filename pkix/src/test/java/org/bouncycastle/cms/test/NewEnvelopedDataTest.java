@@ -28,6 +28,7 @@ import java.util.Hashtable;
 import java.util.Iterator;
 
 import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
@@ -79,6 +80,10 @@ import org.bouncycastle.cms.CMSEnvelopedData;
 import org.bouncycastle.asn1.cms.OtherRecipientInfo;
 import org.bouncycastle.asn1.cms.RecipientInfo;
 import org.bouncycastle.cms.CMSEnvelopedDataParser;
+import org.bouncycastle.cms.CMSTagLengthException;
+import org.bouncycastle.cms.KeyTransRecipientId;
+import org.bouncycastle.cms.jcajce.JceKTSKeyTransEnvelopedRecipient;
+import org.bouncycastle.cms.jcajce.JceKTSKeyTransRecipientInfoGenerator;
 import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSProcessableByteArray;
@@ -3142,6 +3147,57 @@ public class NewEnvelopedDataTest
         catch (CMSException e)
         {
             assertEquals("Malformed content.", e.getMessage());
+        }
+    }
+
+    /**
+     * Adapted from upstream: BC's AEADParameterSpec(iv, macSizeInBits) replaced by the JCA's
+     * GCMParameterSpec(tLen, iv), which carries exactly the 12-octet IV and 96-bit tag this test
+     * needs. AEADParameterSpec is deliberately absent from this fork - JSL's AEAD ciphers do not
+     * read AAD out of it, see the comments in JcePBEKeyEncryptionMethodGenerator and
+     * JcePBEProtectionRemoverFactory - so adding it to satisfy one test was the wrong trade.
+     * The property under test is the minimum-tag-size floor, not the spec class.
+     */
+    public void testKTSKeyTransMinimumTagSize()
+        throws Exception
+    {
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        // a 96-bit (12-octet) GCM tag - valid under RFC 5084, but below a 128-bit floor
+        AlgorithmParameters algParams = AlgorithmParameters.getInstance("GCM", BC);
+        algParams.init(new GCMParameterSpec(96, new byte[12]));
+
+        OutputEncryptor enc = new JceCMSContentEncryptorBuilder(NISTObjectIdentifiers.id_aes128_GCM)
+            .setProvider(BC).setAlgorithmParameters(algParams).build();
+
+        assertEquals(12, GCMParameters.getInstance(enc.getAlgorithmIdentifier().getParameters()).getIcvLen());
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKTSKeyTransRecipientInfoGenerator(_reciCert, "AES", 128).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(new CMSProcessableByteArray(data), enc);
+
+        RecipientInformation recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+        KeyTransRecipientId rid = (KeyTransRecipientId)recipient.getRID();
+
+        // a minimum at or below the actual tag size recovers as normal
+        byte[] recData = recipient.getContent(new JceKTSKeyTransEnvelopedRecipient(_reciKP.getPrivate(), rid).setProvider(BC)
+            .setMinimumTagSize(96));
+
+        assertTrue(Arrays.equals(data, recData));
+
+        // a minimum above the actual tag size is refused with CMSTagLengthException
+        try
+        {
+            recipient.getContent(new JceKTSKeyTransEnvelopedRecipient(_reciKP.getPrivate(), rid).setProvider(BC)
+                .setMinimumTagSize(128));
+
+            fail("content recovered under a tag shorter than the configured minimum");
+        }
+        catch (CMSTagLengthException e)
+        {
+            // expected
         }
     }
 }
