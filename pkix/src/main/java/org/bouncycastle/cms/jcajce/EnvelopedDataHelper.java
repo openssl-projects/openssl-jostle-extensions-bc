@@ -633,16 +633,10 @@ public class EnvelopedDataHelper
             }
             else
             {
-                // Without this the generator uses a default SecureRandom for the IV/nonce and the
-                // caller's rand is ignored. Taken from upstream as future-proofing, NOT as a live
-                // fix: this branch is unreachable on JSL today, because the provider serves only
-                // two AlgorithmParameterGenerator algorithms (DH and DSA), so
-                // createAlgorithmParameterGenerator throws for every content cipher,
-                // generateParameters returns null from its catch, and
-                // JceCMSContentEncryptorBuilder falls to its "second guess" path, which inits the
-                // Cipher with the caller's rand instead. It becomes live the day the provider
-                // grows an AlgorithmParameterGenerator for a content cipher - which
-                // ContentEncryptorRandomTest exists to catch.
+                // Upstream's fix; unreachable on JSL today because the provider serves no
+                // AlgorithmParameterGenerator for a content cipher, so the builder inits the
+                // Cipher with the caller's rand instead. ContentEncryptorRandomTest catches the
+                // day that changes.
                 pGen.init(getStrengthInBits(encKey), rand);
             }
 
