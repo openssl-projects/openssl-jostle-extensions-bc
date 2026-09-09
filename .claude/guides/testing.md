@@ -260,6 +260,22 @@ read what the layer looks up.
 The OID one cost 22 tests ungated and re-disabled; the `generateSecret("AES")` one cost a reported
 provider defect that did not exist. Read the caller before writing the probe.
 
+**A standalone JSLFIPS probe must be handed its module, or it answers "absent" to everything.**
+`new JostleFIPSProvider()` with no argument registers nothing useful: setting `TEST_FIPS_LIB` in the
+environment does not reach it, because the test harness reads that variable and passes it to the
+constructor. Construct it the way `JslTestProvider.install()` does:
+
+```java
+new JostleFIPSProvider("fips_module='" + lib + "'")   // lib = .../ossl-modules/fips.dylib
+```
+
+**Always include an algorithm you expect to be PRESENT as a control.** A probe of CMS3DESwrap name
+forms on 2026-09-09 reported every form absent on both FIPS modules - correct - and also reported
+`AESWRAP` absent, which the passing AES-wrap vectors in the same session flatly contradicted. The
+control is what exposed the mis-constructed provider; without it the run reads as a clean result and
+a false gap goes in the register. A probe where nothing at all resolves is a broken probe until
+proven otherwise.
+
 Probe each DIRECTION separately where they can differ. A 3.5.8 module serves Triple-DES for
 decryption and refuses encryption with a typed `InvalidKeyException`, so "is DESede there" has no
 single answer. The no-argument `canInitCipher` hardcodes a 32-byte AES key and a 12-byte IV, so it

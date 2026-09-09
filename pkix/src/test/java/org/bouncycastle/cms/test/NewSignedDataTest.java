@@ -2000,12 +2000,8 @@ public class NewSignedDataTest
     }
 
     /*
-     * Tree (b): the two NewSignedDataTest rows, ported from upstream 8a04208b.
-     */
-
-    /*
-     * The only local exercise of CMSSignedGenerator.setEncoding(DER) on the signed-data side, and
-     * of the claim that re-encoding the result as DER is the identity. SHA-256, so no gate.
+     * The only local exercise of setEncoding(DER) on the signed-data side, and of re-encoding as DER
+     * being the identity. SHA-256, so no gate.
      */
     public void testEncapsulatedWithDEREncoding()
         throws Exception
@@ -2043,10 +2039,8 @@ public class NewSignedDataTest
     }
 
     /*
-     * Signs with SHA1withRSA, which both FIPS modules refuse, so it takes the measured SHA-1 gate.
-     * Upstream signs with SHA-1 because the regression it pins is Authenticode's, and the version
-     * pinning under test is independent of the digest - but changing the digest here would stop this
-     * being a port, so the gate is taken instead.
+     * Signs with SHA1withRSA, refused by both FIPS modules, so it takes the SHA-1 gate. The digest is
+     * incidental to the version pinning, but changing it would stop this being a port.
      */
     public void testAsVersion()
         throws Exception
@@ -2099,18 +2093,9 @@ public class NewSignedDataTest
     }
 
     /*
-     * Tree (c): the last two writable upstream rows, ported from 8a04208b.
-     */
-
-    /*
-     * RFC 8419's two Ed448 shapes and the SignerInfo length prediction for each. Takes the same
-     * haveKeyPair gate as the other Ed448 rows - a 3.1.2 module serves no Ed448, so CMSTestUtil
-     * leaves _signEd448KP null there and an ungated row would NPE rather than skip.
-     *
-     * The two shapes differ in the digest algorithm, and that is the point of the row: with signed
-     * attributes the digestAlgorithm is id-shake256-len (RFC 8419 sec. 3.1), and with
-     * setDirectSignature(true) it is bare id-shake256 (sec. 3.2). Each prediction is asserted equal
-     * to the DER length actually produced, so a prediction that is merely non-negative does not pass.
+     * RFC 8419's two Ed448 shapes: id-shake256-len with signed attributes (sec. 3.1), bare
+     * id-shake256 with setDirectSignature (sec. 3.2). Each prediction is asserted equal to the DER
+     * length produced. Gated like the other Ed448 rows - a 3.1.2 module leaves the fixture null.
      */
     public void testEd448PredictedEncodedLength()
         throws Exception
@@ -2162,11 +2147,8 @@ public class NewSignedDataTest
     }
 
     /*
-     * Pure library logic over an AlgorithmIdentifier - no key, no provider call - so it runs on every
-     * configuration ungated, including a 3.1.2 module with no Ed448 and no SHAKE at all. It asserts
-     * that CMSUtils.getDigestOutputLength returns -1, meaning "unknown", for every malformed
-     * id-shake256-len parameter rather than throwing or truncating; the last case is the one that
-     * matters most, a value past int range where intValueExact must not silently wrap.
+     * Pure library logic, no provider call, so ungated everywhere. Every malformed id-shake256-len
+     * parameter must give -1 for "unknown" rather than throw or truncate.
      */
     public void testMalformedShake256LenGivesNoPrediction()
         throws Exception
@@ -2193,9 +2175,8 @@ public class NewSignedDataTest
     }
 
     /*
-     * getDigestOutputLength is package-private in org.bouncycastle.cms and this test is in
-     * org.bouncycastle.cms.test, so reflection is the only way in. Taken from upstream unchanged:
-     * a NoSuchMethodException here means the method was renamed, which is the signal wanted.
+     * getDigestOutputLength is package-private, so reflection is the only way in. A
+     * NoSuchMethodException here means it was renamed, which is the signal wanted.
      */
     private int invokeGetDigestOutputLength(AlgorithmIdentifier digAlgId)
         throws Exception

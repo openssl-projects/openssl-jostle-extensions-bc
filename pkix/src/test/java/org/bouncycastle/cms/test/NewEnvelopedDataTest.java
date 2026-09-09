@@ -745,11 +745,8 @@ public class NewEnvelopedDataTest
     }
 
     /**
-     * The CMS3DESwrap key-encryption cipher, needed by four of the sixteen OpenSSL ECDH vectors.
-     * JSL does not register the OID on any configuration yet - that is MT-84, still open - so this
-     * gate is false everywhere today and will go true on all three legs at once when it ships.
-     * Gated per vector rather than per test so the twelve AES-wrap vectors keep running, and so the
-     * four self-activate with no edit here.
+     * CMS3DESwrap, absent on every configuration (MT-84). Gated per vector so the other twelve keep
+     * running and these four self-activate when it ships.
      */
     private boolean requireCms3DesWrap(String vector)
     {
@@ -3241,15 +3238,8 @@ public class NewEnvelopedDataTest
     }
 
     /*
-     * Tree (b): nine rows ported from upstream 8a04208b, each one the only local exercise of a
-     * library guard or encoding path that nothing else in the suite reaches.
-     *
-     * Three of them give call sites to members that were already sitting in this file with none:
-     * processInput (below, already carrying the single adaptation this fork needs - setProvider(BC)
-     * rather than "BC"), bobPrivRsaEncrypt and rfc4134ex5_1. A fourth, rfc4134ex5_2, stays without
-     * a caller: its message is RC2-encrypted (1.2.840.113549.3.2), which this fork does not serve
-     * and does not intend to, so testRFC4134ex5_2 is excluded by policy rather than pending. Do not
-     * delete rfc4134ex5_2 as dead weight without deciding that question first.
+     * Nine rows ported from upstream 8a04208b. rfc4134ex5_2 is kept without a caller: its message is
+     * RC2, excluded by policy. Decide the RC2 question before deleting it.
      */
 
     public void testMissingEncryptedContent()
@@ -3275,9 +3265,8 @@ public class NewEnvelopedDataTest
     }
 
     /*
-     * Decodes a fixture and reads its OID. It never calls getContent, so it needs no Triple-DES
-     * capability despite asserting the DES-EDE3-CBC content OID, and is ungated on that account.
-     * Needs CMSSampleMessages, taken verbatim from upstream alongside this row.
+     * Ungated: it decodes a fixture and reads the OID, never calling getContent, so the DES-EDE3-CBC
+     * assertion needs no Triple-DES.
      */
     public void testOriginatorInfo()
         throws Exception
@@ -3472,11 +3461,8 @@ public class NewEnvelopedDataTest
     }
 
     /*
-     * The only local exercise of JceKeyTransRecipient.setKeySizeValidation over an HKDF-derived CEK.
-     * Upstream's five assertions hold here verbatim: the seam that has to work is
-     * SecretKeyFactory for HKDF-SHA256, which the provider serves, and the mismatch is caught in
-     * library code rather than by the provider - so the exact message below is a local guard's, not
-     * OpenSSL's.
+     * The only local exercise of setKeySizeValidation over an HKDF-derived CEK. The seam is
+     * SecretKeyFactory HKDF-SHA256; the message asserted below is a library guard's, not OpenSSL's.
      */
     public void testKeyTransWithHKDFKeySizeValidation()
         throws Exception
@@ -3549,11 +3535,8 @@ public class NewEnvelopedDataTest
     }
 
     /*
-     * Gated on PKCS#1 key transport alone, though the fixture is DES-EDE3-CBC and the row therefore
-     * needs Triple-DES to DECRYPT as well. Measured: both FIPS modules refuse PKCS#1, so this row
-     * never reaches its Triple-DES requirement on either, and JSL serves both. A module that served
-     * PKCS#1 but not Triple-DES would fail here rather than skip - no such configuration exists
-     * today, so the second gate is deliberately not added, and this comment is the record of why.
+     * Gated on PKCS#1 alone though the fixture is DES-EDE3-CBC, because no configuration serves
+     * PKCS#1 without Triple-DES. One that did would fail here rather than skip.
      */
     public void testRFC4134ex5_1()
         throws Exception
@@ -3592,9 +3575,8 @@ public class NewEnvelopedDataTest
     }
 
     /*
-     * The sixteen OpenSSL-generated ECDH vectors, and the only local exercise of processInput and of
-     * KeyAgreeRecipientInformation over a message this fork did not itself produce. The four
-     * Triple-DES-wrap vectors are gated individually; see requireCms3DesWrap.
+     * The sixteen OpenSSL ECDH vectors - the only local exercise of KeyAgreeRecipientInformation over
+     * messages this fork did not produce. Four are gated individually; see requireCms3DesWrap.
      */
     public void testOpenSSLVectors()
         throws Exception
