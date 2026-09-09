@@ -37,6 +37,25 @@ public class Properties
     public static final String PKCS12_MAX_IT_COUNT = "org.bouncycastle.pkcs12.max_it_count";
 
     /**
+     * The PBE iteration count the PKCS12 keystore uses when <b>writing</b> a file - the write-side
+     * counterpart of {@link #PKCS12_MAX_IT_COUNT}, which only bounds what is accepted on load.
+     * Default 600,000 for the key and certificate encryption, twice that for the integrity MAC.
+     * <p>
+     * Lowering this trades password-cracking resistance for store/load time, and is only worth
+     * doing where something other than the passphrase carries the confidentiality of the file -
+     * a machine-generated high-entropy password, or a keystore held somewhere already protected.
+     * It is deliberately an operator decision rather than a per-call one: a deployment that wants
+     * cheaper files sets it once at startup for the whole JVM.
+     * <p>
+     * A value outside 1 .. 2,500,000 is ignored and the default used, so a mistyped property fails
+     * towards the default rather than towards a file with no PBE work in it; the upper bound keeps
+     * the doubled MAC count inside the 5,000,000 that {@link #PKCS12_MAX_IT_COUNT} defaults to, so
+     * a file written under this property can always be read back. Read via
+     * {@link #asInteger(String, int)}.
+     */
+    public static final String PKCS12_STORE_IT_COUNT = "org.bouncycastle.pkcs12.store_it_count";
+
+    /**
      * Maximum time, in seconds, that a downloaded CRL is cached by the internal CrlCache used
      * by the CertPath validator and X509RevocationChecker. When set to a positive value, cached
      * entries are evicted whichever expires sooner: the configured TTL or the CRL's own
@@ -64,13 +83,14 @@ public class Properties
      * unrestricted: RFC 5280 sec. 4.2.1.13 requires a distribution point URI to name a protocol
      * but does not limit which, and BC supports http, https, ftp and ldap here, so this is an
      * operator policy for deployments that want a narrower set rather than a default.
-     * <p/>
+     * <p>
      * Note the CRL fetch this governs only happens at all when {@link #X509_ENABLE_CRLDP} is set.
      */
     public static final String X509_CRLDP_PROTOCOLS = "org.bouncycastle.x509.CRLDP_protocols";
 
     /**
-     * The largest OCSP response, in bytes, the CertPath validator will read from a responder.
+     * The largest OCSP response, in bytes, the CertPath validator - or the JSSE server's OCSP
+     * stapling fetch - will read from a responder.
      * A responder's Content-Length can narrow this but never widen it, so a responder declaring
      * (and sending) hundreds of megabytes is cut off rather than read into the heap. Default is
      * 64K, which is far above any real response; a value of zero or less is ignored and the
@@ -188,8 +208,39 @@ public class Properties
      * fails (github #1973 / #1986). BER serialization is unaffected. Programmatically
      * constructing a time from a {@code Date} always produces DER content, so this setting
      * only matters for primitives whose contents arrived non-conformant from the wire.
+     * <p>
+     * "Lenient" here means legal-but-non-DER formatting. Structurally malformed content is a
+     * separate matter, rejected on read since 1.85 - see {@link #ASN1_ALLOW_ZONELESS_UTCTIME}, which
+     * makes an exception of exactly one such value.
      */
     public static final String ASN1_ALLOW_NON_DER_TIME = "org.bouncycastle.asn1.allow_non_der_time";
+
+    /**
+     * Decode the zone-less ASN.1 {@code UTCTime} {@code "YYMMDDHHMMSS"}.
+     * <p>
+     * X.680 sec. 47.3 makes the zone mandatory for a UTCTime, so a twelve-digit value carrying
+     * none is not a legal one and, since 1.85, the decoder rejects it along with the rest of the
+     * structurally malformed time content it screens out - non-digit or out-of-range fields, an
+     * illegal length, a missing or garbage zone terminator - with "invalid UTCTime format". That
+     * is raised while the enclosing structure is being read, so a single such field fails the whole
+     * parse: a CMS SignedData whose signing-time attribute lacks its trailing "Z" cannot be loaded
+     * at all, let alone have the rest of its content examined (github #2411).
+     * <p>
+     * That one value is nonetheless readable - {@link org.bouncycastle.asn1.ASN1UTCTime#getTime()}
+     * has always carried an explicit branch taking a zone-less value as GMT, so it denotes a real
+     * instant, and it re-encodes unchanged - and it is produced by tools in the field. Setting this
+     * property admits it, and admits nothing else: every other malformed value is still rejected
+     * with the property set, and the zone-less {@code "YYMMDDHHMM"} (no seconds) is not admitted
+     * either, {@code getTime()} having never been able to read one. {@code GeneralizedTime} is
+     * unaffected, its zone being optional to begin with.
+     * <p>
+     * The property has to be set for the value to decode: the default is to reject it. Generation
+     * is unaffected, as is DER conformance - the value is still not DER, so writing it through a
+     * {@code DEROutputStream} is refused when {@link #ASN1_ALLOW_NON_DER_TIME} is "false". This
+     * property is independent of that one, which governs writing rather than reading. Read via
+     * {@link #isOverrideSet(String)}.
+     */
+    public static final String ASN1_ALLOW_ZONELESS_UTCTIME = "org.bouncycastle.asn1.allow_zoneless_utctime";
 
     /**
      * Maximum depth of nested constructed ASN.1 objects the parser will descend before failing
@@ -243,6 +294,23 @@ public class Properties
     public static final String BCFKS_MAX_SCRYPT_MEMORY = "org.bouncycastle.bcfks.max_scrypt_memory";
 
     /**
+     * The PBKDF2 iteration count the BCFKS keystore uses when <b>writing</b> a file through the
+     * plain {@code KeyStore.store(OutputStream, char[])} path - the write-side counterpart of
+     * {@link #BCFKS_MAX_IT_COUNT}, which only bounds what is accepted on load, and the BCFKS
+     * analogue of {@link #PKCS12_STORE_IT_COUNT}. Default 51,200 (PBKDF2-HMAC-SHA512), applied to
+     * the integrity MAC key and to the key-encryption keys of the entries. A caller supplying a
+     * {@code BCFKSLoadStoreParameter} with its own {@code PBKDFConfig} is unaffected.
+     * <p>
+     * Lowering this trades password-cracking resistance for store/load time, and is only worth
+     * doing where something other than the passphrase carries the confidentiality of the file.
+     * A value outside 1 .. 5,000,000 is ignored and the default used, so a mistyped property fails
+     * towards the default rather than towards a file with no PBE work in it; the upper bound is
+     * the {@link #BCFKS_MAX_IT_COUNT} default, so a file written under this property can always
+     * be read back. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String BCFKS_STORE_IT_COUNT = "org.bouncycastle.bcfks.store_it_count";
+
+    /**
      * Upper bound on the PBKDF2 iteration count honoured when BC takes that count from an
      * untrusted encoding: decrypting a PBES2-protected PKCS#8 / PEM private key or PKCS#12
      * bag, verifying an RFC 9579 PBMAC1, unwrapping a CMS password recipient, and the raw JCA
@@ -266,7 +334,7 @@ public class Properties
 
     /**
      * Upper bound on the RFC 4211 PKMAC / CMP password-based-MAC iteration count honoured when no
-     * explicit ceiling was supplied to {@link org.bouncycastle.cert.crmf.PKMACBuilder}. The count
+     * explicit ceiling was supplied to {@code org.bouncycastle.cert.crmf.PKMACBuilder}. The count
      * travels in the (unauthenticated) PBMParameter of an incoming CMP message and drives an
      * iterated hash, so an unbounded count makes verifying an attacker-supplied message a
      * CPU-exhaustion vector. Default 10,000,000, generous enough for any legitimate setting. Read
@@ -366,7 +434,7 @@ public class Properties
      * per-entry sealed-key decryption), and is read from the (not-yet-verified) keystore ahead of
      * the HMAC integrity check, so an unbounded value is a pre-integrity CPU-exhaustion vector -
      * the analogue of {@link #BCFKS_MAX_IT_COUNT} / {@link #PKCS12_MAX_IT_COUNT} for the BKS
-     * format (the sibling UBER store already caps its own count). Default 1048576 (1 << 20); the
+     * format (the sibling UBER store already caps its own count). Default 1048576 ({@code 1 << 20}); the
      * BKS writer uses ~1024-2047. Read via {@link #asInteger(String, int)}.
      */
     public static final String BKS_MAX_IT_COUNT = "org.bouncycastle.bks.max_it_count";
@@ -378,7 +446,7 @@ public class Properties
      * pre-integrity CPU-exhaustion vector - the OpenSSH analogue of {@link #BCFKS_MAX_IT_COUNT} /
      * {@link #PKCS12_MAX_IT_COUNT}. A round costs several milliseconds, so the 2^31-1 the wire
      * format allows is worth CPU-months from a key file of a few hundred bytes. Reached only when
-     * a passphrase is supplied, i.e. on the key-import path. Default 1048576 (1 << 20); ssh-keygen
+     * a passphrase is supplied, i.e. on the key-import path. Default 1048576 ({@code 1 << 20}); ssh-keygen
      * defaults to 16 and its -a option is rarely taken far beyond a few hundred. Read via
      * {@link #asInteger(String, int)}.
      */

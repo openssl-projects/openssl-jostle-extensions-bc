@@ -36,6 +36,25 @@ public class DefaultKemEncapsulationLengthProvider
         kemEncapsulationLengths.put(BCObjectIdentifiers.hqc192, Integers.valueOf(8978));
         kemEncapsulationLengths.put(BCObjectIdentifiers.hqc256, Integers.valueOf(14421));
 
+        // Classic McEliece (ISO/IEC 18033-2 arc); the plaintext-confirmation ("pc") sets add a
+        // 32 byte confirmation hash to the base ciphertext, the "f" keygen variant does not.
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece460896, Integers.valueOf(156));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece460896f, Integers.valueOf(156));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece460896pc, Integers.valueOf(188));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece460896pcf, Integers.valueOf(188));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6688128, Integers.valueOf(208));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6688128f, Integers.valueOf(208));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6688128pc, Integers.valueOf(240));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6688128pcf, Integers.valueOf(240));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6960119, Integers.valueOf(194));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6960119f, Integers.valueOf(194));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6960119pc, Integers.valueOf(226));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece6960119pcf, Integers.valueOf(226));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece8192128, Integers.valueOf(208));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece8192128f, Integers.valueOf(208));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece8192128pc, Integers.valueOf(240));
+        kemEncapsulationLengths.put(ISOIECObjectIdentifiers.mceliece8192128pcf, Integers.valueOf(240));
+
         // FrodoKEM (ISO/IEC 18033-2 arc); ciphertext sizes are per parameter set, independent of AES/SHAKE
         kemEncapsulationLengths.put(ISOIECObjectIdentifiers.frodokem976_shake, Integers.valueOf(15792));
         kemEncapsulationLengths.put(ISOIECObjectIdentifiers.frodokem976_aes, Integers.valueOf(15792));
@@ -53,16 +72,23 @@ public class DefaultKemEncapsulationLengthProvider
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM768_X25519_SHA3_256, Integers.valueOf(1120));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM768_ECDH_P256_SHA3_256, Integers.valueOf(1153));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM768_ECDH_P384_SHA3_256, Integers.valueOf(1185));
-        kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM768_ECDH_BP256_SHA3_256, Integers.valueOf(1153));
+        kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM768_ECDH_brainpoolP256r1_SHA3_256, Integers.valueOf(1153));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_RSA3072_SHA3_256, Integers.valueOf(1952));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_ECDH_P384_SHA3_256, Integers.valueOf(1665));
-        kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_ECDH_BP384_SHA3_256, Integers.valueOf(1665));
+        kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_ECDH_brainpoolP384r1_SHA3_256, Integers.valueOf(1665));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_X448_SHA3_256, Integers.valueOf(1624));
         kemEncapsulationLengths.put(IANAObjectIdentifiers.id_MLKEM1024_ECDH_P521_SHA3_256, Integers.valueOf(1701));
     }
 
     public int getEncapsulationLength(AlgorithmIdentifier kemAlgorithm)
     {
-        return ((Integer)kemEncapsulationLengths.get(kemAlgorithm.getAlgorithm())).intValue();
+        Integer encapsulationLength = (Integer)kemEncapsulationLengths.get(kemAlgorithm.getAlgorithm());
+
+        if (encapsulationLength == null)
+        {
+            throw new IllegalArgumentException("Unknown KEM algorithm requested: " + kemAlgorithm.getAlgorithm());
+        }
+
+        return encapsulationLength.intValue();
     }
 }
