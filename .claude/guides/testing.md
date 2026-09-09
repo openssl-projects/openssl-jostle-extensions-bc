@@ -46,9 +46,9 @@ Current state, against jar `3bd494a0` on 2026-09-09 (sha256 `3bd494a0d751f90e54f
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 485 | 0 | 0 | 0 | 485 |
-| JSLFIPS 3.5.8 | 485 | 0 | 5 | 64 | 416 |
-| JSLFIPS 3.1.2 | 485 | 0 | 16 | 95 | 374 |
+| JSL | 490 | 0 | 0 | 0 | 490 |
+| JSLFIPS 3.5.8 | 490 | 0 | 5 | 64 | 421 |
+| JSLFIPS 3.1.2 | 490 | 0 | 16 | 95 | 379 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,

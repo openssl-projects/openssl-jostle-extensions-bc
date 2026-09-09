@@ -12,7 +12,7 @@ The JSL provider itself lives in a **separate repo**, `../openssl-jostle` (`org.
 
 ```bash
 ./gradlew assemble          # build all *-jsl jars (release 8, default JDK 17)
-./gradlew test              # run tests against JSL (485 currently; pkix 288, tls 83, util 74, pg 33, mail 4, core 3)
+./gradlew test              # run tests against JSL (490 currently; pkix 293, tls 83, util 74, pg 33, mail 4, core 3)
 ./gradlew fipsTest          # run the same tests against JSLFIPS; only does anything when TEST_FIPS_LIB is set
 ./gradlew :pkix:test --tests "org.bouncycastle.jsl.test.*" --rerun-tasks
 ```
