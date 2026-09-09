@@ -59,15 +59,15 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-53 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
-every count the legs report. 53 is the count of DECLARATIONS; grepping the prefix loosely finds
+59 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
+every count the legs report. 59 is the count of DECLARATIONS; grepping the prefix loosely finds
 more lines, because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
 noted. What they are:
 
 | cause | tests | item |
 |---|---|---|
 | CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
-| the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 5 | MT-73 |
+| the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 11 | MT-73 |
 | `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | 4 | MT-80 |
 | CCM `init` demands a `GCMParameterSpec` where GCM auto-generates its own | 2 | MT-82 |
 | `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |

@@ -973,7 +973,7 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-        // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses KDF2 1.3.133.16.840.9.44.1.1, KDF3 only.
+    // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses KDF2 1.3.133.16.840.9.44.1.1, KDF3 only.
     public void DISABLED_testRsaKemKdf2Sha256Aes256Wrap()
         throws Exception
     {
@@ -982,12 +982,140 @@ public class NewEnvelopedDataTest
             CMSAlgorithm.AES256_WRAP);
     }
 
-        // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses HKDF 1.2.840.113549.1.9.16.3.28, KDF3
-        // only. The three KDF3 variants of this test DO pass.
+    // DISABLED: KTS-KDF gap: RSA-KTS-KEM-KWS refuses HKDF 1.2.840.113549.1.9.16.3.28, KDF3
+    // only. The three KDF3 variants of this test DO pass.
     public void DISABLED_testRsaKemHkdfSha256Aes256Wrap()
         throws Exception
     {
         doRsaKemRoundTrip(CMSAlgorithm.SHA256_HKDF, CMSAlgorithm.AES256_WRAP);
+    }
+
+    /*
+     * The rows below widen MT-73's coverage past the one digest each shape happens to be exercised
+     * with. Before these, the only gated KDFs were KDF2 with SHA-256 and HKDF with SHA-256, so a
+     * provider could satisfy every test here and still refuse HKDF-SHA384/512 or KDF2 with any
+     * other digest. They are gated on MT-73 with the same reference as the rows above and ungate
+     * with them.
+     *
+     * The two shapes matter and are both represented: KDF2 names the KDF in the OID and carries
+     * the digest as an AlgorithmIdentifier in the parameters, while the HKDF OIDs bake the digest
+     * into the OID and carry no parameters at all.
+     *
+     * Each was run once with the gate lifted, on jar 1df49922, to prove it fails on the KDF and
+     * not on a mistake in the test. The provider names the OID it refused:
+     *
+     *   RSA-KTS  InvalidAlgorithmParameterException: unsupported KDF 1.3.133.16.840.9.44.1.1;
+     *            RSA-KTS-KEM-KWS supports KDF3 (1.3.133.16.840.9.44.1.2)
+     *   ML-KEM   InvalidAlgorithmParameterException: unsupported KDF (only X9.44 KDF3 supported):
+     *            1.2.840.113549.1.9.16.3.29
+     *
+     * Note the refusal reads the parameterless HKDF AlgorithmIdentifier and reports its OID
+     * without tripping over the absent parameters, so the two-shape problem is confined to the
+     * accept path MT-73 adds, not the reject path that exists.
+     *
+     * One caveat on the pair of KDF2 rows: today they fail identically, because the refusal is on
+     * the KDF OID before the digest is looked at. Their digests only become distinguishable once
+     * MT-73 makes KDF2 acceptable, which is the point of adding them now.
+     */
+
+    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testRsaKemKdf2Sha256Aes256Wrap, with SHA-384.
+    //
+    // This row is a JSL round trip ONLY, and cannot become a cross-writer pin. BC's own
+    // RSA-KTS-KEM-KWS refuses SHA-384 for both KDF2 and KDF3 - "unrecognized digest OID:
+    // 2.16.840.1.101.3.4.2.2", which is NISTObjectIdentifiers.id_sha384, resolved from the
+    // constants this core ships - while accepting SHA-256 and SHA-512, and accepting HKDF with all
+    // three. So there is no BC-produced artefact to check ourselves against for this one cell;
+    // jostle covers it against BC's low-level generator in its own agreement test instead. That
+    // BC refusal is an upstream note, not a jostle defect.
+    public void DISABLED_testRsaKemKdf2Sha384Aes256Wrap()
+        throws Exception
+    {
+        doRsaKemRoundTrip(
+            new AlgorithmIdentifier(X9ObjectIdentifiers.id_kdf_kdf2, new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha384, DERNull.INSTANCE)),
+            CMSAlgorithm.AES256_WRAP);
+    }
+
+    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testRsaKemKdf2Sha256Aes256Wrap, with SHA-512.
+    public void DISABLED_testRsaKemKdf2Sha512Aes256Wrap()
+        throws Exception
+    {
+        doRsaKemRoundTrip(
+            new AlgorithmIdentifier(X9ObjectIdentifiers.id_kdf_kdf2, new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha512, DERNull.INSTANCE)),
+            CMSAlgorithm.AES256_WRAP);
+    }
+
+    // DISABLED: KTS-KDF gap, MT-73: HKDF 1.2.840.113549.1.9.16.3.29, parameters absent.
+    public void DISABLED_testRsaKemHkdfSha384Aes256Wrap()
+        throws Exception
+    {
+        doRsaKemRoundTrip(CMSAlgorithm.SHA384_HKDF, CMSAlgorithm.AES256_WRAP);
+    }
+
+    // DISABLED: KTS-KDF gap, MT-73: HKDF 1.2.840.113549.1.9.16.3.30, parameters absent.
+    public void DISABLED_testRsaKemHkdfSha512Aes256Wrap()
+        throws Exception
+    {
+        doRsaKemRoundTrip(CMSAlgorithm.SHA512_HKDF, CMSAlgorithm.AES256_WRAP);
+    }
+
+    // DISABLED: KTS-KDF gap, MT-73: the ML-KEM KTS cipher with HKDF
+    // 1.2.840.113549.1.9.16.3.29. The KEM is held at ML-KEM-768 so the KDF is the only variable.
+    public void DISABLED_testMLKemHkdfSha384()
+        throws Exception
+    {
+        doMLKemRoundTrip(CMSAlgorithm.SHA384_HKDF);
+    }
+
+    // DISABLED: KTS-KDF gap, MT-73: as DISABLED_testMLKemHkdfSha384, with HKDF
+    // 1.2.840.113549.1.9.16.3.30.
+    public void DISABLED_testMLKemHkdfSha512()
+        throws Exception
+    {
+        doMLKemRoundTrip(CMSAlgorithm.SHA512_HKDF);
+    }
+
+    /**
+     * ML-KEM-768 KEMRecipientInfo round trip with the KDF as the only variable. Written as a helper
+     * because the three DISABLED_testMLKem512/768/1024 rows above are 45 duplicated lines each;
+     * doRsaKemRoundTrip already sets this precedent for the RSA-KEM rows in this file.
+     */
+    private void doMLKemRoundTrip(AlgorithmIdentifier kdfAlg)
+        throws Exception
+    {
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(
+            new JceKEMRecipientInfoGenerator(_reciMLKem768Cert, CMSAlgorithm.AES256_WRAP)
+                .setKDF(kdfAlg));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_CBC).setProvider(BC).build());
+
+        assertEquals(CMSEnvelopedDataGenerator.AES256_CBC, ed.getEncryptionAlgOID());
+
+        Collection c = ed.getRecipientInfos().getRecipients();
+
+        assertEquals(1, c.size());
+
+        int expectedLength = new DefaultKemEncapsulationLengthProvider().getEncapsulationLength(
+            SubjectPublicKeyInfo.getInstance(_reciMLKem768KP.getPublic().getEncoded()).getAlgorithm());
+
+        for (Iterator it = c.iterator(); it.hasNext();)
+        {
+            KEMRecipientInformation recipient = (KEMRecipientInformation)it.next();
+
+            assertEquals(expectedLength, recipient.getEncapsulation().length);
+            assertEquals(NISTObjectIdentifiers.id_alg_ml_kem_768.getId(), recipient.getKeyEncryptionAlgOID());
+
+            CMSTypedStream contentStream = recipient.getContentStream(
+                new JceKEMEnvelopedRecipient(_reciMLKem768KP.getPrivate()).setProvider(BC));
+
+            assertEquals(PKCSObjectIdentifiers.data, contentStream.getContentType());
+            assertEquals(true, Arrays.equals(data, Streams.readAll(contentStream.getContentStream())));
+        }
     }
 
     /**
