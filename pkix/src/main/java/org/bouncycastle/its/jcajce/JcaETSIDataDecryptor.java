@@ -40,7 +40,10 @@ public class JcaETSIDataDecryptor
             // [ephemeral public key][encrypted key][tag]
             secretKey = (SecretKey)etsiKem.unwrap(wrappedKey, "AES", Cipher.SECRET_KEY);
 
-            Cipher ccm = helper.createCipher("CCM");
+            // "CCM" is a BC alias for AES-CCM; the JCA-canonical transformation is
+            // AES/CCM/NoPadding, which is what JSL serves (measured). The key here is an
+            // AES SecretKeySpec, so AES is the right algorithm to name.
+            Cipher ccm = helper.createCipher("AES/CCM/NoPadding");
             ccm.init(Cipher.DECRYPT_MODE, secretKey, ClassUtil.getGCMSpec(nonce, 128));
             return ccm.doFinal(content);
         }
