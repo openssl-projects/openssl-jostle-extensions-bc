@@ -42,13 +42,13 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591c1948cb9db759edd7cf684f6fca57958a1343417559a5`, from openssl-jostle `64f2bc1`):
+Current state, against jar `3bd494a0` on 2026-09-09 (sha256 `3bd494a0d751f90e54f876f076bf8d2f1ab9a077d0aad24fb283dd65c96500e4`, from openssl-jostle `cea9f9e`):
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 445 | 0 | 0 | 0 | 445 |
-| JSLFIPS 3.5.8 | 445 | 0 | 5 | 63 | 377 |
-| JSLFIPS 3.1.2 | 445 | 0 | 16 | 94 | 335 |
+| JSL | 461 | 0 | 0 | 0 | 461 |
+| JSLFIPS 3.5.8 | 461 | 0 | 5 | 64 | 392 |
+| JSLFIPS 3.1.2 | 461 | 0 | 16 | 95 | 350 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -59,8 +59,8 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-63 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
-every count the legs report. 63 is the count of DECLARATIONS; grepping the prefix loosely finds
+61 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
+every count the legs report. 61 is the count of DECLARATIONS; grepping the prefix loosely finds
 more lines, because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
 noted. What they are:
 
@@ -69,7 +69,6 @@ noted. What they are:
 | CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
 | the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 15 | MT-73 |
 | `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | 4 | MT-80 |
-| CCM `init` demands a `GCMParameterSpec` where GCM auto-generates its own | 2 | MT-82 |
 | `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |
 | JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | 1 | MT-71 |
 | the fork ships no `CertPathValidator` SPI, so a test asserting a BC path-validation message cannot pass | 1 | — |
@@ -179,7 +178,7 @@ false "absent" readings that hid real capabilities: RSA-KEM is `Cipher RSA-KTS-K
 `Cipher AES/CTS/NOPADDING`, the KDFs are per-digest (`KBKDF-HMAC-SHA256`, `SSKDF-SHA256`,
 `SSHKDF-SHA256`), and the X9.63 agreements are `KeyAgreement ECDHWITHSHA256KDF`. Walk
 `provider.getServices()` first. As a cross-check that you are probing the intended jar, the service
-counts at jar `1df49922` are JSL 346, JSLFIPS 191 on a 3.1.2 module and 277 on a 3.5.8 one, and they
+counts at jar `3bd494a0` are JSL 346, JSLFIPS 191 on a 3.1.2 module and 277 on a 3.5.8 one, and they
 should match jostle's own `SERVICES.md` for the commit the jar came from.
 
 **A functional probe must do what the CALLER does.** Supply the parameter set, the spec, the mode,

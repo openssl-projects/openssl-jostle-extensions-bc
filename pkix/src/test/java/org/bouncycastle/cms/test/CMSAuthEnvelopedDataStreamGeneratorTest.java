@@ -20,6 +20,8 @@ import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.cms.Attribute;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.CMSAttributes;
+import org.bouncycastle.asn1.cms.CCMParameters;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.cms.GCMParameters;
 import org.bouncycastle.asn1.cms.Time;
 import org.bouncycastle.cms.CMSAlgorithm;
@@ -128,11 +130,14 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         init();
     }
 
-    // DISABLED: As PKCS8Test.testCCMEncryption: the CCM OID resolves, then init throws "CCM
-    // requires a GCMParameterSpec (tagLen + nonce)" where GCM auto-generates its own.
-    public void DISABLED_testGCMCCMZeroLength()
+    public void testGCMCCMZeroLength()
         throws Exception
     {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
         GCMCCMtest(CMSAlgorithm.AES128_GCM, false, new byte[0]);
         GCMCCMtest(CMSAlgorithm.AES128_GCM, true, new byte[0]);
 
@@ -178,7 +183,7 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
         OutputEncryptor candidate = new JceCMSContentEncryptorBuilder(oid).setProvider(BC).build();
 
         assertEquals(oid, candidate.getAlgorithmIdentifier().getAlgorithm());
-        assertNotNull(GCMParameters.getInstance(candidate.getAlgorithmIdentifier().getParameters()));
+        assertNotNull(aeadParameters(oid, candidate.getAlgorithmIdentifier()));
 
         assertTrue(candidate instanceof OutputAEADEncryptor);
 
@@ -426,5 +431,24 @@ public class CMSAuthEnvelopedDataStreamGeneratorTest
             assertTrue(Arrays.equals(ep.getMac(), recipient.getMac()));
         }
         ep.close();
+    }
+
+    /**
+     * Parse the content-encryption parameters with the parser the algorithm calls for. RFC 5084
+     * allows a CCM ICVlen of 4|6|8|10|12|14|16 but a GCM one of only 12..16, and the provider
+     * legally picks 8 for CCM and 16 for GCM - measured on jar 3bd494a0, nonce 12 octets in both
+     * cases. Parsing CCM parameters with GCMParameters therefore throws "Invalid ICV length: 8".
+     * That only became reachable when MT-82 made CCM auto-generate its parameters; before that
+     * this test failed earlier, at the init, and never got here.
+     */
+    private static Object aeadParameters(ASN1ObjectIdentifier oid, AlgorithmIdentifier algId)
+    {
+        if (CMSAlgorithm.AES128_CCM.equals(oid) || CMSAlgorithm.AES192_CCM.equals(oid)
+            || CMSAlgorithm.AES256_CCM.equals(oid))
+        {
+            return CCMParameters.getInstance(algId.getParameters());
+        }
+
+        return GCMParameters.getInstance(algId.getParameters());
     }
 }

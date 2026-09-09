@@ -221,10 +221,7 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
-    // DISABLED: The AES-CCM OID now resolves, but init throws InvalidKeyException "CCM requires a
-    // GCMParameterSpec (tagLen + nonce)". AES-GCM auto-generates its parameters when init is given
-    // a key alone; CCM does not, and the PKCS#8 layer inits without a spec.
-    public void DISABLED_testCCMEncryption()
+    public void testCCMEncryption()
         throws Exception
     {
         PKCS8EncryptedPrivateKeyInfoBuilder bldr = new PKCS8EncryptedPrivateKeyInfoBuilder(pkInfo);
