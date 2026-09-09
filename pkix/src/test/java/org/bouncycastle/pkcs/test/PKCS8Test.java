@@ -112,6 +112,7 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+    // DISABLED: the GOST3411 digest is absent from all three configurations.
     public void DISABLED_testGOST3411()
         throws Exception
     {

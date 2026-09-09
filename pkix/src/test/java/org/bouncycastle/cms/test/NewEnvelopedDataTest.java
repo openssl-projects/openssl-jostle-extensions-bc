@@ -1561,6 +1561,7 @@ public class NewEnvelopedDataTest
         assertTrue(collection.iterator().next() instanceof RecipientInformation);
     }
 
+    // DISABLED: RC2 absent from all three configurations.
     public void DISABLED_testKeyTransRC2bit40()
         throws Exception
     {
@@ -1597,6 +1598,7 @@ public class NewEnvelopedDataTest
         }
     }
 
+    // DISABLED: ARC4 absent from all three configurations.
     public void DISABLED_testKeyTransRC4()
         throws Exception
     {
@@ -1630,6 +1632,7 @@ public class NewEnvelopedDataTest
         }
     }
 
+    // DISABLED: ARC4 absent from all three configurations.
     public void DISABLED_testKeyTrans128RC4()
         throws Exception
     {
@@ -1666,6 +1669,7 @@ public class NewEnvelopedDataTest
 
 
 
+    // DISABLED: single-DES absent from all three configurations.
     public void DISABLED_testKeyTransODES()
         throws Exception
     {
@@ -1781,12 +1785,14 @@ public class NewEnvelopedDataTest
 
 
 
+    // DISABLED: single-DES absent from all three configurations.
     public void DISABLED_testKeyTransDES()
         throws Exception
     {
         tryKeyTrans(CMSAlgorithm.DES_CBC, CMSAlgorithm.DES_CBC, 8, DEROctetString.class);
     }
 
+    // DISABLED: CAST5 absent from all three configurations.
     public void DISABLED_testKeyTransCAST5()
         throws Exception
     {
@@ -1826,24 +1832,32 @@ public class NewEnvelopedDataTest
         tryKeyTrans(CMSAlgorithm.AES256_CBC, NISTObjectIdentifiers.id_aes256_CBC, 32, DEROctetString.class);
     }
 
+    // DISABLED: SEED absent from all three configurations.
     public void DISABLED_testKeyTransSEED()
         throws Exception
     {
         tryKeyTrans(CMSAlgorithm.SEED_CBC, KISAObjectIdentifiers.id_seedCBC, 16, DEROctetString.class);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; the Cipher IS
+    // usable on JSL, so this becomes runnable if rewritten to a SecretKeySpec - a test change,
+    // not an ungate.
     public void DISABLED_testKeyTransCamellia128()
         throws Exception
     {
         tryKeyTrans(CMSAlgorithm.CAMELLIA128_CBC, NTTObjectIdentifiers.id_camellia128_cbc, 16, DEROctetString.class);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; see
+    // DISABLED_testKeyTransCamellia128.
     public void DISABLED_testKeyTransCamellia192()
         throws Exception
     {
         tryKeyTrans(CMSAlgorithm.CAMELLIA192_CBC, NTTObjectIdentifiers.id_camellia192_cbc, 24, DEROctetString.class);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; see
+    // DISABLED_testKeyTransCamellia128.
     public void DISABLED_testKeyTransCamellia256()
         throws Exception
     {
@@ -1935,12 +1949,14 @@ public class NewEnvelopedDataTest
         }
     }
 
+    // DISABLED: single-DES absent from all three configurations.
     public void DISABLED_testDESKEK()
         throws Exception
     {
         tryKekAlgorithm(CMSTestUtil.makeDesede192Key(), new ASN1ObjectIdentifier("1.2.840.113549.1.9.16.3.6"));
     }
 
+    // DISABLED: RC2 absent from all three configurations.
     public void DISABLED_testRC2128KEK()
         throws Exception
     {
@@ -1995,24 +2011,31 @@ public class NewEnvelopedDataTest
         tryKekAlgorithm(CMSTestUtil.makeAESKey(256), NISTObjectIdentifiers.id_aes256_wrap);
     }
 
+    // DISABLED: SEED absent from all three configurations.
     public void DISABLED_testSEED128KEK()
         throws Exception
     {
         tryKekAlgorithm(CMSTestUtil.makeSEEDKey(), KISAObjectIdentifiers.id_npki_app_cmsSeed_wrap);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; see
+    // DISABLED_testKeyTransCamellia128.
     public void DISABLED_testCamellia128KEK()
         throws Exception
     {
         tryKekAlgorithm(CMSTestUtil.makeCamelliaKey(128), NTTObjectIdentifiers.id_camellia128_wrap);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; see
+    // DISABLED_testKeyTransCamellia128.
     public void DISABLED_testCamellia192KEK()
         throws Exception
     {
         tryKekAlgorithm(CMSTestUtil.makeCamelliaKey(192), NTTObjectIdentifiers.id_camellia192_wrap);
     }
 
+    // DISABLED: KeyGenerator CAMELLIA absent on all three; see
+    // DISABLED_testKeyTransCamellia128.
     public void DISABLED_testCamellia256KEK()
         throws Exception
     {
@@ -2473,6 +2496,7 @@ public class NewEnvelopedDataTest
         confirmNumberRecipients(recipients, 1);
     }
 
+    // DISABLED: ECMQV not registered at all, on any configuration.
     public void DISABLED_testECMQVKeyAgreeMultiple()
         throws Exception
     {
@@ -2533,6 +2557,7 @@ public class NewEnvelopedDataTest
         verifyECKeyAgreeVectors(privKey, "1.2.840.113549.3.7", ecKeyAgreeMsgDESEDE);
     }
 
+    // DISABLED: ECMQV not registered at all, on any configuration.
     public void DISABLED_testECMQVKeyAgreeVectors()
         throws Exception
     {

@@ -98,6 +98,8 @@ public class DSA2Test
         doSigVerifyTest("DSA-7680-384.pub", "dsa-7680-384-sign.gpg");
     }
 
+    // DISABLED: as DISABLED_testK7680H384: OpenSSL's DSA verify rejects the
+    // oversized domain params with "bad q value".
     public void DISABLED_testK15360H512()
         throws Exception
     {
@@ -112,30 +114,36 @@ public class DSA2Test
         doSigGenerateTest("DSA-1024-160.sec", "DSA-1024-160.pub", PGPUtil.SHA224);
     }
 
+    // DISABLED: as DISABLED_testGenerateK1024H224: the .sec keyrings are
+    // PBE-protected with CAST5, which JSL does not provide.
     public void DISABLED_testGenerateK1024H256()
         throws Exception
     {
         doSigGenerateTest("DSA-1024-160.sec", "DSA-1024-160.pub", PGPUtil.SHA256);
     }
 
+    // DISABLED: as DISABLED_testGenerateK1024H224: CAST5-protected keyring.
     public void DISABLED_testGenerateK1024H384()
         throws Exception
     {
         doSigGenerateTest("DSA-1024-160.sec", "DSA-1024-160.pub", PGPUtil.SHA384);
     }
 
+    // DISABLED: as DISABLED_testGenerateK1024H224: CAST5-protected keyring.
     public void DISABLED_testGenerateK1024H512()
         throws Exception
     {
         doSigGenerateTest("DSA-1024-160.sec", "DSA-1024-160.pub", PGPUtil.SHA512);
     }
 
+    // DISABLED: as DISABLED_testGenerateK1024H224: CAST5-protected keyring.
     public void DISABLED_testGenerateK2048H256()
         throws Exception
     {
         doSigGenerateTest("DSA-2048-224.sec", "DSA-2048-224.pub", PGPUtil.SHA256);
     }
 
+    // DISABLED: as DISABLED_testGenerateK1024H224: CAST5-protected keyring.
     public void DISABLED_testGenerateK2048H512()
         throws Exception
     {

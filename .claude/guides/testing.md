@@ -59,8 +59,9 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-53 tests are renamed `DISABLED_testXxx` and run on no configuration, so they are outside every
-count the legs report. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
+53 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
+every count the legs report. 53 is the count of DECLARATIONS; grepping the prefix loosely finds
+more lines, because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
 noted. What they are:
 
 | cause | tests | item |
