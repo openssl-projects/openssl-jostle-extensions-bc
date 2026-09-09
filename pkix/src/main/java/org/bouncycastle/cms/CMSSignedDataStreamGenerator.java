@@ -43,13 +43,13 @@ import org.bouncycastle.operator.DigestAlgorithmIdentifierFinder;
  *      certList.add(signCert);
  *
  *      Store           certs = new JcaCertStore(certList);
- *      ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider("BC").build(signKP.getPrivate());
+ *      ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider(DefaultProviderName.getProviderName()).build(signKP.getPrivate());
  *
  *      CMSSignedDataStreamGenerator gen = new CMSSignedDataStreamGenerator();
  *
  *      gen.addSignerInfoGenerator(
  *                new JcaSignerInfoGeneratorBuilder(
- *                     new JcaDigestCalculatorProviderBuilder().setProvider("BC").build())
+ *                     new JcaDigestCalculatorProviderBuilder().setProvider(DefaultProviderName.getProviderName()).build())
  *                     .build(sha1Signer, signCert));
  *
  *      gen.addCertificates(certs);

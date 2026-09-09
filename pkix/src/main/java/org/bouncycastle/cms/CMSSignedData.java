@@ -56,7 +56,7 @@ import org.bouncycastle.util.Store;
  *      Iterator              certIt = certCollection.iterator();
  *      X509CertificateHolder cert = (X509CertificateHolder)certIt.next();
  *
- *      if (signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(cert)))
+ *      if (signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(DefaultProviderName.getProviderName()).build(cert)))
  *      {
  *          verified++;
  *      }

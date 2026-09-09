@@ -33,12 +33,12 @@ import org.bouncycastle.util.io.TeeOutputStream;
  * <pre>
  *      CMSAuthenticatedDataStreamGenerator edGen = new CMSAuthenticatedDataStreamGenerator();
  *
- *      edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(cert).setProvider("BC"));
+ *      edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(cert).setProvider(DefaultProviderName.getProviderName()));
  *
  *      ByteArrayOutputStream  bOut = new ByteArrayOutputStream();
  *
  *      OutputStream out = edGen.open(
- *                              bOut, new JceCMSMacCalculatorBuilder(CMSAlgorithm.DES_EDE3_CBC).setProvider("BC").build());*
+ *                              bOut, new JceCMSMacCalculatorBuilder(CMSAlgorithm.DES_EDE3_CBC).setProvider(DefaultProviderName.getProviderName()).build());*
  *      out.write(data);
  *
  *      out.close();

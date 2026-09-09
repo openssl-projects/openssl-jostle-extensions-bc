@@ -57,7 +57,7 @@ import org.bouncycastle.util.Store;
  *
  *      SMIMESignedGenerator gen = new SMIMESignedGenerator();
  *
- *      gen.addSignerInfoGenerator(new JcaSimpleSignerInfoGeneratorBuilder().setProvider("BC").build("SHA1withRSA", signKP.getPrivate(), signCert));
+ *      gen.addSignerInfoGenerator(new JcaSimpleSignerInfoGeneratorBuilder().setProvider(DefaultProviderName.getProviderName()).build("SHA1withRSA", signKP.getPrivate(), signCert));
  *
  *      gen.addCertificates(certs);
  *

@@ -68,6 +68,7 @@ import org.bouncycastle.asn1.x509.qualified.MonetaryValue;
 import org.bouncycastle.asn1.x509.qualified.QCStatement;
 import org.bouncycastle.asn1.x509.qualified.QcType;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.pkix.PKIXNameConstraintValidator;
 import org.bouncycastle.pkix.PKIXNameConstraintValidatorException;
 import org.bouncycastle.pkix.util.ErrorBundle;
@@ -167,7 +168,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             }
             try
             {
-                CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
+                CertificateFactory cf = createCertificateFactory();
 
                 this.certPath = cf.generateCertPath(certs);
             }
@@ -2235,7 +2236,15 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             {
                 try
                 {
-                    crl.verify(workingPublicKey, "BC");
+                    String provider = DefaultProviderName.getProviderName();
+                    if (null == provider)
+                    {
+                        crl.verify(workingPublicKey);
+                    }
+                    else
+                    {
+                        crl.verify(workingPublicKey, provider);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -2546,7 +2555,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                     }
                 }
 
-                CertificateFactory cf = CertificateFactory.getInstance("X.509","BC");
+                CertificateFactory cf = createCertificateFactory();
                 result = (X509CRL) cf.generateCRL(conn.getInputStream());
             }
         }
@@ -2637,5 +2646,15 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         msg.setClassLoader(PKIXCertPathReviewer.class.getClassLoader());
         
         return msg;
+    }
+
+    private static CertificateFactory createCertificateFactory()
+        throws GeneralSecurityException
+    {
+        String provider = DefaultProviderName.getProviderName();
+
+        return null == provider
+            ? CertificateFactory.getInstance("X.509")
+            : CertificateFactory.getInstance("X.509", provider);
     }
 }

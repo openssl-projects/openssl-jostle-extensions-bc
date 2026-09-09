@@ -28,7 +28,7 @@ import org.bouncycastle.util.Encodable;
  *      {
  *          RecipientInformation   recipient = (RecipientInformation)it.next();
  *
- *          byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(privateKey).setProvider("BC"));
+ *          byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(privateKey).setProvider(DefaultProviderName.getProviderName()));
  *
  *          processData(recData);
  *      }

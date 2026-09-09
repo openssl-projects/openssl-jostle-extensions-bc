@@ -57,7 +57,7 @@ import org.bouncycastle.operator.OperatorCreationException;
  * <p>
  * <pre>
  *      CAdESSignerInfoGeneratorBuilder b = new CAdESSignerInfoGeneratorBuilder(
- *          new JcaDigestCalculatorProviderBuilder().setProvider("BC").build());
+ *          new JcaDigestCalculatorProviderBuilder().setProvider(DefaultProviderName.getProviderName()).build());
  *      b.setCommitmentType(new CommitmentTypeIndication(
  *          CommitmentTypeIdentifier.proofOfOrigin));
  *      SignerInfoGenerator sig = b.build(contentSigner, signingCertHolder);

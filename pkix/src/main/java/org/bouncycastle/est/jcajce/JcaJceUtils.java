@@ -9,6 +9,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CRL;
 import java.security.cert.CertPathBuilder;
 import java.security.cert.CertStore;
+import java.security.cert.CertStoreParameters;
 import java.security.cert.CertificateException;
 import java.security.cert.CollectionCertStoreParameters;
 import java.security.cert.PKIXBuilderParameters;
@@ -27,6 +28,7 @@ import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 
 
 /**
@@ -90,10 +92,18 @@ public class JcaJceUtils
             {
                 try
                 {
-                    CertStore certStore = CertStore.getInstance("Collection",
-                        new CollectionCertStoreParameters(Arrays.asList(x509Certificates)), "BC");
+                    String provider = DefaultProviderName.getProviderName();
 
-                    CertPathBuilder pathBuilder = CertPathBuilder.getInstance("PKIX", "BC");
+                    CertStoreParameters certStoreParams =
+                        new CollectionCertStoreParameters(Arrays.asList(x509Certificates));
+
+                    CertStore certStore = null == provider
+                        ? CertStore.getInstance("Collection", certStoreParams)
+                        : CertStore.getInstance("Collection", certStoreParams, provider);
+
+                    CertPathBuilder pathBuilder = null == provider
+                        ? CertPathBuilder.getInstance("PKIX")
+                        : CertPathBuilder.getInstance("PKIX", provider);
 
                     X509CertSelector constraints = new X509CertSelector();
 

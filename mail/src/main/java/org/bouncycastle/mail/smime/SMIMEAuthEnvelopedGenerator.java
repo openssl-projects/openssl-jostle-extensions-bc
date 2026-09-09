@@ -27,9 +27,9 @@ import org.bouncycastle.operator.OutputEncryptor;
  * <pre>
  *      SMIMEAuthEnvelopedGenerator fact = new SMIMEAuthEnvelopedGenerator();
  *
- *      fact.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider("BC"));
+ *      fact.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider(DefaultProviderName.getProviderName()));
  *
- *      MimeBodyPart mp = fact.generate(content, new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_GCM).setProvider("BC").build());
+ *      MimeBodyPart mp = fact.generate(content, new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_GCM).setProvider(DefaultProviderName.getProviderName()).build());
  * </pre>
  *
  * <b>Note:</b> Most clients expect the MimeBodyPart to be in a MimeMultipart

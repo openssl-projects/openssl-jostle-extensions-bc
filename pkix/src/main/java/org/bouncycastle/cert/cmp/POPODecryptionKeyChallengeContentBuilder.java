@@ -17,6 +17,7 @@ import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
 import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.RecipientInfoGenerator;
 import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
@@ -64,9 +65,17 @@ public class POPODecryptionKeyChallengeContentBuilder
 
             edGen.addRecipientInfoGenerator(recipientInfGenerator);
 
+            JceCMSContentEncryptorBuilder encryptorBuilder = new JceCMSContentEncryptorBuilder(challengeEncAlg);
+
+            String provider = DefaultProviderName.getProviderName();
+            if (null != provider)
+            {
+                encryptorBuilder.setProvider(provider);
+            }
+
             encryptedChallenge = edGen.generate(
                 new CMSProcessableByteArray(new Challenge.Rand(A, recipient).getEncoded()),
-                new JceCMSContentEncryptorBuilder(challengeEncAlg).setProvider("BC").build());
+                encryptorBuilder.build());
         }
         catch (Exception e)
         {

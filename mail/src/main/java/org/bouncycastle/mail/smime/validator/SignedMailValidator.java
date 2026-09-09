@@ -60,6 +60,7 @@ import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.SignerInformationVerifier;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.cms.jcajce.JcaX509CertSelectorConverter;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.mail.smime.SMIMESigned;
 import org.bouncycastle.pkix.jcajce.CertPathReviewerException;
 import org.bouncycastle.pkix.jcajce.PKIXCertPathReviewer;
@@ -185,11 +186,17 @@ public class SignedMailValidator
             }
 
             // save certstore and signerInformationStore
-            certs = new JcaCertStoreBuilder()
+            JcaCertStoreBuilder certStoreBuilder = new JcaCertStoreBuilder()
                 .addCertificates(s.getCertificates())
-                .addCRLs(s.getCRLs())
-                .setProvider("BC")
-                .build();
+                .addCRLs(s.getCRLs());
+
+            String provider = DefaultProviderName.getProviderName();
+            if (null != provider)
+            {
+                certStoreBuilder.setProvider(provider);
+            }
+
+            certs = certStoreBuilder.build();
             signers = s.getSignerInfos();
 
             // save "from" addresses from message
@@ -239,8 +246,14 @@ public class SignedMailValidator
 
     protected void validateSignatures(PKIXParameters pkixParam)
     {
-        JcaSimpleSignerInfoVerifierBuilder signerInfoVerifierBuilder = new JcaSimpleSignerInfoVerifierBuilder()
-                  .setProvider("BC");
+        JcaSimpleSignerInfoVerifierBuilder signerInfoVerifierBuilder = new JcaSimpleSignerInfoVerifierBuilder();
+
+        String provider = DefaultProviderName.getProviderName();
+        if (null != provider)
+        {
+            signerInfoVerifierBuilder.setProvider(provider);
+        }
+
         validateSignatures(signerInfoVerifierBuilder, pkixParam);
     }
 
@@ -703,7 +716,7 @@ public class SignedMailValidator
                 {
                     try
                     {
-                        cert.verify(cert.getPublicKey(), "BC");
+                        verify(cert, cert.getPublicKey());
 
                         certSet.add(cert);
                         userProvidedList.add(Boolean.valueOf(!certIsSystemProvided));
@@ -716,7 +729,7 @@ public class SignedMailValidator
             }
         }
 
-        CertPath certPath = CertificateFactory.getInstance("X.509", "BC").generateCertPath(new ArrayList(certSet));
+        CertPath certPath = createCertificateFactory().generateCertPath(new ArrayList(certSet));
         return new Object[]{ certPath, userProvidedList };
     }
 
@@ -937,7 +950,7 @@ public class SignedMailValidator
                     {
                         if (certIssuer.equals(taCert.getSubjectX500Principal()))
                         {
-                            cert.verify(taCert.getPublicKey(), "BC");
+                            verify(cert, taCert.getPublicKey());
                             return trustAnchor;
                         }
                     }
@@ -945,7 +958,7 @@ public class SignedMailValidator
                     {
                         if (certIssuer.getName().equals(trustAnchor.getCAName()))
                         {
-                            cert.verify(trustAnchor.getCAPublicKey(), "BC");
+                            verify(cert, trustAnchor.getCAPublicKey());
                             return trustAnchor;
                         }
                     }
@@ -1002,5 +1015,30 @@ public class SignedMailValidator
     private static boolean supportsKeyUsage(boolean[] ku, int kuBit)
     {
         return null == ku || (ku.length > kuBit && ku[kuBit]);
+    }
+
+    private static CertificateFactory createCertificateFactory()
+        throws GeneralSecurityException
+    {
+        String provider = DefaultProviderName.getProviderName();
+
+        return null == provider
+            ? CertificateFactory.getInstance("X.509")
+            : CertificateFactory.getInstance("X.509", provider);
+    }
+
+    private static void verify(X509Certificate cert, PublicKey key)
+        throws GeneralSecurityException
+    {
+        String provider = DefaultProviderName.getProviderName();
+
+        if (null == provider)
+        {
+            cert.verify(key);
+        }
+        else
+        {
+            cert.verify(key, provider);
+        }
     }
 }

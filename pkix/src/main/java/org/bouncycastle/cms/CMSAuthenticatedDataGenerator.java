@@ -31,7 +31,7 @@ import org.bouncycastle.util.io.TeeOutputStream;
  * <pre>
  *      CMSAuthenticatedDataGenerator  fact = new CMSAuthenticatedDataGenerator();
  *
- *      adGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider("BC"));
+ *      adGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider(DefaultProviderName.getProviderName()));
  *
  *      CMSAuthenticatedData         data = fact.generate(new CMSProcessableByteArray(data),
  *                              new JceCMSMacCalculatorBuilder(CMSAlgorithm.DES_EDE3_CBC).setProvider(BC).build()));

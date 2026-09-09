@@ -28,12 +28,12 @@ import org.bouncycastle.operator.OutputEncryptor;
  *
  *       CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
  *
- *       edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider("BC"));
+ *       edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider(DefaultProviderName.getProviderName()));
  *
  *       CMSEnvelopedData ed = edGen.generate(
  *                                       msg,
  *                                       new JceCMSContentEncryptorBuilder(CMSAlgorithm.DES_EDE3_CBC)
- *                                              .setProvider("BC").build());
+ *                                              .setProvider(DefaultProviderName.getProviderName()).build());
  *
  * </pre>
  */

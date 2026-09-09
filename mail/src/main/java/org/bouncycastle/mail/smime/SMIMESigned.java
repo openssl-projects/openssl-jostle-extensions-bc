@@ -31,7 +31,7 @@ import org.bouncycastle.cms.CMSSignedData;
  * matches the given signer...
  * <p>
  * <pre>
- *  CertStore               certs = s.getCertificates("Collection", "BC");
+ *  CertStore               certs = s.getCertificates("Collection", DefaultProviderName.getProviderName());
  *  SignerInformationStore  signers = s.getSignerInfos();
  *  Collection              c = signers.getSigners();
  *  Iterator                it = c.iterator();

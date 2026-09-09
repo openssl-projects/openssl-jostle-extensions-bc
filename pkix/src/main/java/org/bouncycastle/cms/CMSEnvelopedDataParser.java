@@ -34,7 +34,7 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
  *      {
  *          RecipientInformation   recipient = (RecipientInformation)it.next();
  *
- *          CMSTypedStream recData = recipient.getContentStream(new JceKeyTransEnvelopedRecipient(privateKey).setProvider("BC"));
+ *          CMSTypedStream recData = recipient.getContentStream(new JceKeyTransEnvelopedRecipient(privateKey).setProvider(DefaultProviderName.getProviderName()));
  *          
  *          processDataStream(recData.getContentStream());
  *      }

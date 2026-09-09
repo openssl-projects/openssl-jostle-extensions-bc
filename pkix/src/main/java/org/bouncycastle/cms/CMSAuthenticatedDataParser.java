@@ -40,7 +40,7 @@ import org.bouncycastle.util.Arrays;
  *      {
  *          RecipientInformation   recipient = (RecipientInformation)it.next();
  *
- *          CMSTypedStream recData = recipient.getContentStream(new JceKeyTransAuthenticatedRecipient(privateKey).setProvider("BC"));
+ *          CMSTypedStream recData = recipient.getContentStream(new JceKeyTransAuthenticatedRecipient(privateKey).setProvider(DefaultProviderName.getProviderName()));
  *
  *          processDataStream(recData.getContentStream());
  *

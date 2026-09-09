@@ -29,6 +29,7 @@ import org.bouncycastle.bcpg.PacketTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyUtils;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
@@ -42,7 +43,7 @@ import org.bouncycastle.util.encoders.DecoderException;
 public class PGPUtil
     implements HashAlgorithmTags
 {
-    private static String defProvider = "BC";
+    private static String defProvider = DefaultProviderName.getProviderName();
 
     private static Map<String, Integer> nameToHashId = new HashMap<String, Integer>()
     {

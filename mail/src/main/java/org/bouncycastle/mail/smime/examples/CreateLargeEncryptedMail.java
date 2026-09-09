@@ -19,6 +19,7 @@ import javax.mail.internet.MimeMessage;
 import org.bouncycastle.cms.CMSAlgorithm;
 import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
 import org.bouncycastle.cms.jcajce.JceKeyTransRecipientInfoGenerator;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.mail.smime.SMIMEEnvelopedGenerator;
 
 /**
@@ -48,7 +49,7 @@ public class CreateLargeEncryptedMail
         //
         // Open the key store
         //
-        KeyStore    ks = KeyStore.getInstance("PKCS12", "BC");
+        KeyStore    ks = KeyStore.getInstance("PKCS12", DefaultProviderName.getProviderName());
         String      keyAlias = ExampleUtils.findKeyAlias(ks, args[0], args[1].toCharArray());
 
         Certificate[]   chain = ks.getCertificateChain(keyAlias);
@@ -58,7 +59,7 @@ public class CreateLargeEncryptedMail
         //
         SMIMEEnvelopedGenerator  gen = new SMIMEEnvelopedGenerator();
           
-        gen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator((X509Certificate)chain[0]).setProvider("BC"));
+        gen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator((X509Certificate)chain[0]).setProvider(DefaultProviderName.getProviderName()));
 
         //
         // create a subject key id - this has to be done the same way as
@@ -66,7 +67,7 @@ public class CreateLargeEncryptedMail
         // version 3 only.
         //
         /*
-        MessageDigest           dig = MessageDigest.getInstance("SHA1", "BC");
+        MessageDigest           dig = MessageDigest.getInstance("SHA1", DefaultProviderName.getProviderName());
 
         dig.update(cert.getPublicKey().getEncoded());
               
@@ -82,7 +83,7 @@ public class CreateLargeEncryptedMail
         msg.setHeader("Content-Type", "application/octet-stream");
         msg.setHeader("Content-Transfer-Encoding", "binary");
 
-        MimeBodyPart mp = gen.generate(msg, new JceCMSContentEncryptorBuilder(CMSAlgorithm.RC2_CBC).setProvider("BC").build());
+        MimeBodyPart mp = gen.generate(msg, new JceCMSContentEncryptorBuilder(CMSAlgorithm.RC2_CBC).setProvider(DefaultProviderName.getProviderName()).build());
         
         //
         // Get a Session object and create the mail message

@@ -99,9 +99,9 @@ Only when a diff is entirely (a) is a straight copy safe. The bucket-(b) list li
 
 Record and compare. Do not accept "it built".
 
-- JSL: 435 tests, 0 failures, nothing skipped.
-- JSLFIPS: 435 tests, 0 failures on both modules; 367 doing real work on a 3.5.8 module and 325 on
-  a 3.1.2 one, the rest gated. Quote the module and the silent-skip count, never the bare 435.
+- JSL: 438 tests, 0 failures, nothing skipped.
+- JSLFIPS: 438 tests, 0 failures on both modules; 370 doing real work on a 3.5.8 module and 328 on
+  a 3.1.2 one, the rest gated. Quote the module and the silent-skip count, never the bare 438.
 
 A suite that shrinks silently is a regression. Compare counts, not just exit codes.
 

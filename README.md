@@ -72,7 +72,7 @@ variables (see `gradle.properties`). Sources are compiled with `--release 8`.
 
 ```bash
 ./gradlew assemble          # build all *-jsl jars
-./gradlew test              # run the suite against JSL (435 tests; core has none)
+./gradlew test              # run the suite against JSL (438 tests; core 3)
 ./gradlew fipsTest          # run the same suite against JSLFIPS
 
 # run a single test set
