@@ -141,7 +141,11 @@ public class PKCS8Test
         assertTrue(Arrays.areEqual(scryptKey, pkInfo.getEncoded()));
     }
 
-        // DISABLED: Undiagnosed: IllegalStateException "cannot encode privateKeyInfo".
+    // DISABLED: the ENCRYPT half is fixed (MT-77: JceUtils now names the padded
+    // transformation for a CBC scheme OID, so the blob is written correctly - verified
+    // byte-for-byte against SunJCE, same PBES2 structure and same 1232-byte block-aligned
+    // ciphertext). It still fails on the DECRYPT half: no SecretKeyFactory for the PBKDF2
+    // OID 1.2.840.113549.1.5.12 (MT-72). Ungate when the MT-72 jar lands.
     public void DISABLED_testSHA256Encryption()
         throws Exception
     {
@@ -169,7 +173,11 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
-        // DISABLED: Undiagnosed: IllegalStateException "cannot encode privateKeyInfo".
+    // DISABLED: the ENCRYPT half is fixed (MT-77: JceUtils now names the padded
+    // transformation for a CBC scheme OID, so the blob is written correctly - verified
+    // byte-for-byte against SunJCE, same PBES2 structure and same 1232-byte block-aligned
+    // ciphertext). It still fails on the DECRYPT half: no SecretKeyFactory for the PBKDF2
+    // OID 1.2.840.113549.1.5.12 (MT-72). Ungate when the MT-72 jar lands.
     public void DISABLED_testSHA3_256Encryption()
         throws Exception
     {

@@ -234,7 +234,7 @@ public class JcePKCSPBEOutputEncryptorBuilder
                         salt, skdf.getCostParameter(), skdf.getBlockSize(), skdf.getParallelizationParameter(),
                                                  keySizeProvider.getKeySize(new AlgorithmIdentifier(keyEncAlgorithm))));
 
-                    cipher = helper.createCipher(keyEncAlgorithm.getId());
+                    cipher = JceUtils.createCipher(helper, keyEncAlgorithm);
 
                     cipher.init(Cipher.ENCRYPT_MODE, simplifyPbeKey(key), random);
 
@@ -269,7 +269,7 @@ public class JcePKCSPBEOutputEncryptorBuilder
                     key = keyFact.generateSecret(new PBEKeySpec(password, salt, pkdf.getIterationCount(),
                                             keySizeProvider.getKeySize(new AlgorithmIdentifier(keyEncAlgorithm))));
 
-                    cipher = helper.createCipher(keyEncAlgorithm.getId());
+                    cipher = JceUtils.createCipher(helper, keyEncAlgorithm);
 
                     cipher.init(Cipher.ENCRYPT_MODE, simplifyPbeKey(key), random);
 

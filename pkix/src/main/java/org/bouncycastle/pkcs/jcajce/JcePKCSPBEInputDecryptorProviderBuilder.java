@@ -175,7 +175,7 @@ public class JcePKCSPBEInputDecryptorProviderBuilder
                             }
                         }
 
-                        cipher = helper.createCipher(alg.getEncryptionScheme().getAlgorithm().getId());
+                        cipher = JceUtils.createCipher(helper, alg.getEncryptionScheme().getAlgorithm());
 
                         encryptionAlg = AlgorithmIdentifier.getInstance(alg.getEncryptionScheme());
 
