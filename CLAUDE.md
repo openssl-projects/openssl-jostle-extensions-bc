@@ -37,7 +37,7 @@ JDK toolchains come from `BC_JDK8/11/17/21/25` env vars (`gradle.properties`). T
 
 ## Migrating bc-java tests (ongoing)
 
-Copying tests from `../bc-java/pkix/src/test` into `pkix/src/test`. Rules: drop tests/imports depending on `*.bc.*`; replace `BouncyCastleProvider`→`JslTestProvider.provider()`, `"BC"`→`JslTestProvider.name()`. Tests are either JUnit3 (`extends TestCase`) or BC `SimpleTest` (`performTest()`, not discovered by gradle — add a JUnit `@Test` bridge calling `perform()`). JUnit3 `@Ignore` does NOT work — skip a failing test by renaming `testXxx`→`DISABLED_testXxx` (globally, incl. `main()`/`suite()` call sites); if all methods get disabled, drop the class. Isolated-compile each candidate before adding it (a non-compiling file breaks the whole module). Full workflow, including the isolated-compile classpath: the `port-from-bc-java` skill.
+Copying tests from `/Users/meganwoods/cw/bc/bc-java/pkix/src/test` into `pkix/src/test` (upstream is a configured additional working directory, not `../bc-java`). Rules: drop tests/imports depending on `*.bc.*`; replace `BouncyCastleProvider`→`JslTestProvider.provider()`, `"BC"`→`JslTestProvider.name()`. Tests are either JUnit3 (`extends TestCase`) or BC `SimpleTest` (`performTest()`, not discovered by gradle — add a JUnit `@Test` bridge calling `perform()`). JUnit3 `@Ignore` does NOT work — skip a failing test by renaming `testXxx`→`DISABLED_testXxx` (globally, incl. `main()`/`suite()` call sites); if all methods get disabled, drop the class. Isolated-compile each candidate before adding it (a non-compiling file breaks the whole module). Full workflow, including the isolated-compile classpath: the `port-from-bc-java` skill.
 
 ## State of the JSL provider work (this is what the provider can do for CMS/certs)
 
@@ -52,4 +52,4 @@ ML-DSA, SLH-DSA, ML-KEM, EC, RSA, AES (incl. GCM + RFC 3394/5649 key-wrap) work 
 - `conventions.md` — working rules, each one traceable to a specific problem
 - `provider-gaps.md` — JSL capability gaps, open and closed, with probe dates
 
-Porting anything from `../bc-java` (source, refactor or test)? Use the **`port-from-bc-java`** skill (`.claude/skills/port-from-bc-java/SKILL.md`) — it covers diff-then-classify, which dependencies do not exist here, the local JSL adaptations a resync must not revert, and the verification order.
+Porting anything from upstream bc-java at `/Users/meganwoods/cw/bc/bc-java` (source, refactor or test)? Use the **`port-from-bc-java`** skill (`.claude/skills/port-from-bc-java/SKILL.md`) — it covers diff-then-classify, which dependencies do not exist here, the local JSL adaptations a resync must not revert, and the verification order.

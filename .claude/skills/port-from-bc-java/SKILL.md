@@ -1,11 +1,12 @@
 ---
 name: port-from-bc-java
-description: Port or refresh a source file, class or test from the upstream bc-java checkout into this JSL fork. Use whenever the task involves copying from ../bc-java, resyncing a file with upstream, migrating bc-java tests, or pulling in an upstream refactor. Covers dependency triage (what does NOT exist here), the local JSL adaptations that must survive a resync, and the verification order.
+description: Port or refresh a source file, class or test from the upstream bc-java checkout into this JSL fork. Use whenever the task involves copying from the upstream bc-java checkout, resyncing a file with upstream, migrating bc-java tests, or pulling in an upstream refactor. Covers dependency triage (what does NOT exist here), the local JSL adaptations that must survive a resync, and the verification order.
 ---
 
 # Porting from bc-java into the JSL fork
 
-Upstream lives at `/home/dgh/bc/git/repositories/bc-java`. This repo keeps BC's high-level APIs but
+Upstream lives at `/Users/meganwoods/cw/bc/bc-java`, which is a configured additional working directory. It is NOT
+`../bc-java`: nothing sits beside this repo (`../openssl-jostle` does, and that reference is correct). This repo keeps BC's high-level APIs but
 delegates every primitive to the OpenSSL Jostle ("JSL") provider, and its `core` is deliberately
 minimized. **A verbatim copy is almost always wrong.** Work through the steps below in order.
 
@@ -52,7 +53,7 @@ If the file already exists here, never overwrite it blind:
 
 ```bash
 diff -u pg/src/main/java/org/bouncycastle/openpgp/operator/PGPUtil.java \
-        ../bc-java/pg/src/main/java/org/bouncycastle/openpgp/operator/PGPUtil.java
+        /Users/meganwoods/cw/bc/bc-java/pg/src/main/java/org/bouncycastle/openpgp/operator/PGPUtil.java
 ```
 
 Sort every hunk into one of three buckets:
@@ -153,5 +154,5 @@ Full workflow, the exact classpath, and the per-package record of what was migra
 - Prefer deleting a dead upstream dependency over porting it (`.claude/guides/conventions.md`).
   Before deleting, use import/FQN reachability, not bare-token grep — comments and same-name classes
   in other packages produce false hits both ways (`.claude/guides/conventions.md`).
-- Commit only when asked. Short lowercase subject, body explaining *why*.
-  **No `Co-Authored-By` or other AI-attribution trailer** (`.claude/guides/conventions.md`).
+- Commit only when asked. One single lowercase sentence as the subject: no body, no trailers,
+  no author tags (`.claude/guides/conventions.md`).
