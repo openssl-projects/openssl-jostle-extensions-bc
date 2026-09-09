@@ -43,7 +43,7 @@ be needed before the failure appears.
 
 ```bash
 ./gradlew assemble    # all *-jsl jars, release 8, default JDK 17
-./gradlew test        # 412 tests against JSL
+./gradlew test        # 435 tests against JSL
 ./gradlew fipsTest    # the same tests against JSLFIPS; needs TEST_FIPS_LIB
 ```
 
@@ -100,9 +100,10 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 
 ## Current state
 
-- All three legs green against jar `050298a8`: JSL 412 / 0 failures / 0 skipped; JSLFIPS 412 / 0
-  failures on both modules, skipping 5 with a 3.5.8 module and 16 with a 3.1.2 one. One JSLFIPS
-  number means nothing without saying which module produced it - see `testing.md`.
+- All three legs green against jar `1df49922` (openssl-jostle `64f2bc1`): 435 tests and 0 failures
+  on each. JSL skips nothing; JSLFIPS reports 5 skips and gates 63 more silently on a 3.5.8 module,
+  16 and 94 on a 3.1.2 one. One JSLFIPS number means nothing without saying which module produced
+  it, and a test count means little without the silent-skip count beside it - see `testing.md`.
 - Branch `resync-1.86` is at `main`; its resync and FIPS test work are already in. Nothing pending
   on it.
 - The TLS handshake matrix has never run. See `testing.md`.

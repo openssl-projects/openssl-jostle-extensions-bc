@@ -41,11 +41,18 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591c1948cb9db759edd7cf684f6fca57958a1343417559a5`, from openssl-jostle `64f2bc1`): JSL 412 / 0 failures / 0 skipped;
-JSLFIPS 412 / 0 failures, skipping 5 with a 3.5.8 module and 16 with a 3.1.2 one. Run BOTH
-modules - they skip different tests, in both directions, and a green run on one proves
-nothing about the other. Differing skip counts are also how you tell a real FIPS run from a
-replayed cached one.
+Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591c1948cb9db759edd7cf684f6fca57958a1343417559a5`, from openssl-jostle `64f2bc1`):
+
+| leg | tests | failures | reported skips | silent skips | doing real work |
+|---|---|---|---|---|---|
+| JSL | 435 | 0 | 0 | 0 | 435 |
+| JSLFIPS 3.5.8 | 435 | 0 | 5 | 63 | 367 |
+| JSLFIPS 3.1.2 | 435 | 0 | 16 | 94 | 325 |
+
+"Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
+reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
+in both directions, and a green run on one proves nothing about the other. Differing skip counts
+are also how you tell a real FIPS run from a replayed cached one.
 
 Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing module.
 
@@ -105,15 +112,20 @@ per-test probes, and two lessons came out of building them:
 Each leg prints one line per module:
 
 ```
-pkix fipsTest: tests=252 failures=0 reported-skips=4 silent-skips=104 (silent-skips = gated executions, not distinct tests)
+pkix fipsTest: tests=275 failures=0 reported-skips=4 silent-skips=55 (silent-skips = gated executions, not distinct tests)
 ```
 
+That is a real line from the 3.5.8 leg, not an illustration.
+
 **`silent-skips` is the number that matters.** A gate in a `junit.framework.TestCase` subclass
-returns early, and JUnit records that as a PASS, so `tests=252 failures=0` is equally true of a
-module doing its work and of one gated almost entirely out. Measured on 2026-09-08: the JSLFIPS leg
-reported 5 skips on a 3.5.8 module and 16 on a 3.1.2 one, while 108 and 125 tests respectively had
-been gated silently. JSL gates nothing, so its `silent-skips` is 0 and any non-zero value there is
-worth reading.
+returns early, and JUnit records that as a PASS, so `tests=275 failures=0` is equally true of a
+module doing its work and of one gated almost entirely out. JSL gates nothing, so its `silent-skips`
+is 0 and any non-zero value there is worth reading.
+
+Why the counter exists, as a dated example of what it caught: on 2026-09-08, before the CMS class
+gates were narrowed, the JSLFIPS legs reported 5 skips on a 3.5.8 module and 16 on a 3.1.2 one while
+silently gating 108 and 125 tests. Both legs read as "412 tests, 0 failures". Those two numbers are
+history, not the current state - the table under **The two runs** has that.
 
 Two limits, both deliberate:
 
@@ -142,8 +154,8 @@ false "absent" readings that hid real capabilities: RSA-KEM is `Cipher RSA-KTS-K
 `Cipher AES/CTS/NOPADDING`, the KDFs are per-digest (`KBKDF-HMAC-SHA256`, `SSKDF-SHA256`,
 `SSHKDF-SHA256`), and the X9.63 agreements are `KeyAgreement ECDHWITHSHA256KDF`. Walk
 `provider.getServices()` first. As a cross-check that you are probing the intended jar, the service
-counts at jar `050298a8` are JSL 340, JSLFIPS 188 on a 3.1.2 module and 274 on a 3.5.8 one, which
-match jostle's own `SERVICES.md`.
+counts at jar `1df49922` are JSL 346, JSLFIPS 191 on a 3.1.2 module and 277 on a 3.5.8 one, and they
+should match jostle's own `SERVICES.md` for the commit the jar came from.
 
 **A functional probe must do what the CALLER does.** Supply the parameter set, the spec, the mode,
 the transformation, and the same NAME FORM the caller uses - or its "no" is the probe's omission,
