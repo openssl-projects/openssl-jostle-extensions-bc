@@ -24,6 +24,7 @@ import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Hashtable;
 import java.util.Iterator;
 
@@ -37,6 +38,7 @@ import junit.framework.Assert;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -76,6 +78,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.cms.CMSAlgorithm;
+import org.bouncycastle.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.cms.CMSEnvelopedData;
 import org.bouncycastle.asn1.cms.OtherRecipientInfo;
 import org.bouncycastle.asn1.cms.RecipientInfo;
@@ -738,6 +741,24 @@ public class NewEnvelopedDataTest
         }
         System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
             + " does not serve " + paramSet + " (a 3.1.2 module has no ML-KEM; a 3.5.8 module does)");
+        return false;
+    }
+
+    /**
+     * The CMS3DESwrap key-encryption cipher, needed by four of the sixteen OpenSSL ECDH vectors.
+     * JSL does not register the OID on any configuration yet - that is MT-84, still open - so this
+     * gate is false everywhere today and will go true on all three legs at once when it ships.
+     * Gated per vector rather than per test so the twelve AES-wrap vectors keep running, and so the
+     * four self-activate with no edit here.
+     */
+    private boolean requireCms3DesWrap(String vector)
+    {
+        if (JslTestProvider.has("Cipher", PKCSObjectIdentifiers.id_alg_CMS3DESwrap.getId()))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + " vector " + vector + ": " + JslTestProvider.name()
+            + " does not serve CMS3DESwrap (" + PKCSObjectIdentifiers.id_alg_CMS3DESwrap.getId() + ", MT-84)");
         return false;
     }
 
@@ -3217,5 +3238,411 @@ public class NewEnvelopedDataTest
         {
             // expected
         }
+    }
+
+    /*
+     * Tree (b): nine rows ported from upstream 8a04208b, each one the only local exercise of a
+     * library guard or encoding path that nothing else in the suite reaches.
+     *
+     * Three of them give call sites to members that were already sitting in this file with none:
+     * processInput (below, already carrying the single adaptation this fork needs - setProvider(BC)
+     * rather than "BC"), bobPrivRsaEncrypt and rfc4134ex5_1. A fourth, rfc4134ex5_2, stays without
+     * a caller: its message is RC2-encrypted (1.2.840.113549.3.2), which this fork does not serve
+     * and does not intend to, so testRFC4134ex5_2 is excluded by policy rather than pending. Do not
+     * delete rfc4134ex5_2 as dead weight without deciding that question first.
+     */
+
+    public void testMissingEncryptedContent()
+        throws Exception
+    {
+        // EncryptedContentInfo.encryptedContent is [0] IMPLICIT OCTET STRING OPTIONAL. A message that
+        // omits it must be rejected with a typed CMSException, not a NullPointerException escaping the
+        // CMSEnvelopedData(ContentInfo) constructor's throws CMSException contract.
+        EncryptedContentInfo eci = new EncryptedContentInfo(
+            CMSObjectIdentifiers.data, new AlgorithmIdentifier(NISTObjectIdentifiers.id_aes128_CBC), null);
+        EnvelopedData envData = new EnvelopedData(null, new DERSet(), eci, (org.bouncycastle.asn1.ASN1Set)null);
+        ContentInfo ci = new ContentInfo(CMSObjectIdentifiers.envelopedData, envData);
+
+        try
+        {
+            new CMSEnvelopedData(ci);
+            fail("no exception on enveloped data with missing encrypted content");
+        }
+        catch (CMSException e)
+        {
+            assertEquals("Missing content.", e.getMessage());
+        }
+    }
+
+    /*
+     * Decodes a fixture and reads its OID. It never calls getContent, so it needs no Triple-DES
+     * capability despite asserting the DES-EDE3-CBC content OID, and is ungated on that account.
+     * Needs CMSSampleMessages, taken verbatim from upstream alongside this row.
+     */
+    public void testOriginatorInfo()
+        throws Exception
+    {
+        CMSEnvelopedData env = new CMSEnvelopedData(CMSSampleMessages.originatorMessage);
+
+        RecipientInformationStore recipients = env.getRecipientInfos();
+
+        OriginatorInformation origInfo = env.getOriginatorInfo();
+
+        assertEquals(new X500Name("C=US,O=U.S. Government,OU=HSPD12Lab,OU=Agents,CN=user1"), ((X509CertificateHolder)origInfo.getCertificates().getMatches(null).iterator().next()).getSubject());
+        assertEquals(CMSEnvelopedDataGenerator.DES_EDE3_CBC, env.getEncryptionAlgOID());
+    }
+
+    public void testKeyTransAllowedContentAlgorithms()
+        throws Exception
+    {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(_reciCert).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_CBC).setProvider(BC).build());
+
+        RecipientInformation recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+
+        // when the content-encryption algorithm is in the allowed set, recovery proceeds as normal
+        byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setProvider(BC)
+            .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES256_CBC)));
+
+        assertTrue(Arrays.equals(data, recData));
+
+        // when the actual content-encryption algorithm is not in the allowed set, recovery is refused
+        try
+        {
+            recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setProvider(BC)
+                .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES128_CBC)));
+
+            fail("content recovered under a disallowed content-encryption algorithm");
+        }
+        catch (CMSAlgorithmNotAllowedException e)
+        {
+            // expected
+        }
+    }
+
+    public void testKEKAllowedContentAlgorithms()
+        throws Exception
+    {
+        byte[] data = "WallaWallaWashington".getBytes();
+        SecretKey kek = new SecretKeySpec(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, "AES");
+        byte[] kekId = new byte[]{1, 2, 3, 4, 5};
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKEKRecipientInfoGenerator(kekId, kek).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_CBC).setProvider(BC).build());
+
+        RecipientInformation recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+
+        // when the content-encryption algorithm is in the allowed set, recovery proceeds as normal
+        byte[] recData = recipient.getContent(new JceKEKEnvelopedRecipient(kek).setProvider(BC)
+            .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES256_CBC)));
+
+        assertTrue(Arrays.equals(data, recData));
+
+        // when the actual content-encryption algorithm is not in the allowed set, recovery is refused
+        try
+        {
+            recipient.getContent(new JceKEKEnvelopedRecipient(kek).setProvider(BC)
+                .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES128_CBC)));
+
+            fail("content recovered under a disallowed content-encryption algorithm");
+        }
+        catch (CMSAlgorithmNotAllowedException e)
+        {
+            // expected
+        }
+    }
+
+    public void testKTSKeyTransAllowedContentAlgorithms()
+        throws Exception
+    {
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKTSKeyTransRecipientInfoGenerator(_reciCert, "AES", 128).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES256_CBC).setProvider(BC).build());
+
+        RecipientInformation recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+        KeyTransRecipientId rid = (KeyTransRecipientId)recipient.getRID();
+
+        // with no constraint configured, recovery proceeds as it always has
+        byte[] recData = recipient.getContent(new JceKTSKeyTransEnvelopedRecipient(_reciKP.getPrivate(), rid).setProvider(BC));
+
+        assertTrue(Arrays.equals(data, recData));
+
+        // when the content-encryption algorithm is in the allowed set, recovery proceeds as normal
+        recData = recipient.getContent(new JceKTSKeyTransEnvelopedRecipient(_reciKP.getPrivate(), rid).setProvider(BC)
+            .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES256_CBC)));
+
+        assertTrue(Arrays.equals(data, recData));
+
+        // when the actual content-encryption algorithm is not in the allowed set, recovery is refused
+        try
+        {
+            recipient.getContent(new JceKTSKeyTransEnvelopedRecipient(_reciKP.getPrivate(), rid).setProvider(BC)
+                .setAllowedContentAlgorithms(Collections.singleton(CMSAlgorithm.AES128_CBC)));
+
+            fail("content recovered under a disallowed content-encryption algorithm");
+        }
+        catch (CMSAlgorithmNotAllowedException e)
+        {
+            // expected
+        }
+    }
+
+    public void testKeyTransEncodings()
+        throws Exception
+    {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
+        byte[] data = "WallaWallaWashington".getBytes();
+
+        // default - outer ContentInfo uses the indefinite-length (BER) method
+        byte[] enc = keyTransEncode(data, null);
+
+        assertEquals((byte)0x80, enc[1]);
+        keyTransDecode(enc, data);
+
+        // DL - definite-length throughout, re-encoding as DL is the identity
+        enc = keyTransEncode(data, ASN1Encoding.DL);
+
+        assertTrue(enc[1] != (byte)0x80);
+        assertTrue(Arrays.equals(enc, ContentInfo.getInstance(enc).getEncoded(ASN1Encoding.DL)));
+        keyTransDecode(enc, data);
+
+        // DER - canonical, re-encoding as DER is the identity
+        enc = keyTransEncode(data, ASN1Encoding.DER);
+
+        assertTrue(Arrays.equals(enc, ContentInfo.getInstance(enc).getEncoded(ASN1Encoding.DER)));
+        keyTransDecode(enc, data);
+    }
+
+    private byte[] keyTransEncode(byte[] data, String encoding)
+        throws Exception
+    {
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        if (encoding != null)
+        {
+            edGen.setEncoding(encoding);
+        }
+
+        edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(_reciCert).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC).setProvider(BC).build());
+
+        return ed.getEncoded();
+    }
+
+    private void keyTransDecode(byte[] enc, byte[] data)
+        throws Exception
+    {
+        CMSEnvelopedData ed = new CMSEnvelopedData(enc);
+
+        RecipientInformation recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+
+        byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setProvider(BC));
+
+        assertTrue(Arrays.equals(data, recData));
+    }
+
+    /*
+     * The only local exercise of JceKeyTransRecipient.setKeySizeValidation over an HKDF-derived CEK.
+     * Upstream's five assertions hold here verbatim: the seam that has to work is
+     * SecretKeyFactory for HKDF-SHA256, which the provider serves, and the mismatch is caught in
+     * library code rather than by the provider - so the exact message below is a local guard's, not
+     * OpenSSL's.
+     */
+    public void testKeyTransWithHKDFKeySizeValidation()
+        throws Exception
+    {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
+        byte[] data = "WallaWallaWashington".getBytes();
+        byte[] wrongSizeKey = new byte[32];   // 256 bits of keying material, content encryption algorithm says aes128-CBC
+
+        for (int i = 0; i != wrongSizeKey.length; i++)
+        {
+            wrongSizeKey[i] = (byte)i;
+        }
+
+        CMSEnvelopedDataGenerator edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(_reciCert).setProvider(BC));
+
+        CMSEnvelopedData ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC)
+                .setEnableSha256HKdf(true)
+                .setProvider(BC).build(wrongSizeKey));
+
+        assertEquals(ed.getEncryptionAlgOID(), CMSObjectIdentifiers.id_alg_cek_hkdf_sha256.getId());
+        assertEquals(AlgorithmIdentifier.getInstance(ed.getContentEncryptionAlgorithm().getParameters()).getAlgorithm(), CMSAlgorithm.AES128_CBC);
+
+        RecipientInformationStore recipients = ed.getRecipientInfos();
+
+        Collection c = recipients.getRecipients();
+
+        assertEquals(1, c.size());
+
+        RecipientInformation recipient = (RecipientInformation)c.iterator().next();
+
+        try
+        {
+            recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setKeySizeValidation(true).setProvider(BC));
+            fail("CEK size not matching content encryption algorithm not picked up");
+        }
+        catch (CMSException e)
+        {
+            assertEquals("Expected key size for algorithm OID not found in recipient.", e.getMessage());
+        }
+
+        // without key size validation the mismatched message still decrypts
+        byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setKeySizeValidation(false).setProvider(BC));
+
+        assertEquals(true, Arrays.equals(data, recData));
+
+        // a CEK matching the content encryption algorithm passes validation
+        edGen = new CMSEnvelopedDataGenerator();
+
+        edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(_reciCert).setProvider(BC));
+
+        ed = edGen.generate(
+            new CMSProcessableByteArray(data),
+            new JceCMSContentEncryptorBuilder(CMSAlgorithm.AES128_CBC)
+                .setEnableSha256HKdf(true)
+                .setProvider(BC).build());
+
+        recipient = (RecipientInformation)ed.getRecipientInfos().getRecipients().iterator().next();
+
+        recData = recipient.getContent(new JceKeyTransEnvelopedRecipient(_reciKP.getPrivate()).setKeySizeValidation(true).setProvider(BC));
+
+        assertEquals(true, Arrays.equals(data, recData));
+    }
+
+    /*
+     * Gated on PKCS#1 key transport alone, though the fixture is DES-EDE3-CBC and the row therefore
+     * needs Triple-DES to DECRYPT as well. Measured: both FIPS modules refuse PKCS#1, so this row
+     * never reaches its Triple-DES requirement on either, and JSL serves both. A module that served
+     * PKCS#1 but not Triple-DES would fail here rather than skip - no such configuration exists
+     * today, so the second gate is deliberately not added, and this comment is the record of why.
+     */
+    public void testRFC4134ex5_1()
+        throws Exception
+    {
+        if (!requirePkcs1KeyTransport())
+        {
+            return;
+        }
+
+        byte[] data = Hex.decode("5468697320697320736f6d652073616d706c6520636f6e74656e742e");
+
+        KeyFactory kFact = KeyFactory.getInstance("RSA", BC);
+        Key key = kFact.generatePrivate(new PKCS8EncodedKeySpec(bobPrivRsaEncrypt));
+
+        CMSEnvelopedData ed = new CMSEnvelopedData(rfc4134ex5_1);
+
+        RecipientInformationStore recipients = ed.getRecipientInfos();
+
+        assertEquals("1.2.840.113549.3.7", ed.getEncryptionAlgOID());
+
+        Collection c = recipients.getRecipients();
+        Iterator it = c.iterator();
+
+        if (it.hasNext())
+        {
+            RecipientInformation recipient = (RecipientInformation)it.next();
+
+            byte[] recData = recipient.getContent(new JceKeyTransEnvelopedRecipient((PrivateKey)key).setProvider(BC));
+
+            assertEquals(true, Arrays.equals(data, recData));
+        }
+        else
+        {
+            fail("no recipient found");
+        }
+    }
+
+    /*
+     * The sixteen OpenSSL-generated ECDH vectors, and the only local exercise of processInput and of
+     * KeyAgreeRecipientInformation over a message this fork did not itself produce. The four
+     * Triple-DES-wrap vectors are gated individually; see requireCms3DesWrap.
+     */
+    public void testOpenSSLVectors()
+        throws Exception
+    {
+        byte[] expected = Strings.toByteArray("abcdefghijklmnopqrstuvwxyz0123456789\r\n");
+
+        PEMParser pemParser = new PEMParser(new InputStreamReader(getClass().getResourceAsStream("ecdh/ecc.key")));
+
+        pemParser.readObject();  // skip the curve definition
+
+        PEMKeyPair kp = (PEMKeyPair)pemParser.readObject();
+
+        KeyFactory keyFactory = KeyFactory.getInstance("EC", BC);
+
+        ECPrivateKey ecKey = (ECPrivateKey)keyFactory.generatePrivate(new PKCS8EncodedKeySpec(kp.getPrivateKeyInfo().getEncoded()));
+
+        pemParser = new PEMParser(new InputStreamReader(getClass().getResourceAsStream("ecdh/ecc.crt")));
+
+        X509Certificate x509Certificate = new JcaX509CertificateConverter().setProvider(BC).getCertificate((X509CertificateHolder)pemParser.readObject());
+
+        if (requireCms3DesWrap("encSess1"))
+        {
+            processInput(ecKey, expected, "ecdh/encSess1.asc", new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_CMS3DESwrap, DERNull.INSTANCE));
+        }
+        if (requireCms3DesWrap("encSess2"))
+        {
+            processInput(ecKey, expected, "ecdh/encSess2.asc", new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_CMS3DESwrap, DERNull.INSTANCE));
+        }
+        processInput(ecKey, expected, "ecdh/encSess3.asc", new AlgorithmIdentifier(CMSAlgorithm.AES128_WRAP, DERNull.INSTANCE));
+        processInput(ecKey, expected, "ecdh/encSess4.asc", new AlgorithmIdentifier(CMSAlgorithm.AES128_WRAP, DERNull.INSTANCE));
+        processInput(ecKey, expected, "ecdh/encSess5.asc", new AlgorithmIdentifier(CMSAlgorithm.AES192_WRAP, DERNull.INSTANCE));
+        processInput(ecKey, expected, "ecdh/encSess6.asc", new AlgorithmIdentifier(CMSAlgorithm.AES192_WRAP, DERNull.INSTANCE));
+        processInput(ecKey, expected, "ecdh/encSess7.asc", new AlgorithmIdentifier(CMSAlgorithm.AES256_WRAP, DERNull.INSTANCE));
+        processInput(ecKey, expected, "ecdh/encSess8.asc", new AlgorithmIdentifier(CMSAlgorithm.AES256_WRAP, DERNull.INSTANCE));
+
+        if (requireCms3DesWrap("encSessA"))
+        {
+            processInput(ecKey, expected, "ecdh/encSessA.asc", new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_CMS3DESwrap, DERNull.INSTANCE));
+        }
+        if (requireCms3DesWrap("encSessB"))
+        {
+            processInput(ecKey, expected, "ecdh/encSessB.asc", new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_CMS3DESwrap, DERNull.INSTANCE));
+        }
+        processInput(ecKey, expected, "ecdh/encSessC.asc", new AlgorithmIdentifier(CMSAlgorithm.AES128_WRAP));
+        processInput(ecKey, expected, "ecdh/encSessD.asc", new AlgorithmIdentifier(CMSAlgorithm.AES128_WRAP));
+        processInput(ecKey, expected, "ecdh/encSessE.asc", new AlgorithmIdentifier(CMSAlgorithm.AES192_WRAP));
+        processInput(ecKey, expected, "ecdh/encSessF.asc", new AlgorithmIdentifier(CMSAlgorithm.AES192_WRAP));
+        processInput(ecKey, expected, "ecdh/encSessG.asc", new AlgorithmIdentifier(CMSAlgorithm.AES256_WRAP));
+        processInput(ecKey, expected, "ecdh/encSessH.asc", new AlgorithmIdentifier(CMSAlgorithm.AES256_WRAP));
     }
 }

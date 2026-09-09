@@ -1997,6 +1997,105 @@ public class NewSignedDataTest
         rsaPSSTest("SHA3-384withRSAandMGF1");
     }
 
+    /*
+     * Tree (b): the two NewSignedDataTest rows, ported from upstream 8a04208b.
+     */
+
+    /*
+     * The only local exercise of CMSSignedGenerator.setEncoding(DER) on the signed-data side, and
+     * of the claim that re-encoding the result as DER is the identity. SHA-256, so no gate.
+     */
+    public void testEncapsulatedWithDEREncoding()
+        throws Exception
+    {
+        List              certList = new ArrayList();
+        CMSTypedData      msg = new CMSProcessableByteArray("Hello world!".getBytes());
+
+        certList.add(_origCert);
+        certList.add(_signCert);
+
+        Store           certs = new JcaCertStore(certList);
+
+        CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
+        ContentSigner sha256Signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider(BC).build(_origKP.getPrivate());
+
+        gen.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build()).build(sha256Signer, _origCert));
+
+        gen.addCertificates(certs);
+
+        gen.setEncoding(ASN1Encoding.DER);
+
+        CMSSignedData s = gen.generate(msg, true);
+
+        // canonical - re-encoding as DER is the identity
+        byte[] enc = s.getEncoded();
+
+        assertTrue(org.bouncycastle.util.Arrays.areEqual(enc, ContentInfo.getInstance(enc).getEncoded(ASN1Encoding.DER)));
+
+        //
+        // compute expected content digest and verify the round trip
+        //
+        MessageDigest md = MessageDigest.getInstance("SHA256", BC);
+
+        verifySignatures(new CMSSignedData(enc), md.digest("Hello world!".getBytes()));
+    }
+
+    /*
+     * Signs with SHA1withRSA, which both FIPS modules refuse, so it takes the measured SHA-1 gate.
+     * Upstream signs with SHA-1 because the regression it pins is Authenticode's, and the version
+     * pinning under test is independent of the digest - but changing the digest here would stop this
+     * being a port, so the gate is taken instead.
+     */
+    public void testAsVersion()
+        throws Exception
+    {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
+        // replaceSigners recomputes the CMS version per RFC 5652 (a non-id-data eContentType such
+        // as Authenticode's SPC_INDIRECT_DATA computes to version 3), but a producer can pin a
+        // specific version with CMSSignedData.asVersion(int) - e.g. Authenticode requires 1.
+        // Regression test for github #2344.
+        ASN1ObjectIdentifier spcIndirectData = new ASN1ObjectIdentifier("1.3.6.1.4.1.311.2.1.4");
+
+        List certList = new ArrayList();
+        certList.add(_origCert);
+        certList.add(_signCert);
+        Store certs = new JcaCertStore(certList);
+
+        CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
+        DigestCalculatorProvider digProvider = new JcaDigestCalculatorProviderBuilder().setProvider(BC).build();
+        JcaSignerInfoGeneratorBuilder sigGenBuilder = new JcaSignerInfoGeneratorBuilder(digProvider);
+        ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(_origKP.getPrivate());
+        gen.addSignerInfoGenerator(sigGenBuilder.build(sha1Signer, _origCert));
+        gen.addCertificates(certs);
+
+        CMSSignedData s = gen.generate(new CMSProcessableByteArray(spcIndirectData, "hello world".getBytes()), true);
+
+        // a non-id-data eContentType yields version 3 both on generation and after replaceSigners.
+        assertEquals("generated version", 3, s.getVersion());
+        CMSSignedData replaced = CMSSignedData.replaceSigners(s, s.getSignerInfos());
+        assertEquals("replaceSigners recomputes to version 3", 3, replaced.getVersion());
+
+        // asVersion(1) pins the Authenticode version without disturbing anything else.
+        CMSSignedData pinned = replaced.asVersion(1);
+        assertEquals("asVersion pins the version", 1, pinned.getVersion());
+
+        // the content type, certificates and signer are untouched, and the signature still verifies.
+        assertEquals(spcIndirectData, pinned.getSignedContent().getContentType());
+        assertEquals(replaced.getCertificates().getMatches(null).size(), pinned.getCertificates().getMatches(null).size());
+
+        SignerInformation signer = (SignerInformation)pinned.getSignerInfos().getSigners().iterator().next();
+        X509CertificateHolder cert = (X509CertificateHolder)pinned.getCertificates().getMatches(signer.getSID()).iterator().next();
+        assertTrue("signature valid after asVersion",
+            signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(BC).build(cert)));
+
+        // asVersion round-trips through an encode/decode.
+        assertEquals(1, new CMSSignedData(pinned.getEncoded()).getVersion());
+    }
+
     public void testEd25519()
         throws Exception
     {

@@ -18,6 +18,7 @@ Match the error first. Each row gives the cause and the action.
 | `certificate_unknown(46); No support for rsa_pss_pss` | SPKI `AlgorithmIdentifier` lost in key re-derivation | Check the round trip. Fixed provider-side; see **RSA-PSS certificates**. |
 | `'resource' doesn't specify a valid private key` under FIPS | `JcaTlsCrypto` advertised a scheme the provider cannot do | Fix capability reporting, do not gate. See **Capability reporting**. |
 | handshake `internal_error(80)` under FIPS | Same as above | Same as above. |
+| CMS `"originator key invalid."` | **Not a key problem.** Two levels down the cause chain is `No such algorithm: <oid>` for an absent key-WRAP cipher - the outer message names the wrong thing | Read `getCause()` to the bottom before believing the top. `1.2.840.113549.1.9.16.3.6` is CMS3DESwrap (MT-84); RFC 3211 password key wrap (`AESRFC3211Wrap`, MT-93) is a DIFFERENT absence - do not treat one as evidence about the other. |
 | `NoClassDefFoundError` on a whole test class | Missing algorithm inside a `static { }` block | See **Static initialisers**. |
 | `AssumptionViolatedException` reported as a failure | Class extends `junit.framework.TestCase` | Use an early `return`, not an assumption. |
 | `ProviderException: DSA key generation is not supported` | Module config refuses DSA generation (e.g. 3.5.x `-pedantic`); import/verify still work | Catch the typed refusal or probe with `canSign`. Config-dependent, not version-dependent. **`CMSTestUtil.makeDsaKeyPair()` catches `ProviderException` broadly and returns null, so a genuine DSA keygen DEFECT reads as "not generatable here" too** - if DSA coverage goes quiet unexpectedly, look at the exception before trusting the null. |
@@ -27,7 +28,7 @@ Match the error first. Each row gives the cause and the action.
 | `InvalidKeyException` from `initSign`/`initVerify` on JSLFIPS `NoneWithRSA`, often as TLS 1.3 `internal_error(80)` | Deliberate: raw RSA is non-approved, so JSLFIPS registers the name against an SPI that cannot resolve. See **Raw RSA on JSLFIPS**. | Probe with `canSign("NoneWithRSA", "RSA", 2048)` and use another credential. Do not file it as a gap. |
 | FIPS suite passes in milliseconds | Gradle replayed a cached result | `TEST_FIPS_LIB` must be a task input. See **Gradle**. |
 | A leg reports 0 failures but the work looks absent | JUnit3 gates return early, which counts as a PASS | Read the `silent-skips` figure in the leg summary. See **Reading a leg summary**. |
-| `--tests` run fails tests that pass in a full run | The filtered subset loses the provider registration other classes' `TestSetup` performs | Never measure from a filtered run. Run the whole task. |
+| `--tests` run fails tests that pass in a full run | The filtered subset loses the provider registration other classes' `TestSetup` performs | Prefer the whole task. A class that installs the provider through its OWN `suite()`/`TestSetup` - `NewEnvelopedDataTest` and `NewSignedDataTest` both do - filters safely, and this failure is loud rather than silent. But see **Filtered runs and absolute totals**. |
 | `Test data directory bc-test-data not found` | `TestResourceFinder` walks UP from the working directory, and `BC_TEST_DATA_HOME` is not wired into `build.gradle` | Run from inside the tree, or put a `bc-test-data` symlink in a parent. Bites in a git worktree. |
 
 ## The two runs
@@ -46,9 +47,18 @@ Current state, against jar `f74cadcf` on 2026-09-09 (sha256 `f74cadcf00ee53a173c
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 512 | 0 | 0 | 0 | 512 |
-| JSLFIPS 3.5.8 | 512 | 0 | 5 | 65 | 442 |
-| JSLFIPS 3.1.2 | 512 | 0 | 16 | 105 | 391 |
+| JSL | 523 | 0 | 0 | 4 | 519 |
+| JSLFIPS 3.5.8 | 523 | 0 | 5 | 74 | 444 |
+| JSLFIPS 3.1.2 | 523 | 0 | 16 | 114 | 393 |
+
+Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git hash-object` on the
+same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
+one. Check with `shasum -a 256 libs/openssl-jostle-0.1-SNAPSHOT.jar`.
+
+The 523 totals carry the tree (b) delta - eleven ported CMS rows - which was measured on the two
+CMS test classes alone across all three legs (132 to 143 tests, 0 failures, silent skips 0 to 4 on
+JSL and +9 on each FIPS module) and added to the last full-suite run. The next full run confirms
+them; nothing else moved.
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -120,15 +130,36 @@ upstream `8a04208b` on 2026-09-09 with jar `f74cadcf`:
 
 | | count |
 |---|---|
-| upstream methods absent here (universe) | 55 |
+| upstream methods absent here (universe) | 44 |
 | excluded — algorithm absent, or by policy | 36 |
-| candidates | 19 |
+| candidates | 8 |
 | of those, gap-bound — 4 on MT-93, 2 on MT-94 | 6 |
-| **writable** | **13** |
+| **writable** | **2** |
+
+The two still writable are `testEd448PredictedEncodedLength` and
+`testMalformedShake256LenGivesNoPrediction`, both in `NewSignedDataTest`.
+
+The 36 excluded are GOST (16), PLAIN-ECDSA (8), RIPEMD (3), the `*.bc.*` lightweight-operator rows
+(4), SM2 (2), RC2 (1 - `testRFC4134ex5_2`), and NTRU/BIKE via the absent BC PQC provider (2).
+Recount before trusting it: `testKemWithoutEncapsulationLength` reads like a KEM error-path
+candidate and is not one, because it builds its key pair with `KeyPairGenerator("BIKE", BCPQC)`.
 
 `reviews/gate-audit.md` is gitignored per-test scratch and its totals are NOT load-bearing; they
 rotted four ways at once while nothing could see them. This table is load-bearing, and it moves in
 the same tree as any port that changes it.
+
+## Filtered runs and absolute totals
+
+A `--tests` run measures a DELTA, never a total. Adding a filtered delta to a full-suite figure is
+sound only while the two sets are disjoint and nothing else moved, and that is an assumption, not a
+measurement - so say which it is wherever the number lands. Tree (b) was verified this way on
+instruction: eleven rows measured across all three legs on the two CMS classes alone
+(132 to 143 tests, 0 failures), and the suite totals in **Current state** carry that delta forward
+pending the next full run.
+
+The mechanical trap: `git hash-object` and `shasum -a 256` disagree about the provider jar's
+identity, and this guide quotes sha256. A blob hash that differs from the documented prefix is not
+evidence of a rebuilt jar.
 
 ## Gating a class, and why not to
 

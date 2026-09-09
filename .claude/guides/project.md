@@ -43,7 +43,7 @@ be needed before the failure appears.
 
 ```bash
 ./gradlew assemble    # all *-jsl jars, release 8, default JDK 17
-./gradlew test        # 512 tests against JSL
+./gradlew test        # 523 tests against JSL
 ./gradlew fipsTest    # the same tests against JSLFIPS; needs TEST_FIPS_LIB
 ```
 
@@ -128,10 +128,12 @@ names in its own package before taking it.
 
 ## Current state
 
-- All three legs green against jar `f74cadcf` (openssl-jostle `8d8cf1e`): 512 tests and 0 failures
-  on each. JSL skips nothing; JSLFIPS reports 5 skips and gates 65 more silently on a 3.5.8 module,
-  16 and 105 on a 3.1.2 one. One JSLFIPS number means nothing without saying which module produced
-  it, and a test count means little without the silent-skip count beside it - see `testing.md`.
+- All three legs green against jar `f74cadcf` (openssl-jostle `8d8cf1e`): 523 tests and 0 failures
+  on each. JSL gates 4 executions; JSLFIPS reports 5 skips and gates 74 more silently on a 3.5.8
+  module, 16 and 114 on a 3.1.2 one. One JSLFIPS number means nothing without saying which module
+  produced it, and a test count means little without the silent-skip count beside it - see
+  `testing.md`. The 523 figures carry a targeted delta on top of the last full run; `testing.md`
+  **Filtered runs and absolute totals** says exactly which part was measured how.
 - Work happens on `main`. Branch `resync-1.86` is a stale pointer at `origin/main` and carries none
   of the resync above; do not treat it as the resync branch.
 - The TLS handshake matrix has never run. See `testing.md`.
