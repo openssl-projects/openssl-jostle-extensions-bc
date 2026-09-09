@@ -373,7 +373,7 @@ public class RevocationTest
         }
     }
 
-    public void DISABLED_testRevokedEndEntityOnly()
+    public void testRevokedEndEntityOnly()
         throws Exception
     {
         List list = new ArrayList();
@@ -418,8 +418,12 @@ public class RevocationTest
         }
         catch (CertPathValidatorException e)
         {
-            assertTrue(e.getMessage().startsWith("certificate [issuer=\"CN=CA Cert\",serialNumber=3,subject=\"CN=End Entity\"] revoked"));
-            assertTrue(e.getMessage().endsWith(", reason: privilegeWithdrawn"));
+            // TestUtil.serialNumber is a static counter shared by every test in the JVM, so the
+            // end entity's serial depends on how many certificates ran before this one. bc-java
+            // hardcoded 3 here; read it off the certificate instead.
+            assertTrue(e.getMessage(), e.getMessage().startsWith("certificate [issuer=\"CN=CA Cert\",serialNumber="
+                + eeCert.getSerialNumber() + ",subject=\"CN=End Entity\"] revoked"));
+            assertTrue(e.getMessage(), e.getMessage().endsWith(", reason: privilegeWithdrawn"));
         }
     }
 

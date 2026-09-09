@@ -61,7 +61,7 @@ public class InvalidMessagesTest
         }
     }
 
-    public void DISABLED_testBadOidSigAlg()
+    public void testBadOidSigAlg()
         throws Exception
     {
         ProtectedPKIMessage message = new ProtectedPKIMessage(fetchPkiMessage("bad-oid-sigalg"));
@@ -77,7 +77,8 @@ public class InvalidMessagesTest
         }
         catch (PKCSException e)
         {
-            Assert.assertEquals("unable to process signature: exception on setup: java.security.NoSuchAlgorithmException: no such algorithm: 1.2.840.113549.2097035 for provider BC", e.getMessage());
+            Assert.assertEquals("unable to process signature: exception on setup: java.security.NoSuchAlgorithmException: no such algorithm: 1.2.840.113549.2097035 for provider "
+                + JslTestProvider.name(), e.getMessage());
         }
     }
 

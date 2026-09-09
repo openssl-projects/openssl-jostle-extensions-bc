@@ -705,7 +705,9 @@ public class CMSTestUtil
         {
             contentSignerBuilder = new JcaContentSignerBuilder(d + "withDSA");
         }
-        else if (issPub.getAlgorithm().equals("ECDSA"))
+        // A JSL EC key reports "EC", measured, not "ECDSA" as a BC key does. Match both: the
+        // ECDSA-only test left this branch dead and sent every EC key to the throw below.
+        else if (issPub.getAlgorithm().equals("EC") || issPub.getAlgorithm().equals("ECDSA"))
         {
             contentSignerBuilder = new JcaContentSignerBuilder(d + "withECDSA");
         }

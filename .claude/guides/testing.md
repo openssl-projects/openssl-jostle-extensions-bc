@@ -10,6 +10,7 @@ Match the error first. Each row gives the cause and the action.
 | symptom | cause | action |
 |---|---|---|
 | `no such algorithm: <X> for provider JSLFIPS` | FIPS module lacks `<X>` | Gate the test. See **Which gate to use**. |
+| `IllegalStateException: unable to rebuild certpath`, or any `NoSuchProviderException` naming `JSL` on a `fipsTest` leg | A library class named a provider through `DefaultProviderName`, whose default is `"JSL"`, but only `JSLFIPS` is registered | Nothing to fix in the test: `JslTestProvider.install()` repoints `DefaultProviderName` at the installed provider. Make sure the test calls `install()`. See **Naming a provider from library code**. |
 | `KeyStoreException` for any `PKCS12*` type on JSLFIPS | PKCS#12 is withdrawn from JSLFIPS entirely | Use JSL for keystores. There is no FIPS keystore. |
 | `InvalidKeyException` from `initSign` naming `digest not allowed` | SHA-1 signature *generation* refused (verification is allowed) | Sign with SHA-256. See **Prefer adapting over skipping**. |
 | `RSA key size 1024 is out of range [2048, 16384]` | FIPS minimum modulus | Use 2048 under FIPS. |
@@ -45,9 +46,9 @@ Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 438 | 0 | 0 | 0 | 438 |
-| JSLFIPS 3.5.8 | 438 | 0 | 5 | 63 | 370 |
-| JSLFIPS 3.1.2 | 438 | 0 | 16 | 94 | 328 |
+| JSL | 442 | 0 | 0 | 0 | 442 |
+| JSLFIPS 3.5.8 | 442 | 0 | 5 | 63 | 374 |
+| JSLFIPS 3.1.2 | 442 | 0 | 16 | 94 | 332 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -58,18 +59,41 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-62 tests are renamed `DISABLED_testXxx` and run on no configuration, so they are outside every
-count the legs report. Each now carries a one-line reason measured on 2026-09-08. What they are:
+53 tests are renamed `DISABLED_testXxx` and run on no configuration, so they are outside every
+count the legs report. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
+noted. What they are:
 
 | cause | tests | item |
 |---|---|---|
 | CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
 | the ML-KEM and RSA-KEM KTS ciphers accept X9.44 KDF3 only; CMS asks for HKDF or KDF2 | 5 | MT-73 |
+| `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | 4 | MT-80 |
+| CCM `init` demands a `GCMParameterSpec` where GCM auto-generates its own | 2 | MT-82 |
 | `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |
 | JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | 1 | MT-71 |
-| the Spi-less `SecureRandom` NPE (`FixedSecureRandom`) | 4 | MT-69 |
+| the fork ships no `CertPathValidator` SPI, so a test asserting a BC path-validation message cannot pass | 1 | — |
 | algorithms absent on every configuration — SEED, CAST5, RC2, RC4, Twofish, GOST, ECMQV, Camellia `KeyGenerator` | 30 | — |
-| test-side work, not capability | 12 | — |
+
+The count and this table must agree at every commit. Recount with
+`grep -rh 'public void DISABLED_test' --include="*.java" */src/test | wc -l` rather than trusting
+the prose: it read **62** while the real figure was 57, an intermediate value nobody corrected.
+
+**A reason comment is a measurement with a date on it, not a permanent label.** The four
+`ETSIEncryptedDataTest` rows were filed under MT-69, the Spi-less `SecureRandom` NPE. Re-measuring
+them on jar `1df49922` peeled off three layers and none of them was MT-69:
+
+1. MT-69's NPE is fixed. What replaced it was `rand up-call failed with code -99`, cause swallowed.
+2. MT-79 then made the cause readable, and it was **test-side**: a 32-byte `FixedSecureRandom`
+   running short of OpenSSL's 64-byte EC keygen draw, `ArrayIndexOutOfBoundsException: last source
+   index 64 out of bounds for byte[32]`. BC's keygen draws 32, so the fixture was sized for BC.
+   The determinism was never needed — the test round-trips a plaintext — so it now uses a real
+   `SecureRandom`.
+3. Underneath that, `brainpoolP256r1` is absent from the FIPS modules but **present** on JSL, so
+   the curve needs a per-configuration probe gate rather than a flat exclusion.
+4. Underneath THAT, all four rows stop at the same place: `Cipher ETSIKEMwithSHA256`, MT-80.
+
+Four wrong reasons deep. Each layer looked like the whole answer until it was removed, which is the
+argument for re-measuring a gate rather than reading its comment.
 
 The seven OIDs behind MT-72, resolved from the constants this repo ships rather than from memory —
 `id_aes128_CCM` `2.16.840.1.101.3.4.1.7`, `id_aes192_CCM` `…1.27`, `id_PBKDF2`
@@ -240,6 +264,33 @@ selection, and now a key-lifetime bug as well.
 
 This is not test-only: any application that re-registers the provider, or registers it in two
 places, orphans the keys it made earlier.
+
+### Naming a provider from library code
+
+Most library code lets the JCA resolve an algorithm. A few classes cannot: a `CertificateFactory`,
+a CRL or certificate `verify`, a `CertStore`, a `CertPathBuilder`, and the content encryptor a CMP
+challenge is built with all take a provider name. Those sites read
+`org.bouncycastle.jcajce.util.DefaultProviderName`, whose default is `"JSL"`. bc-java hardcoded its
+own provider name at each of them, which cannot work here - there is no `BouncyCastleProvider` in
+this fork.
+
+The default is right for a `test` leg and wrong for a `fipsTest` leg, where only `JSLFIPS` is
+registered. `JslTestProvider.install()` therefore repoints `DefaultProviderName` at whichever
+provider the run installed. A test that reaches one of those sites without calling `install()`
+gets a `NoSuchProviderException` naming `JSL`, usually wrapped: `PKIXCertPathReviewer` turns it
+into `IllegalStateException: unable to rebuild certpath`, which says nothing about providers at
+all.
+
+This was measured, not predicted. `CheckNameConstraintsTest.testPKIXCertPathReviewer` had been
+disabled since the initial checkin for exactly that wrapped message; the certificate factory site
+was the cause. It passes now, and it is currently the ONLY test that reaches any of those sites -
+setting the name to a nonsense value leaves the whole suite green apart from the one core test that
+asserts the default. Treat those sites as unverified by the suite.
+
+An application that registers the provider under another name must call
+`DefaultProviderName.setProviderName` itself, before using the library. Setting it to `null` makes
+every site fall back to JCA resolution, which takes the first installed provider serving the
+algorithm.
 
 ### Raw RSA on JSLFIPS
 

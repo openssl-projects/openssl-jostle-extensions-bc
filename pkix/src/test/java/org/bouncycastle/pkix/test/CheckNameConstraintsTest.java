@@ -28,7 +28,7 @@ import org.bouncycastle.test.TestResourceFinder;
 public class CheckNameConstraintsTest 
     extends TestCase
 {
-    public void DISABLED_testPKIXCertPathReviewer()
+    public void testPKIXCertPathReviewer()
         throws Exception
     {
         JslTestProvider.install();

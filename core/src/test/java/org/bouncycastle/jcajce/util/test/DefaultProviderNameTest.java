@@ -22,6 +22,12 @@ public class DefaultProviderNameTest
         DefaultProviderName.setProviderName(original);
     }
 
+    /**
+     * Asserts the pristine compile-time default, so it holds only in a JVM where nothing has
+     * called JslTestProvider.install() - that repoints the name at whichever provider the leg
+     * installed, which is "JSLFIPS" on a fipsTest run. core has no provider-using tests, and this
+     * class does not install one. Add a provider-using test to core and this needs revisiting.
+     */
     @Test
     public void testDefaultIsJsl()
     {

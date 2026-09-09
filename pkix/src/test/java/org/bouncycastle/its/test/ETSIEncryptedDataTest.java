@@ -6,6 +6,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.interfaces.ECPublicKey;
@@ -99,6 +100,11 @@ public class ETSIEncryptedDataTest
     }
 
 
+    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
+    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
+    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
+    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
+    // so unlike the bare "CCM" alongside it this one is not ours to rename.
     public void DISABLED_testDecryption()
         throws Exception
     {
@@ -181,6 +187,11 @@ public class ETSIEncryptedDataTest
         assertTrue(Arrays.areEqual(request.getItsId().getOctets(), Hex.decode("455453492d4954532d303031")));
     }
 
+    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
+    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
+    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
+    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
+    // so unlike the bare "CCM" alongside it this one is not ours to rename.
     public void DISABLED_testEncryptionNist()
         throws Exception
     {
@@ -220,12 +231,30 @@ public class ETSIEncryptedDataTest
 
     }
 
+    // Disabled: MT-80, Cipher "ETSIKEMwithSHA256", same final blocker as the other three rows.
+    // Reached only after peeling off two layers that used to hide it, both re-measured 2026-09-09
+    // on jar 1df49922, and both worth keeping so this test is ready when MT-80 lands:
+    //   1. The 32-byte FixedSecureRandom ran short of OpenSSL's 64-byte EC keygen draw. MT-79 now
+    //      surfaces the caller's exception as the cause, which is how that was finally readable:
+    //      ArrayIndexOutOfBoundsException "last source index 64 out of bounds for byte[32]".
+    //   2. brainpoolP256r1 is absent from the FIPS modules but PRESENT on JSL, so the curve is a
+    //      per-configuration gate, not a flat gap - hence supportsCurve() below.
     public void DISABLED_testEncryptionTele()
         throws Exception
     {
+        if (!supportsCurve("brainpoolP256r1"))
+        {
+            return;
+        }
+
         KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
 
-        kpGen.initialize(new ECGenParameterSpec("brainpoolP256r1"), new FixedSecureRandom(Hex.decode("06EB0D8314ADC4C3564A8E721DF1372FF54B5C725D09E2E353F2D0A46003AB86")));
+        // Was a 32-byte FixedSecureRandom. OpenSSL's EC keygen draws 64 bytes where BC's draws 32,
+        // so the fixture ran short and FixedSecureRandom threw ArrayIndexOutOfBoundsException
+        // ("last source index 64 out of bounds for byte[32]") from inside the provider's up-call.
+        // The determinism was never needed: this test encrypts and decrypts and asserts the
+        // plaintext round-trips, so any valid key works. getRecipient() below already does this.
+        kpGen.initialize(new ECGenParameterSpec("brainpoolP256r1"), new SecureRandom());
 
         //  kpGen.initialize(new ECGenParameterSpec("P-256"), new FixedSecureRandom(Hex.decode("06EB0D8314ADC4C3564A8E721DF1372FF54B5C725D09E2E353F2D0A46003AB86")));
 
@@ -284,6 +313,11 @@ public class ETSIEncryptedDataTest
     }
 
 
+    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
+    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
+    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
+    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
+    // so unlike the bare "CCM" alongside it this one is not ours to rename.
     public void DISABLED_testEncryptionMulti()
         throws Exception
     {
@@ -322,4 +356,27 @@ public class ETSIEncryptedDataTest
     }
 
 
+
+    /**
+     * ETSI ITS uses the brainpool curves, and whether OpenSSL carries them is a build option
+     * rather than a FIPS-module question - this build has none of them, on all three
+     * configurations. Probe the way the caller does: initialize the generator with the
+     * ECGenParameterSpec, since the curve is rejected at initialize, not at getInstance.
+     */
+    private static boolean supportsCurve(String curve)
+        throws Exception
+    {
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
+        try
+        {
+            kpGen.initialize(new ECGenParameterSpec(curve), new SecureRandom());
+            return true;
+        }
+        catch (InvalidAlgorithmParameterException e)
+        {
+            System.out.println("[skipped] " + curve + ": not supported by the loaded OpenSSL build ("
+                + JslTestProvider.name() + ")");
+            return false;
+        }
+    }
 }

@@ -4,6 +4,7 @@ import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.Security;
 
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.junit.Assume;
 import org.openssl.jostle.jcajce.provider.JostleProvider;
 import org.openssl.jostle.jcajce.provider.fips.JostleFIPSProvider;
@@ -125,6 +126,17 @@ public final class JslTestProvider
             throw new IllegalStateException("provider " + want + " requested via "
                 + SELECT_PROPERTY + " but it is not available");
         }
+
+        // A few library classes have to name a provider rather than let the JCA pick one - a
+        // certificate factory, a CRL verification, a CertStore, a CertPathBuilder. They read
+        // DefaultProviderName, whose default is "JSL". On a fipsTest leg only "JSLFIPS" is
+        // registered, so leaving the default alone makes those sites ask for a provider that is
+        // not there. Point it at whichever provider this run installed.
+        //
+        // Measured: without this, CheckNameConstraintsTest.testPKIXCertPathReviewer passes on JSL
+        // and fails on both FIPS modules with "unable to rebuild certpath", which is
+        // PKIXCertPathReviewer wrapping the NoSuchProviderException from its certificate factory.
+        DefaultProviderName.setProviderName(want);
 
         return instance;
     }
