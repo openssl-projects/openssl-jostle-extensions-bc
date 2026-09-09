@@ -236,7 +236,6 @@ class JceAEADUtil
     static byte[] processAeadKeyData(JceAEADUtil aeadUtil, int mode, int encAlgorithm, int aeadAlgorithm, byte[] s2kKey, byte[] iv, int packetTag, int keyVersion, byte[] keyData, int keyOff, int keyLen, byte[] pubkeyData)
         throws PGPException
     {
-        // TODO: Replace HDKF code with JCE based implementation
         byte[] key = generateHKDFBytes(aeadUtil.helper, s2kKey, null,
             new byte[]{(byte)(0xC0 | packetTag), (byte)keyVersion, (byte)encAlgorithm, (byte)aeadAlgorithm},
             SymmetricKeyUtils.getKeyLengthInOctets(encAlgorithm));

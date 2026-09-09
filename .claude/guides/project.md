@@ -98,6 +98,27 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 | public OID classes in `core`, not `internal.asn1` | `asn1.misc`, `edec`, `gnu`, `iso`, `oiw`, `cryptlib`, `rosstandart`, `iana` | upstream splits these; this fork keeps one public copy |
 | capability probing in `JcaTlsCrypto` | `hasCryptoHashAlgorithm`, `hasSignatureAlgorithm`, `isSupportedSignatureScheme` | upstream answers "yes" flatly; here the provider may lack the digest, algorithm or curve |
 
+## Resync state
+
+**Last resynced to bc-java `8a04208b0db5e32524a5cf6f1b932633da1f9b1b` (2026-09-08).** That commit is
+the floor for the next resync; the one before it was `e597b7a124` (2026-08-14).
+
+This line lives here, in a tracked file, on purpose. It used to live only in `reviews/gate-audit.md`,
+which is gitignored, and that file lagged the tree three times in one day — a stale test count, a
+list of reason comments that had already been written, and six fixture tests recorded as outstanding
+after they had been done. **Before scheduling any item from an audit or plan file, grep the tree for
+it first.**
+
+Method, and the one thing that bites: classify each differing file by whether its exact bytes appear
+anywhere in upstream's history for that path (see the `port-from-bc-java` skill, and memory
+`bc-java-resync-blob-history-method`). Then ask separately whether upstream has MOVED the file since
+the floor — if it has not, the difference is purely our own adaptation and there is nothing to take.
+Getting that second question wrong turns a nine-file merge into a 217-file one.
+
+An import-based dependency check is not enough. It cannot see **same-package** references, and it
+passed two files clean that the compiler then rejected. Grep the upstream file for unqualified type
+names in its own package before taking it.
+
 ## Current state
 
 - All three legs green against jar `3bd494a0` (openssl-jostle `cea9f9e`): 461 tests and 0 failures
