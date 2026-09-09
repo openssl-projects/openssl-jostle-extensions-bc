@@ -24,6 +24,8 @@ or patch the jar.
 
 | gap | symptom | impact |
 |---|---|---|
+| **No RFC 3211 key wrap** (MT-93) | `Cipher.getInstance("AESRFC3211Wrap")` and `"DESEDERFC3211Wrap"` → `NoSuchAlgorithmException`, on JSL and both FIPS modules. The wrap-cipher surface is `AESWRAP`, `AESWRAPINV`, `AESWRAPPAD`, `RSA-KTS-KEM-KWS` only. | Blocks CMS password recipients (`PasswordRecipientInfo`, RFC 3211) in both directions, and with them 4 upstream tests. **PBKDF2 is not the problem** — it and `PBKDF2WITHHMACSHA1/224/256/384/512` are all served; only the wrap is missing. The `PKCS5_SCHEME2` half additionally asks for the literal `SecretKeyFactory` name `PBKDF2with8BIT`, also absent. Distinct from CMS3DESwrap (MT-84). Probed 2026-09-09 on jar `f74cadcf`. |
+| **No SHA-512/224 or SHA-512/256 RSA signature** (MT-94) | `Signature` OIDs 1.2.840.113549.1.1.15 and .16 absent, and no `SHA512(224)withRSA` / `SHA512(256)withRSA` name in any spelling. The DIGESTS are present, as `SHA2-512/224` and `SHA2-512/256`. | Blocks 2 upstream `rsaDigestTest` rows, which need the `ContentSigner` rather than the digest. A digest existing is not a signature existing — a name-form reading of this one reads as portable and is not. Probed 2026-09-09 on jar `f74cadcf`. |
 | **No EAX cipher mode** | `Cipher.getInstance("AES/EAX/NoPadding")` → `NoSuchAlgorithmException: cipher mode EAX not supported`, from `BlockCipherSpi.engineSetMode` | RFC 9580 lists EAX as one of OpenPGP's three AEAD modes. v6 AEAD messages using it cannot be read or written. **OCB and GCM both work** — verified by full password-based round trips. |
 
 ## Closed

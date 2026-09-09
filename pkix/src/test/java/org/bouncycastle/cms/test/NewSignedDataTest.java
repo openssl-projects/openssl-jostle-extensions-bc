@@ -1944,6 +1944,59 @@ public class NewSignedDataTest
         rsaDigestTest("SHA3-512withRSA");
     }
 
+    /*
+     * RSA-PSS, ported from upstream 8a04208b. requireSha1Signing() probes SHA1withRSA, not the
+     * SHA1withRSAandMGF1 these rows sign; the two were measured to behave identically on all three
+     * configurations - JSL signs, both FIPS modules throw InvalidKeyException at initSign - so the
+     * gate is reused on evidence. Upstream carries no SHA-512 or SHA3-512 PSS row; none is added.
+     */
+    public void testSHA1WithRSAPSS()
+        throws Exception
+    {
+        if (!requireSha1Signing())
+        {
+            return;
+        }
+
+        rsaPSSTest("SHA1withRSAandMGF1");
+    }
+
+    public void testSHA224WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA224withRSAandMGF1");
+    }
+
+    public void testSHA256WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA256withRSAandMGF1");
+    }
+
+    public void testSHA384WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA384withRSAandMGF1");
+    }
+
+    public void testSHA3_224WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA3-224withRSAandMGF1");
+    }
+
+    public void testSHA3_256WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA3-256withRSAandMGF1");
+    }
+
+    public void testSHA3_384WithRSAPSS()
+        throws Exception
+    {
+        rsaPSSTest("SHA3-384withRSAandMGF1");
+    }
+
     public void testEd25519()
         throws Exception
     {

@@ -46,9 +46,9 @@ Current state, against jar `f74cadcf` on 2026-09-09 (sha256 `f74cadcf00ee53a173c
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 505 | 0 | 0 | 0 | 505 |
-| JSLFIPS 3.5.8 | 505 | 0 | 5 | 64 | 436 |
-| JSLFIPS 3.1.2 | 505 | 0 | 16 | 104 | 385 |
+| JSL | 512 | 0 | 0 | 0 | 512 |
+| JSLFIPS 3.5.8 | 512 | 0 | 5 | 65 | 442 |
+| JSLFIPS 3.1.2 | 512 | 0 | 16 | 105 | 391 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -112,6 +112,23 @@ different KDF and no cofactor. `dhSinglePass_stdDH_hkdf_sha256_scheme` is a DIFF
 `…1.9.16.3.19`. To resolve one, reflect over the `ASN1ObjectIdentifier` constants in the shipped
 `core` (538 of them) rather than searching bc-java's sources, which build OIDs by branching so a
 literal search finds nothing.
+
+## Upstream test port progress
+
+The two big CMS test files, `NewEnvelopedDataTest` and `NewSignedDataTest`, measured against
+upstream `8a04208b` on 2026-09-09 with jar `f74cadcf`:
+
+| | count |
+|---|---|
+| upstream methods absent here (universe) | 55 |
+| excluded — algorithm absent, or by policy | 36 |
+| candidates | 19 |
+| of those, gap-bound — 4 on MT-93, 2 on MT-94 | 6 |
+| **writable** | **13** |
+
+`reviews/gate-audit.md` is gitignored per-test scratch and its totals are NOT load-bearing; they
+rotted four ways at once while nothing could see them. This table is load-bearing, and it moves in
+the same tree as any port that changes it.
 
 ## Gating a class, and why not to
 
