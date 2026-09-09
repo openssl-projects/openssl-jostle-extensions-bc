@@ -47,18 +47,19 @@ Current state, against jar `f74cadcf` on 2026-09-09 (sha256 `f74cadcf00ee53a173c
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 523 | 0 | 0 | 4 | 519 |
-| JSLFIPS 3.5.8 | 523 | 0 | 5 | 74 | 444 |
-| JSLFIPS 3.1.2 | 523 | 0 | 16 | 114 | 393 |
+| JSL | 525 | 0 | 0 | 4 | 521 |
+| JSLFIPS 3.5.8 | 525 | 0 | 5 | 74 | 446 |
+| JSLFIPS 3.1.2 | 525 | 0 | 16 | 115 | 394 |
 
 Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git hash-object` on the
 same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
 one. Check with `shasum -a 256 libs/openssl-jostle-0.1-SNAPSHOT.jar`.
 
-The 523 totals carry the tree (b) delta - eleven ported CMS rows - which was measured on the two
-CMS test classes alone across all three legs (132 to 143 tests, 0 failures, silent skips 0 to 4 on
-JSL and +9 on each FIPS module) and added to the last full-suite run. The next full run confirms
-them; nothing else moved.
+The 525 totals carry the tree (b) and tree (c) deltas - thirteen ported CMS rows - measured on the
+two CMS test classes alone across all three legs and added to the last full-suite run: 132 to 143
+tests for tree (b), 143 to 145 for tree (c), 0 failures throughout, silent skips 0 to 4 on JSL,
+67 to 77 on a 3.1.2 module and 54 to 63 on a 3.5.8 one. The next full run confirms them; nothing
+else moved.
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -130,14 +131,16 @@ upstream `8a04208b` on 2026-09-09 with jar `f74cadcf`:
 
 | | count |
 |---|---|
-| upstream methods absent here (universe) | 44 |
+| upstream methods absent here (universe) | 42 |
 | excluded — algorithm absent, or by policy | 36 |
-| candidates | 8 |
+| candidates | 6 |
 | of those, gap-bound — 4 on MT-93, 2 on MT-94 | 6 |
-| **writable** | **2** |
+| **writable** | **0** |
 
-The two still writable are `testEd448PredictedEncodedLength` and
-`testMalformedShake256LenGivesNoPrediction`, both in `NewSignedDataTest`.
+**Nothing is writable.** Every upstream method these two files do not have is either excluded or
+waiting on MT-93 or MT-94, so the next row here arrives with a provider fix and not before. If this
+table ever shows writable > 0 again without a provider change, the universe moved - upstream grew a
+test - and the recount is the thing to trust, not this sentence.
 
 The 36 excluded are GOST (16), PLAIN-ECDSA (8), RIPEMD (3), the `*.bc.*` lightweight-operator rows
 (4), SM2 (2), RC2 (1 - `testRFC4134ex5_2`), and NTRU/BIKE via the absent BC PQC provider (2).
