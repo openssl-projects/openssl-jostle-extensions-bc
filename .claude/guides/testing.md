@@ -55,11 +55,9 @@ Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git ha
 same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
 one. Check with `shasum -a 256 libs/openssl-jostle-0.1-SNAPSHOT.jar`.
 
-The 525 totals carry the tree (b) and tree (c) deltas - thirteen ported CMS rows - measured on the
-two CMS test classes alone across all three legs and added to the last full-suite run: 132 to 143
-tests for tree (b), 143 to 145 for tree (c), 0 failures throughout, silent skips 0 to 4 on JSL,
-67 to 77 on a 3.1.2 module and 54 to 63 on a 3.5.8 one. The next full run confirms them; nothing
-else moved.
+Measured by a full three-leg run on 2026-09-09 after the thirteen CMS rows of trees (b) and (c)
+landed, not inferred. The three silent-skip figures differ from each other, which is also how you
+tell these apart from a replayed cached result.
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -155,10 +153,14 @@ the same tree as any port that changes it.
 
 A `--tests` run measures a DELTA, never a total. Adding a filtered delta to a full-suite figure is
 sound only while the two sets are disjoint and nothing else moved, and that is an assumption, not a
-measurement - so say which it is wherever the number lands. Tree (b) was verified this way on
-instruction: eleven rows measured across all three legs on the two CMS classes alone
-(132 to 143 tests, 0 failures), and the suite totals in **Current state** carry that delta forward
-pending the next full run.
+measurement - so say which it is wherever the number lands, and settle it with a full run at the end
+of an arc rather than per change.
+
+That worked, once, checked: trees (b) and (c) were verified on the two CMS classes alone across all
+three legs (132 to 143 to 145 tests, 0 failures throughout), the totals were carried forward by
+arithmetic, and the full run afterwards reproduced all nine figures exactly - 525/0/0/4,
+525/0/16/115, 525/0/5/74. The method is sound for classes that install the provider themselves. It
+is still an assumption each time, and one full run at the end is what converts it.
 
 The mechanical trap: `git hash-object` and `shasum -a 256` disagree about the provider jar's
 identity, and this guide quotes sha256. A blob hash that differs from the documented prefix is not
@@ -671,13 +673,15 @@ reaches that object.
 
 ## Known gaps
 
-- **Three classic CMS classes are gated wholesale under FIPS**: `NewSignedDataTest`,
-  `NewEnvelopedDataTest`, `CMSAuthEnvelopedDataStreamGeneratorTest`. Their assertions rest on SHA-1
-  signing, RSA PKCS#1 v1.5 key transport, DESede content encryption and Edwards/PQC signatures —
-  59 failures across four causes. Narrowing to the FIPS-clean methods is unfinished.
-- **JUnit 3 early returns are silent passes**, not skips. 137 tests return early under FIPS and
-  count as passing. They log `[skipped] ...`, but the result XML cannot distinguish them. Treat the
-  reported FIPS count as an upper bound.
+- ~~Three classic CMS classes gated wholesale under FIPS~~ — **done.** The class-level `isFips()`
+  gates on `NewSignedDataTest`, `NewEnvelopedDataTest` and
+  `CMSAuthEnvelopedDataStreamGeneratorTest` were removed and replaced by per-test capability gates;
+  see **Gating a class, and why not to**. The four causes it named are still real, but they now
+  gate individual rows instead of hiding whole classes.
+- **JUnit 3 early returns are silent passes**, not skips - 115 gated executions on a 3.1.2 module
+  and 74 on a 3.5.8 one at 525 tests. The result XML still cannot distinguish them, but the per-leg
+  gate summary now counts them: read `silent-skips` rather than treating the FIPS count as an upper
+  bound. See **Reading a leg summary**.
 - **The handshake matrix**, above.
 
 ## Reading a FIPS security policy

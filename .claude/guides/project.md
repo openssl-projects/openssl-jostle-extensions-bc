@@ -132,8 +132,7 @@ names in its own package before taking it.
   on each. JSL gates 4 executions; JSLFIPS reports 5 skips and gates 74 more silently on a 3.5.8
   module, 16 and 115 on a 3.1.2 one. One JSLFIPS number means nothing without saying which module
   produced it, and a test count means little without the silent-skip count beside it - see
-  `testing.md`. The 525 figures carry a targeted delta on top of the last full run; `testing.md`
-  **Filtered runs and absolute totals** says exactly which part was measured how.
+  `testing.md`.
 - Work happens on `main`. Branch `resync-1.86` is a stale pointer at `origin/main` and carries none
   of the resync above; do not treat it as the resync branch.
 - The TLS handshake matrix has never run. See `testing.md`.
