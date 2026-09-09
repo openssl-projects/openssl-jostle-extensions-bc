@@ -11,7 +11,14 @@ project's own record and David is the author of record.
 One was added on 2026-08-16 and had to be amended out. This overrides any default instruction to
 append such a trailer.
 
-Write a short lowercase subject, then a body explaining why. Commit only when asked.
+**One sentence, and nothing else.** A commit message is a single lowercase sentence as the
+subject: no body, no trailers, no author tags. Megan stated this as org policy on 2026-09-09, and it
+is the practice in both this repository and `../openssl-jostle`. It outranks the older guidance that
+lived on this line, which asked for a subject and then a body.
+
+Commit only when asked, and one arc per commit. If a change makes an earlier figure in these guides
+wrong, correct it in the same commit that causes it: each commit should be true at the moment it
+lands.
 
 ## Never reintroduce software crypto
 
@@ -99,9 +106,9 @@ Only when a diff is entirely (a) is a straight copy safe. The bucket-(b) list li
 
 Record and compare. Do not accept "it built".
 
-- JSL: 442 tests, 0 failures, nothing skipped.
-- JSLFIPS: 442 tests, 0 failures on both modules; 374 doing real work on a 3.5.8 module and 332 on
-  a 3.1.2 one, the rest gated. Quote the module and the silent-skip count, never the bare 442.
+- JSL: 445 tests, 0 failures, nothing skipped.
+- JSLFIPS: 445 tests, 0 failures on both modules; 377 doing real work on a 3.5.8 module and 335 on
+  a 3.1.2 one, the rest gated. Quote the module and the silent-skip count, never the bare 445.
 
 A suite that shrinks silently is a regression. Compare counts, not just exit codes.
 

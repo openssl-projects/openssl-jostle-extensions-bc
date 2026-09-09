@@ -46,9 +46,9 @@ Current state, against jar `1df49922` on 2026-09-09 (sha256 `1df4992222a988fa591
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 442 | 0 | 0 | 0 | 442 |
-| JSLFIPS 3.5.8 | 442 | 0 | 5 | 63 | 374 |
-| JSLFIPS 3.1.2 | 442 | 0 | 16 | 94 | 332 |
+| JSL | 445 | 0 | 0 | 0 | 445 |
+| JSLFIPS 3.5.8 | 445 | 0 | 5 | 63 | 377 |
+| JSLFIPS 3.1.2 | 445 | 0 | 16 | 94 | 335 |
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
@@ -284,9 +284,27 @@ all.
 
 This was measured, not predicted. `CheckNameConstraintsTest.testPKIXCertPathReviewer` had been
 disabled since the initial checkin for exactly that wrapped message; the certificate factory site
-was the cause. It passes now, and it is currently the ONLY test that reaches any of those sites -
-setting the name to a nonsense value leaves the whole suite green apart from the one core test that
-asserts the default. Treat those sites as unverified by the suite.
+was the cause.
+
+**Two of the thirteen sites are covered. Treat the other eleven as unverified.** Setting the name to
+a value no provider answers to leaves the whole suite green apart from those two and the core test
+that asserts the default — so a wrong site would not be caught. The covered two are
+`PKIXCertPathReviewer`'s certificate factory, via that test, and `SignedMailValidator`'s, via
+`ProviderNameSiteTest`.
+
+`ProviderNameSiteTest` is the pattern to copy for the rest. It drives
+`SignedMailValidator.createCertPath`, which is public and static and needs only a certificate rather
+than a signed message, and it asserts through the **cause chain** rather than the message, because
+the validator wraps what the JCA throws. Three cells: a name no provider answers to must be
+reported, `null` must resolve through the JCA default, and a control on the installed name so a
+broken fixture cannot masquerade as a passing assertion.
+
+Which site a test reaches is a question to answer by falsification, not by reading the code.
+`createCertPath` touches two name-reading helpers, and the obvious guess — that the
+`cert.verify(key, provider)` at :706 runs first — is wrong. Reverting each helper to a literal in
+turn settles it: with both reverted the nonsense cell fails, with only the certificate factory
+reverted it fails, with only `verify` reverted it passes. So that test reaches the certificate
+factory and the four `verify` sites remain uncovered.
 
 An application that registers the provider under another name must call
 `DefaultProviderName.setProviderName` itself, before using the library. Setting it to `null` makes
