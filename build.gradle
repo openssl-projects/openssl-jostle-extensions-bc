@@ -27,16 +27,12 @@ static String deriveOSGIVersion(String prjVersion) {
 
 ext.bundle_version = deriveOSGIVersion(version.toString())
 
-// Per-module Export-Package patterns — the packages each bundle owns. bnd only
-// exports packages physically present in that jar, so these can be broad.
-ext.osgiExports = [
-    core: 'org.bouncycastle.*',
-    util: 'org.bouncycastle.asn1.{bsi|cmc|cmp|cms|crmf|cryptlib|dvcs|eac|edec|esf|ess|est|gnu|icao|isara|isismtt|iso|kisa|microsoft|misc|mozilla|nsri|ntt|oiw|rosstandart|smime|tsp}.*,org.bouncycastle.cbor.*,org.bouncycastle.oer.*',
-    pkix: 'org.bouncycastle.{cert|cmc|cms|dvcs|eac|est|its|mime|mozilla|voms|operator|pkix|openssl|pkcs|tsp}.*',
-    pg  : 'org.bouncycastle.{apache|bcpg|gpg|openpgp}.*',
-    tls : 'org.bouncycastle.{jsse|tls}.*',
-    mail: 'org.bouncycastle.mail.*',
-]
+// `Export-Package` is a bnd PULL instruction: it copies every matching package off the
+// build classpath into the bundle, which is how bcutil-jsl re-shipped seven of core's
+// asn1 packages. `-exportcontents` only describes what the jar already holds, so one
+// broad pattern is safe and no per-module list has to be kept in step with the tree.
+// The exclusion mirrors bc-java prov/build.gradle:261; the fork carries none today.
+ext.osgiExportPattern = '!org.bouncycastle.internal.*,org.bouncycastle.*'
 
 allprojects {
     tasks.withType(Javadoc).configureEach {
@@ -184,7 +180,7 @@ subprojects {
 
             // OSGi bundle headers (processed by the bnd builder plugin).
             String v = rootProject.ext.bundle_version
-            String rawExports = rootProject.ext.osgiExports[project.name]
+            String rawExports = rootProject.ext.osgiExportPattern
             // Attach ;version to each exported package clause (skip bnd exclusions).
             String exportHeader = rawExports.split(',').collect { c ->
                 c.startsWith('!') ? c : "${c};version=${v}"
@@ -200,7 +196,7 @@ subprojects {
                 "Bundle-SymbolicName"       : project.ext.artifactBaseName,
                 "Bundle-Version"            : v,
                 "Bundle-RequiredExecutionEnvironment" : "JavaSE-1.8",
-                "Export-Package"            : exportHeader,
+                "-exportcontents"           : exportHeader,
                 "Import-Package"            : "java.*;resolution:=optional,javax.*;resolution:=optional,org.bouncycastle.*;version=\"[${v},${project.maxVersion})\",*"
             )
         }
@@ -224,6 +220,127 @@ subprojects {
         }
     }
 }
+
+// Three assertions, each falsified RED on its own before this landed: the bundle holds
+// what the module compiled (catches a pattern that pulls a package nothing else owns),
+// exports everything it holds (catches a package silently left unexported), and shares
+// no package with another bundle (the split that fails module-path resolution).
+tasks.register('checkBundlePackages') {
+    description = 'Asserts each bundle holds exactly the packages its module compiled, exports all of them, and shares none.'
+    group = 'verification'
+
+    def jars = subprojects.collectEntries { sp ->
+        [(sp.name): [jar    : sp.tasks.named('jar').flatMap { it.archiveFile },
+                     classes: sp.sourceSets.main.output.classesDirs]]
+    }
+    dependsOn subprojects.collect { it.tasks.named('jar') }
+
+    doLast {
+        // Split an OSGi header on its top-level commas: a clause's uses:= and version
+        // attributes carry quoted commas of their own.
+        def clausesOf = { String header ->
+            def out = []
+            def cur = new StringBuilder()
+            boolean quoted = false
+            header.each { ch ->
+                if (ch == '"')
+                {
+                    quoted = !quoted
+                    cur.append(ch)
+                }
+                else if (ch == ',' && !quoted)
+                {
+                    out << cur.toString()
+                    cur = new StringBuilder()
+                }
+                else
+                {
+                    cur.append(ch)
+                }
+            }
+            out << cur.toString()
+            out*.trim().findAll { !it.isEmpty() }
+        }
+
+        def held = [:]
+        def problems = []
+
+        jars.each { name, loc ->
+            def inJar = [] as Set
+            def exported = [] as Set
+
+            new java.util.jar.JarFile(loc.jar.get().asFile).withCloseable { jf ->
+                jf.entries().each { e ->
+                    if (e.name.endsWith('.class') && e.name.contains('/'))
+                    {
+                        inJar << e.name.substring(0, e.name.lastIndexOf('/')).replace('/', '.')
+                    }
+                }
+                String header = jf.manifest?.mainAttributes?.getValue('Export-Package') ?: ''
+                clausesOf(header).each { c ->
+                    if (!c.startsWith('!'))
+                    {
+                        exported << (c.contains(';') ? c.substring(0, c.indexOf(';')) : c)
+                    }
+                }
+            }
+
+            def compiled = [] as Set
+            loc.classes.each { dir ->
+                if (dir.isDirectory())
+                {
+                    fileTree(dir).matching { include '**/*.class' }.each { f ->
+                        def rel = dir.toPath().relativize(f.toPath()).toString()
+                        if (rel.contains(File.separator))
+                        {
+                            compiled << rel.substring(0, rel.lastIndexOf(File.separator)).replace(File.separator, '.')
+                        }
+                    }
+                }
+            }
+
+            def pulled = inJar - compiled
+            def lost = compiled - inJar
+            def unexported = inJar - exported
+            def phantom = exported - inJar
+
+            if (!pulled.isEmpty())
+            {
+                problems << "${name}: bundle carries ${pulled.size()} package(s) the module never compiled: ${pulled.sort()}"
+            }
+            if (!lost.isEmpty())
+            {
+                problems << "${name}: bundle is missing ${lost.size()} compiled package(s): ${lost.sort()}"
+            }
+            if (!unexported.isEmpty())
+            {
+                problems << "${name}: bundle holds ${unexported.size()} package(s) it does not export: ${unexported.sort()}"
+            }
+            if (!phantom.isEmpty())
+            {
+                problems << "${name}: bundle exports ${phantom.size()} package(s) it does not hold: ${phantom.sort()}"
+            }
+
+            held[name] = inJar
+        }
+
+        def owners = [:].withDefault { [] }
+        held.each { name, pkgs -> pkgs.each { owners[it] << name } }
+        owners.findAll { pkg, mods -> mods.size() > 1 }.sort().each { pkg, mods ->
+            problems << "split package ${pkg} is held by ${mods.sort()}"
+        }
+
+        if (!problems.isEmpty())
+        {
+            throw new GradleException("bundle package check failed:\n  " + problems.join("\n  "))
+        }
+
+        logger.lifecycle("bundle package check: ${held.size()} bundles, " +
+            "${held.values().sum { it.size() }} packages, each compiled, exported and owned once")
+    }
+}
+
+subprojects { sp -> sp.tasks.named('check').configure { dependsOn rootProject.tasks.named('checkBundlePackages') } }
 
 // Convenience accessor for the jostle provider jar used by subprojects.
 ext.jostleProviderJar = jostleJar
