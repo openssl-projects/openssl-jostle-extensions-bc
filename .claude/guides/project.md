@@ -109,12 +109,13 @@ list of reason comments that had already been written, and six fixture tests rec
 after they had been done. **Before scheduling any item from an audit or plan file, grep the tree for
 it first.**
 
-**One file is deliberately held for the NEXT resync**, and it must be taken as a pair with a
-decision, not on its own: `tls/.../jsse/provider/BouncyCastleJsseProvider.java`. Upstream's version
-needs the new `ProviderInfoSuffix` seam AND bumps `PROVIDER_VERSION` to 1.0025 / "Version 1.0.25",
-a change attributed to bc-java `35e8ebf0c9` "Move to the 1.86 release". Taking it would advertise
-this fork's own shipped JSSE provider as 1.0.25 as a side effect of a resync, which is a release
-decision. Held with the 1.86 move.
+**The JSSE provider file is no longer held.** `tls/.../jsse/provider/BouncyCastleJsseProvider.java`
+was kept back from earlier resyncs because upstream's version bumps `PROVIDER_VERSION` to 1.0025 /
+"Version 1.0.25" (bc-java `35e8ebf0c9`, "Move to the 1.86 release"), which advertises this fork's own
+shipped JSSE provider as 1.0.25 — a release decision rather than a resync step. Megan took it with
+the 1.86 move: the fork carries upstream's 1.86 JSSE code, so it reports upstream's number. The file
+is now byte-equal to upstream again, along with the `ProviderInfoSuffix` seam it needs, so both
+classify as mechanical for every future resync instead of becoming a permanent hand-merge.
 
 Method, and the one thing that bites: classify each differing file by whether its exact bytes appear
 anywhere in upstream's history for that path (see the `port-from-bc-java` skill, and memory
