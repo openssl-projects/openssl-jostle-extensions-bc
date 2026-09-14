@@ -100,8 +100,30 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 
 ## Resync state
 
-**Last resynced to bc-java `8a04208b0db5e32524a5cf6f1b932633da1f9b1b` (2026-09-08).** That commit is
-the floor for the next resync; the one before it was `e597b7a124` (2026-08-14).
+**Last resynced to bc-java `eacda831fbe15b272933e40841d8b0827b556fae` = tag `r1rv86` (2026-09-11).**
+That commit is the floor for the next resync; the one before it was `8a04208b` (2026-09-08).
+At `r1rv86` the tag and upstream's head are the same commit.
+
+**The fork's main sources are fully at 1.86.** Measured floor-independently, every `.java` under the
+mapped main trees compared against `r1rv86` directly:
+
+| | files |
+|---|---|
+| compared | 2849 |
+| identical to `r1rv86` | 2714 |
+| differing | 88 |
+| fork-only, no upstream counterpart at that path | 47 |
+
+All 88 differences are deliberate. 86 are adaptations by blob history; the other two are covered
+under trap 3 below.
+
+The windowed view below is how the work was FOUND, and is a subset — never quote it as the
+comparison: of 482 upstream files changed between the floor and `r1rv86` in the mapped trees, 366
+do not exist here (pruned crypto, pqc, `jce.provider`, the `Bc*` builders), 81 were already
+identical, and 35 differed — 26 mechanically, 9 carrying adaptations. The work that came out of it
+was 25 files taken verbatim, the JSSE provider pair, and one security fix. Seven of the nine
+"hand-merge" files and seven of seven upstream-changed tests needed nothing at all; that is the
+shape to expect, not an anomaly.
 
 This line lives here, in a tracked file, on purpose. It used to live only in `reviews/gate-audit.md`,
 which is gitignored, and that file lagged the tree three times in one day — a stale test count, a
@@ -117,11 +139,37 @@ the 1.86 move: the fork carries upstream's 1.86 JSSE code, so it reports upstrea
 is now byte-equal to upstream again, along with the `ProviderInfoSuffix` seam it needs, so both
 classify as mechanical for every future resync instead of becoming a permanent hand-merge.
 
-Method, and the one thing that bites: classify each differing file by whether its exact bytes appear
-anywhere in upstream's history for that path (see the `port-from-bc-java` skill, and memory
-`bc-java-resync-blob-history-method`). Then ask separately whether upstream has MOVED the file since
-the floor — if it has not, the difference is purely our own adaptation and there is nothing to take.
-Getting that second question wrong turns a nine-file merge into a 217-file one.
+Method. **Compare against the target tag directly, then use the window to explain what you find.**
+Filtering by the upstream change window FIRST hides exactly the files nobody is looking at: a file
+this fork diverges on whose last upstream change predates the floor is invisible to a windowed scan.
+Doing it that way here reported 35 differing files when the real number was 88.
+
+Then classify each differing file by whether its exact bytes appear anywhere in upstream's history
+for that path (the `port-from-bc-java` skill, and memory `bc-java-resync-blob-history-method`), and
+ask three questions in order:
+
+1. **Did upstream MOVE the file since the floor?** If not, the difference is purely ours and there
+   is nothing to take. Getting this wrong turns a nine-file merge into a 217-file one.
+2. **Does the fork LACK any of upstream's changes?** Differing is not the same as being behind. A
+   file can carry an adaptation, so classify as needing a hand-merge, and already be complete. Seven
+   of nine did exactly that in the 1.86 move.
+3. **Would upstream's version COMPILE here?** A blob match against OLD upstream text does not prove
+   the fork is behind; it can mean the fork deliberately holds that form.
+   Worked example: `core/.../crypto/util/ScryptConfig.java` and
+   `core/.../jcajce/spec/XDHParameterSpec.java` each differ from `r1rv86` by one import —
+   `org.bouncycastle.asn1.{misc,edec}` here, `org.bouncycastle.internal.asn1.{misc,edec}` upstream.
+   Blob history calls both "behind" because the fork's line matches upstream's text from before
+   `fa9f381d5d` (2024-03-08, "move of ASN.1 edec, misc, nsri and rosstandart to util package"), the
+   commit that created the internal copies. This fork has no `org.bouncycastle.internal` package
+   under any module, so upstream's import would not compile. They are adaptations, not gaps.
+
+Two follow-ups out of the 1.86 move, neither a resync question:
+
+- Whether any of the 366 upstream files absent here should now be CARRIED rather than stay pruned.
+  That is a scope decision, Megan's, and no resync answers it.
+- The legacy PKCS#12 PBE MAC is a provider gap, not a fork one: JSL registers no `Mac` under a
+  digest OID, which is what `JcePKCS12MacCalculatorBuilder` looks up. Filed in `provider-gaps.md`
+  and raised against the provider repo.
 
 An import-based dependency check is not enough. It cannot see **same-package** references, and it
 passed two files clean that the compiler then rejected. Grep the upstream file for unqualified type
