@@ -1,6 +1,8 @@
 dependencies {
     implementation project(':core')
     implementation project(':util')
-    implementation project(':pkix')
+    // pkix is a TEST dependency only: :tls:compileJava succeeds without it and the jar holds no
+    // pkix reference, but the jsse and tls tests build certificates with it.
+    testImplementation project(':pkix')
     implementation files(rootProject.jostleProviderJar())
 }

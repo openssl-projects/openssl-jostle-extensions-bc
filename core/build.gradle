@@ -127,4 +127,4 @@ tasks.register('moduleLegsCheck') {
     }
 }
 
-tasks.named('check').configure { dependsOn tasks.named('moduleLegsCheck') }
+tasks.named('check').configure { dependsOn tasks.named('moduleLegsCheck'), rootProject.tasks.named('checkPublishedPoms') }

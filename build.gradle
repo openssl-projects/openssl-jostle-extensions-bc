@@ -41,6 +41,18 @@ ext.moduleRequires = [
     pg: ['core', 'util'], tls: ['core', 'util'], mail: ['core', 'util', 'pkix'],
 ]
 
+// A publication must not stage with a placeholder in it: every coordinate, licence and URL is
+// read through here, and a missing one fails the build with the property name rather than writing
+// "unspecified" into a POM someone later uploads.
+ext.publishProperty = { String name ->
+    def value = rootProject.findProperty(name)
+    if (value == null || value.toString().trim().isEmpty())
+    {
+        throw new GradleException("publication property '${name}' is not set; see gradle.properties")
+    }
+    return value.toString()
+}
+
 allprojects {
     tasks.withType(Javadoc).configureEach {
         options.addStringOption('Xdoclint:none', '-quiet')
@@ -203,6 +215,12 @@ subprojects {
     // The compat artifact name carries the -jsl qualifier (bccore-jsl, bcutil-jsl, ...).
     ext.artifactBaseName = "bc${project.name == 'core' ? 'core' : project.name}-jsl"
 
+    // Whether this module resolves anything through JCA and so needs the provider at all, and at
+    // which scope: tls exposes provider types in its own exported API and needs the jar to compile,
+    // so its consumers do too; the rest only resolve services at run time.
+    ext.usesProvider = project.name != 'util'
+    ext.providerScope = project.name == 'tls' ? 'compile' : 'runtime'
+
     afterEvaluate {
         // Deliberately sourceCompatibility/targetCompatibility rather than options.release: under
         // --release 9 java.activation is a real platform module exporting javax.activation, which
@@ -262,6 +280,12 @@ subprojects {
             archiveBaseName = project.ext.artifactBaseName
             archiveClassifier = 'sources'
             from sourceSets.main.allSource
+
+            // The descriptor is a source file like any other, and a sources jar without it cannot
+            // be recompiled into the jar it documents.
+            into('META-INF/versions/9') {
+                from sourceSets.java9.allSource
+            }
         }
 
         task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -274,6 +298,104 @@ subprojects {
             archives jar
             archives sourcesJar
             archives javadocJar
+        }
+
+        // Neither bc-java nor jostle ships Gradle Module Metadata; a .module file here would make
+        // these the only artifacts in the family that carry one.
+        tasks.withType(GenerateModuleMetadata).configureEach {
+            enabled = false
+        }
+
+        publishing {
+            publications {
+                maven(MavenPublication) {
+                    groupId = publishProperty('jslGroupId')
+                    artifactId = project.ext.artifactBaseName
+
+                    from components.java
+                    artifact sourcesJar
+                    artifact javadocJar
+
+                    pom {
+                        name = project.ext.artifactBaseName
+                        description = "${project.name} for the OpenSSL Jostle (JSL) provider, rebuilt from bc-java"
+                        // Providers, not values: these are read when a POM is generated, so an
+                        // ordinary build does not trip the guard on a property only publishing needs.
+                        url = providers.provider { rootProject.ext.publishProperty('jslProjectUrl') }
+
+                        licenses {
+                            license {
+                                name = providers.provider { rootProject.ext.publishProperty('jslLicenceName') }
+                                url = providers.provider { rootProject.ext.publishProperty('jslLicenceUrl') }
+                            }
+                        }
+
+                        // The copyright-holding groups, as jostle's POM names them. This repo has no
+                        // AUTHORS file; individual contributors are left to the revision history.
+                        developers {
+                            developer {
+                                id = 'bouncycastle'
+                                name = 'Legion of the Bouncy Castle Inc.'
+                                url = 'https://www.bouncycastle.org'
+                            }
+                            developer {
+                                id = 'openssl'
+                                name = 'OpenSSL Software Services, Inc.'
+                                url = 'https://www.openssl.org'
+                            }
+                        }
+
+                        scm {
+                            def scmUrl = providers.provider { rootProject.ext.publishProperty('jslScmUrl') }
+                            connection = scmUrl.map { "scm:git:${it}.git".toString() }
+                            developerConnection = scmUrl.map { "scm:git:${it}.git".toString() }
+                            url = scmUrl
+                        }
+
+                        // The provider is reached through JCA, so only tls names it at compile time
+                        // and `from components.java` would leave it out of the POMs of the modules
+                        // that call it at run time. Measured by JCA service references in main:
+                        // core 13, pkix 84, pg 23, tls 32, mail 2, util 0 - util is asn.1 only and
+                        // resolves nothing, so it alone does not declare the provider. Consumers add
+                        // the arch bundle for their platform as jostle's README documents; this names
+                        // the umbrella POM, with no classifier.
+                        if (project.ext.usesProvider)
+                        {
+                            withXml {
+                                def root = asNode()
+                                def existing = root.get('dependencies')
+                                def deps = existing.isEmpty() ? root.appendNode('dependencies') : existing.get(0)
+                                def node = deps.appendNode('dependency')
+                                node.appendNode('groupId', 'org.openssl.jostle')
+                                node.appendNode('artifactId', 'openssl-jostle')
+                                node.appendNode('version', rootProject.jostleVersion)
+                                node.appendNode('scope', project.ext.providerScope)
+                            }
+                        }
+                    }
+                }
+            }
+
+            repositories {
+                maven {
+                    // Staging only: render the repository tree, upload nothing. The publish job
+                    // PGP-signs it on the HSM and uploads. Snapshots stage too, so they cannot skip
+                    // signing.
+                    name = 'staging'
+                    def remote = rootProject.findProperty('centralReleaseUrl')
+                    url = remote ?: layout.buildDirectory.dir('staging-deploy').get().asFile.toURI().toString()
+
+                    // Gradle refuses to attach an authentication scheme to a file:// repository and
+                    // validates the credentials even when it would never use them.
+                    if (remote)
+                    {
+                        credentials {
+                            username = System.getenv('CENTRAL_USERNAME')
+                            password = System.getenv('CENTRAL_PASSWORD')
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -403,6 +525,138 @@ tasks.register('checkBundlePackages') {
 }
 
 subprojects { sp -> sp.tasks.named('check').configure { dependsOn rootProject.tasks.named('checkBundlePackages') } }
+
+// A POM that disagrees with the descriptor beside it is worse than either alone: the module path
+// and the dependency resolver then hand a consumer different graphs. This derives the expectation
+// from module-info.java, so the descriptors stay the single source of truth. `requires static` is
+// optional by definition, so those coordinates are permitted but not demanded.
+tasks.register('checkPublishedPoms') {
+    description = 'Asserts each generated POM declares exactly what its module descriptor requires.'
+    group = 'verification'
+
+    // jslProjectUrl and jslScmUrl are deliberately unset until this fork's public home is decided,
+    // and generating a POM without them fails by design. So the POM tasks are depended on only when
+    // the publication is complete: otherwise this skips loudly rather than failing `check` for
+    // everyone, and it starts running the moment they are set.
+    def unset = ['jslGroupId', 'jslLicenceName', 'jslLicenceUrl', 'jslProjectUrl', 'jslScmUrl'].findAll {
+        def v = rootProject.findProperty(it)
+        v == null || v.toString().trim().isEmpty()
+    }
+
+    if (unset.isEmpty())
+    {
+        dependsOn subprojects.collect { "${it.path}:generatePomFileForMavenPublication" }
+    }
+
+    onlyIf {
+        if (!unset.isEmpty())
+        {
+            logger.lifecycle("SKIPPED checkPublishedPoms: publication properties unset (${unset.join(', ')})")
+        }
+        unset.isEmpty()
+    }
+
+    def modules = subprojects.collectEntries { sp ->
+        [(sp.name): [descriptor   : sp.file('src/main/java9/module-info.java'),
+                     pom          : sp.layout.buildDirectory.file('publications/maven/pom-default.xml'),
+                     usesProvider : sp.ext.usesProvider]]
+    }
+    def group = rootProject.findProperty('jslGroupId')?.toString()
+    def providerCoord = 'org.openssl.jostle:openssl-jostle'
+
+    // Module name -> coordinate. The javax pair are the automatic-module names mail's descriptor
+    // carries; the java.* spellings of them resolve to no artifact at all.
+    def coordinateOf = { String moduleName ->
+        if (moduleName.startsWith('org.bouncycastle.jsl.'))
+        {
+            def shortName = moduleName.substring('org.bouncycastle.jsl.'.length())
+            return "${group}:bc${shortName}-jsl".toString()
+        }
+        if (moduleName == 'org.openssl.jostle.prov') { return providerCoord }
+        if (moduleName == 'mail') { return 'javax.mail:mail' }
+        if (moduleName == 'activation') { return 'javax.activation:activation' }
+        return null
+    }
+
+    doLast {
+        def problems = []
+
+        modules.each { name, m ->
+            def required = [] as Set
+            def optional = [] as Set
+
+            // Derived from the descriptor, never from the flag that wrote the POM: a `requires
+            // transitive` on the provider means its types are in this module's exported API, so a
+            // consumer compiling against this module compiles against the provider too.
+            def expectedProviderScope = 'runtime'
+
+            m.descriptor.eachLine { line ->
+                def match = line.trim() =~ /^requires\s+(static\s+|transitive\s+)*([A-Za-z0-9_.]+)\s*;/
+                if (match.find())
+                {
+                    def moduleName = match.group(2)
+                    if (moduleName.startsWith('java.') && !moduleName.startsWith('java.mail')
+                            && !moduleName.startsWith('java.activation'))
+                    {
+                        return
+                    }
+                    def coordinate = coordinateOf(moduleName)
+                    if (coordinate == null)
+                    {
+                        return
+                    }
+                    if (coordinate == providerCoord && line.contains('requires transitive'))
+                    {
+                        expectedProviderScope = 'compile'
+                    }
+
+                    (line.contains('requires static') ? optional : required) << coordinate
+                }
+            }
+
+            if (m.usesProvider)
+            {
+                required << providerCoord
+            }
+
+            def declared = [] as Set
+            def scopes = [:]
+            def pom = new groovy.xml.XmlSlurper().parse(m.pom.get().asFile)
+            pom.dependencies.dependency.each { d ->
+                def coordinate = "${d.groupId.text()}:${d.artifactId.text()}".toString()
+                declared << coordinate
+                scopes[coordinate] = d.scope.text()
+            }
+
+            // The provider's scope is the difference between a consumer that compiles against this
+            // module and one that merely runs it.
+            if (m.usesProvider && scopes[providerCoord] != expectedProviderScope)
+            {
+                problems << "${name}: provider dependency is scope '${scopes[providerCoord]}'," +
+                    " but the descriptor asks for '${expectedProviderScope}'"
+            }
+
+            def missing = required - declared
+            def unexpected = declared - required - optional
+
+            if (!missing.isEmpty())
+            {
+                problems << "${name}: POM is missing ${missing.sort()}, which its descriptor requires"
+            }
+            if (!unexpected.isEmpty())
+            {
+                problems << "${name}: POM declares ${unexpected.sort()}, which its descriptor does not require"
+            }
+        }
+
+        if (!problems.isEmpty())
+        {
+            throw new GradleException("published POM check failed:\n  " + problems.join("\n  "))
+        }
+
+        logger.lifecycle("published POM check: ${modules.size()} POMs agree with their module descriptors")
+    }
+}
 
 // Convenience accessor for the jostle provider jar used by subprojects.
 ext.jostleProviderJar = jostleJar

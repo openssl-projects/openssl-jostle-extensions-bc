@@ -1,5 +1,6 @@
 dependencies {
     implementation project(':core')
     implementation project(':util')
-    implementation files(rootProject.jostleProviderJar())
+    // No provider jar: pg:compileJava succeeds without it; the provider is reached
+    // through JCA at run time, not by reference. tls is the one module that names it.
 }

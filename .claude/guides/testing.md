@@ -742,6 +742,38 @@ directory — measured against the jostle jar, which is already multi-release: 5
 such as `META-INF.versions.25.org.openssl.jostle.jcajce.provider`. It now skips `META-INF/` and any
 `module-info.class`.
 
+## Published POMs
+
+`./gradlew checkPublishedPoms` asserts each generated POM declares exactly what the module
+descriptor beside it requires, so the module path and the dependency resolver cannot hand a consumer
+different graphs. The expectation is derived from `module-info.java`, never written twice.
+`requires static` is optional by definition, so those coordinates are permitted but not demanded;
+`java.*` is ignored; the provider coordinate is expected wherever the module reaches JCA.
+
+It SKIPS loudly while `jslProjectUrl` and `jslScmUrl` are unset — this fork's public home is not
+decided, and a POM generated without them would carry a placeholder someone later uploads. The
+publish path itself still fails loudly, naming the missing property. The check starts running the
+moment they are set.
+
+Scope is asserted too: a `requires transitive` on the provider means its types are in that module's
+exported API, so a consumer compiling against the module compiles against the provider — tls, and
+only tls. The rest get `runtime`.
+
+Falsified both ways 2026-09-14: re-adding `implementation project(':pkix')` to tls gives "POM
+declares [org.bouncycastle.jsl:bcpkix-jsl], which its descriptor does not require"; pointing util's
+descriptor at pkix instead of core gives the missing-and-unexpected pair; flipping tls's provider
+scope gives "provider dependency is scope 'runtime', but the descriptor asks for 'compile'".
+
+**An expectation taken from the producer proves nothing.** The scope assertion first read the same
+`ext.providerScope` flag that wrote the POM, so flipping that flag moved both sides together and the
+falsification passed — a green that asserted only that a value equals itself. Every expectation in
+this task is now derived from `module-info.java`, which nothing in the publication path writes.
+
+**What a compile-only measurement misses.** `:tls:compileJava` succeeds without pkix and the built
+jar holds no pkix reference, so the dependency was dropped — and `:tls:compileTestJava` then failed,
+because the jsse and tls tests build certificates with it. `implementation` feeds the test compile
+classpath too. It is now `testImplementation`, which the tests need and the POM does not carry.
+
 ## Known gaps
 
 - ~~Three classic CMS classes gated wholesale under FIPS~~ — **done.** The class-level `isFips()`
