@@ -6,3 +6,119 @@
 // Unlike bc-java's core, this module carries no jmh benchmarks, no `application`
 // entry point and no SQIsign multi-release (jdk1.9) overlay: crypto is delegated
 // to OpenSSL through the JSL provider, so those software paths are not built here.
+
+// ===================== E3: module-path legs =====================
+//
+// On the class path the module system is off: a split package resolves and a wrong
+// Automatic-Module-Name is never read. These legs run the BUILT jars on --module-path, with a
+// class-path control cell asserting the inverse so `check` stays green. Sources sit at
+// rootProject modulecheck/ because the guard is the project's; the source set is here for the
+// java plugin.
+
+def moduleLegJars = {
+    ->
+    rootProject.subprojects.collect { it.tasks.named('jar').get().archiveFile.get().asFile } +
+        [rootProject.jostleProviderJar()]
+}
+
+def moduleLegNames = [
+    'org.bouncycastle.jsl.core', 'org.bouncycastle.jsl.util', 'org.bouncycastle.jsl.pkix',
+    'org.bouncycastle.jsl.pg', 'org.bouncycastle.jsl.tls', 'org.bouncycastle.jsl.mail',
+    'org.openssl.jostle.prov'
+].join(',')
+
+configurations {
+    moduleLegHarness
+}
+
+dependencies {
+    moduleLegHarness 'junit:junit:4.13.2'
+}
+
+sourceSets {
+    moduleTest {
+        java {
+            srcDirs = [rootProject.file('modulecheck/src/main/java')]
+        }
+        compileClasspath = configurations.moduleLegHarness + files({ moduleLegJars() })
+    }
+}
+
+tasks.named('compileModuleTestJava').configure {
+    // 11 is the floor these legs run at, and the module path starts at 9.
+    options.release = 11
+    dependsOn rootProject.subprojects.collect { it.tasks.named('jar') }
+}
+
+// --enable-native-access names a MODULE, so the class-path cell names ALL-UNNAMED instead. JDK 11
+// rejects the flag outright and refuses to start; the threshold is 17, measured.
+def registerModuleLeg = {
+    String name, int jdk, boolean onModulePath ->
+    tasks.register(name, Test) {
+        group = 'verification'
+        description = "module-path leg: jdk${jdk}, jars on the " + (onModulePath ? 'module path' : 'class path (control)')
+
+        String envVar = "BC_JDK${jdk}"
+        onlyIf {
+            boolean present = System.getenv(envVar) != null
+            if (!present)
+            {
+                logger.lifecycle("SKIPPED ${name}: ${envVar} unset")
+            }
+            present
+        }
+
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(jdk)
+        }
+
+        testClassesDirs = sourceSets.moduleTest.output.classesDirs
+        classpath = sourceSets.moduleTest.output + configurations.moduleLegHarness +
+            (onModulePath ? files() : files({ moduleLegJars() }))
+
+        systemProperty 'jsl.module.cell', onModulePath ? 'modulepath' : 'classpath'
+        systemProperty 'jsl.module.jdk', jdk
+
+        // The root build sets this false for every Test task, because core has no tests of its
+        // own. Here an empty leg is the failure: it would report BUILD SUCCESSFUL having proved
+        // nothing about the module path.
+        failOnNoDiscoveredTests = true
+
+        doFirst {
+            if (onModulePath)
+            {
+                jvmArgs('--module-path', moduleLegJars().join(File.pathSeparator),
+                        '--add-modules', moduleLegNames)
+            }
+            if (jdk >= 17)
+            {
+                jvmArgs('--enable-native-access=' + (onModulePath ? 'org.openssl.jostle.prov' : 'ALL-UNNAMED'))
+            }
+        }
+    }
+}
+
+def moduleLegs = ['moduleLeg11': [11, true], 'moduleLeg25': [25, true], 'moduleLegControl25': [25, false]]
+moduleLegs.each { legName, cfg -> registerModuleLeg(legName, (int)cfg[0], (boolean)cfg[1]) }
+
+// An unset BC_JDK made jostle's legs vanish without a word before MT-96. Skipping one cell is
+// allowed; skipping every cell means the guard did not run at all and must not read as green.
+tasks.register('moduleLegsCheck') {
+    group = 'verification'
+    description = 'every module-path leg, failing if none of them could run'
+    dependsOn moduleLegs.keySet()
+
+    def legNames = moduleLegs.keySet() as List
+
+    doLast {
+        def skipped = legNames.findAll { tasks.named(it).get().state.skipped }
+        if (skipped.size() == legNames.size())
+        {
+            throw new GradleException(
+                "every module-path leg was skipped (" + skipped.join(', ') + "); set BC_JDK11 and BC_JDK25")
+        }
+        logger.lifecycle("module-path legs: ${legNames.size() - skipped.size()} of ${legNames.size()} ran")
+    }
+}
+
+tasks.named('check').configure { dependsOn tasks.named('moduleLegsCheck') }

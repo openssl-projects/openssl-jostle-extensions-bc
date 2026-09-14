@@ -683,6 +683,47 @@ A test passing a provider **instance** (`setProvider(new JostleProvider())`, as 
 bypasses the name registry. Name-based stand-ins cannot intercept it. That is itself proof the call
 reaches that object.
 
+## Module-path legs
+
+`./gradlew :core:moduleLegsCheck` runs the six built jars plus the jostle jar as a modular consumer
+sees them. Three cells: `moduleLeg11` and `moduleLeg25` put the seven on `--module-path` with the
+test as an unnamed-module consumer; `moduleLegControl25` puts the same seven on the class path and
+asserts the INVERSE — every type in the unnamed module, no module name. The control is what makes
+the other two about the module path rather than about the types, and it is green by design so it
+can sit in `check`.
+
+The source is `modulecheck/src/main/java`, beside `testsupport/`, because the guard belongs to the
+project rather than to core; the source set and tasks live in `core/build.gradle` because they need
+the java plugin.
+
+Three things only these legs can see: a split package (fatal at boot-layer resolution, invisible on
+the class path), a changed `Automatic-Module-Name` (the names are the API a modular consumer types,
+and they are kept when real descriptors land), and whether the provider still answers across the
+module boundary once resolution has succeeded.
+
+**Falsify the split-package assertion like this.** Add `org.bouncycastle.asn1.edec.*` to util as an
+`Export-Package` header in the root `build.gradle` manifest block, so bnd pulls core's copy in, then
+run `:core:moduleLeg25`. Expect `java.lang.module.ResolutionException: Modules
+org.bouncycastle.jsl.core and org.bouncycastle.jsl.util export package org.bouncycastle.asn1.edec`.
+Do not falsify by editing the built jar: the leg depends on the `jar` tasks, so Gradle rebuilds it
+and wipes the plant before the leg runs. Measured 2026-09-14: RED on both JDK 11 and 25, and the
+class-path control stays GREEN, which is the whole point.
+
+`--enable-native-access` names a module, so the control cell passes `ALL-UNNAMED` instead. JDK 11
+rejects the flag outright and refuses to start, which says nothing about native access; the
+threshold is 17, measured across the local toolchains.
+
+Every cell sets `failOnNoDiscoveredTests = true`, overriding the root default. For the other legs an
+empty run is expected (core carries no tests of its own); here it would report BUILD SUCCESSFUL
+having proved nothing. A cell whose `BC_JDK<n>` is unset prints `SKIPPED <cell>` at lifecycle level,
+and `moduleLegsCheck` fails if every cell was skipped — an unset variable made jostle's legs vanish
+silently before MT-96.
+
+When E2 replaces the automatic modules with real descriptors, mail's `requires static java.mail /
+java.activation` clause is first exercised here, and the leg may need the javax jars on the path.
+The legs also start asserting `isNamed()` against real descriptors rather than derived names, which
+is how you tell the descriptors took effect instead of the jars quietly staying automatic.
+
 ## Known gaps
 
 - ~~Three classic CMS classes gated wholesale under FIPS~~ — **done.** The class-level `isFips()`
