@@ -1069,21 +1069,26 @@ public class NewEnvelopedDataTest
      * both failed on the KDF OID, before the digest was ever looked at.
      */
 
-    // As testRsaKemKdf2Sha256Aes256Wrap, with SHA-384.
-    //
-    // This row is a JSL round trip ONLY, and cannot become a cross-writer pin. BC's own
-    // RSA-KTS-KEM-KWS refuses SHA-384 for both KDF2 and KDF3 - "unrecognized digest OID:
-    // 2.16.840.1.101.3.4.2.2", which is NISTObjectIdentifiers.id_sha384, resolved from the
-    // constants this core ships - while accepting SHA-256 and SHA-512, and accepting HKDF with all
-    // three. So there is no BC-produced artefact to check ourselves against for this one cell;
-    // jostle covers it against BC's low-level generator in its own agreement test instead. That
-    // BC refusal is an upstream note, not a jostle defect.
-    public void testRsaKemKdf2Sha384Aes256Wrap()
+    // KDF2 and KDF3 admit SHA-256, SHA-512, SHAKE128 and SHAKE256 and nothing else; SHA-384
+    // reaches a KDF only through its own HKDF OID, covered by testRsaKemHkdfSha384Aes256Wrap.
+    // BouncyCastle pins the same set (KdfUtil:243-246 in 1.86) and JSL follows it (MT-87), so a
+    // widened set is a defect on either side. Both surface CMSException here, measured on 1.86;
+    // the message is ours.
+    public void testRsaKemKdf2Sha384Rejected()
         throws Exception
     {
-        doRsaKemRoundTrip(
-            new AlgorithmIdentifier(X9ObjectIdentifiers.id_kdf_kdf2, new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha384, DERNull.INSTANCE)),
-            CMSAlgorithm.AES256_WRAP);
+        try
+        {
+            doRsaKemRoundTrip(
+                new AlgorithmIdentifier(X9ObjectIdentifiers.id_kdf_kdf2, new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha384, DERNull.INSTANCE)),
+                CMSAlgorithm.AES256_WRAP);
+
+            fail("KDF2 with SHA-384 was accepted");
+        }
+        catch (CMSException e)
+        {
+            assertTrue(e.getMessage(), e.getMessage().contains("unsupported KDF digest 2.16.840.1.101.3.4.2.2"));
+        }
     }
 
     // As testRsaKemKdf2Sha256Aes256Wrap, with SHA-512.

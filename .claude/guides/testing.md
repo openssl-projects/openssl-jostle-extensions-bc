@@ -87,6 +87,18 @@ of them (`testKem*` in `NewEnvelopedDataTest`) are the only pins for the `CMSEnv
 "Malformed content." guard, and their fixture needs ML-KEM - so on a 3.1.2 module they gate and
 that guard is exercised on JSL and a 3.5.8 module only.
 
+**KDF2 and KDF3 admit four digests and no more:** SHA-256, SHA-512, SHAKE128, SHAKE256. SHA-384
+reaches a KDF only through its own HKDF OID. Both providers pin the same set - jostle by MT-87
+(commit `368ded68`), BouncyCastle 1.86 at `prov/.../util/KdfUtil.java:243-246` - so a widened set is
+a defect on whichever side widened it. `NewEnvelopedDataTest.testRsaKemKdf2Sha384Rejected` pins the
+refusal; it was a passing round-trip row until `368ded68` refused the digest BouncyCastle already
+refused.
+
+Exception parity, measured 2026-09-14 against BC 1.86 rather than recalled: both surface
+`CMSException` at the CMS level, wrapped `OperatorException` twice. The innermost cause differs -
+BC `InvalidKeyException`, JSL `InvalidAlgorithmParameterException` - so the pin asserts the surfaced
+type and our own message, not the root type.
+
 The count and this table must agree at every commit. Recount with
 `grep -rh 'public void DISABLED_test' --include="*.java" */src/test | wc -l` rather than trusting
 the prose: it read **62** while the real figure was 57, an intermediate value nobody corrected.
