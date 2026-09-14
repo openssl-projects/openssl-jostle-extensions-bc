@@ -107,23 +107,27 @@ def registerModuleLeg = {
 def moduleLegs = ['moduleLeg11': [11, true], 'moduleLeg25': [25, true], 'moduleLegControl25': [25, false]]
 moduleLegs.each { legName, cfg -> registerModuleLeg(legName, (int)cfg[0], (boolean)cfg[1]) }
 
-// An unset BC_JDK made jostle's legs vanish without a word before MT-96. Skipping one cell is
-// allowed; skipping every cell means the guard did not run at all and must not read as green.
+// An unset BC_JDK made jostle's legs vanish without a word before MT-96. One missing toolchain is
+// allowed; all of them missing means the guard covered nothing and must not read as green.
+//
+// The condition is the TOOLCHAIN, not the task state. Gradle reports an UP-TO-DATE task as skipped,
+// so asking the tasks would fail a second `check` in a row - up to date means the leg passed on
+// these very inputs, which is the opposite of not having run.
 tasks.register('moduleLegsCheck') {
     group = 'verification'
-    description = 'every module-path leg, failing if none of them could run'
+    description = 'every module-path leg, failing if no toolchain was available to run any of them'
     dependsOn moduleLegs.keySet()
 
-    def legNames = moduleLegs.keySet() as List
+    def jdks = moduleLegs.collectEntries { legName, cfg -> [(legName): "BC_JDK${cfg[0]}".toString()] }
 
     doLast {
-        def skipped = legNames.findAll { tasks.named(it).get().state.skipped }
-        if (skipped.size() == legNames.size())
+        def unavailable = jdks.findAll { legName, envVar -> System.getenv(envVar) == null }
+        if (unavailable.size() == jdks.size())
         {
             throw new GradleException(
-                "every module-path leg was skipped (" + skipped.join(', ') + "); set BC_JDK11 and BC_JDK25")
+                "no module-path leg could run (" + unavailable.keySet().join(', ') + "); set BC_JDK11 and BC_JDK25")
         }
-        logger.lifecycle("module-path legs: ${legNames.size() - skipped.size()} of ${legNames.size()} ran")
+        logger.lifecycle("module-path legs: ${jdks.size() - unavailable.size()} of ${jdks.size()} had a toolchain")
     }
 }
 
