@@ -1,0 +1,61 @@
+// `requires transitive` means types of that module appear in this module's exported API,
+// as measured by jdeps over the built jar.
+module org.bouncycastle.jsl.core
+{
+    requires java.logging;
+
+    exports org.bouncycastle;
+    exports org.bouncycastle.asn1;
+    exports org.bouncycastle.asn1.anssi;
+    exports org.bouncycastle.asn1.bc;
+    exports org.bouncycastle.asn1.cryptlib;
+    exports org.bouncycastle.asn1.cryptopro;
+    exports org.bouncycastle.asn1.edec;
+    exports org.bouncycastle.asn1.gm;
+    exports org.bouncycastle.asn1.gnu;
+    exports org.bouncycastle.asn1.iana;
+    exports org.bouncycastle.asn1.iso;
+    exports org.bouncycastle.asn1.misc;
+    exports org.bouncycastle.asn1.nist;
+    exports org.bouncycastle.asn1.ocsp;
+    exports org.bouncycastle.asn1.oiw;
+    exports org.bouncycastle.asn1.pkcs;
+    exports org.bouncycastle.asn1.plants;
+    exports org.bouncycastle.asn1.rosstandart;
+    exports org.bouncycastle.asn1.sec;
+    exports org.bouncycastle.asn1.teletrust;
+    exports org.bouncycastle.asn1.util;
+    exports org.bouncycastle.asn1.x500;
+    exports org.bouncycastle.asn1.x500.style;
+    exports org.bouncycastle.asn1.x509;
+    exports org.bouncycastle.asn1.x509.qualified;
+    exports org.bouncycastle.asn1.x509.sigi;
+    exports org.bouncycastle.asn1.x9;
+    exports org.bouncycastle.crypto;
+    exports org.bouncycastle.crypto.ec;
+    exports org.bouncycastle.crypto.io;
+    exports org.bouncycastle.crypto.params;
+    exports org.bouncycastle.crypto.util;
+    exports org.bouncycastle.i18n;
+    exports org.bouncycastle.i18n.filter;
+    exports org.bouncycastle.iana;
+    exports org.bouncycastle.jcajce;
+    exports org.bouncycastle.jcajce.interfaces;
+    exports org.bouncycastle.jcajce.io;
+    exports org.bouncycastle.jcajce.provider.util;
+    exports org.bouncycastle.jcajce.spec;
+    exports org.bouncycastle.jcajce.util;
+    exports org.bouncycastle.math;
+    exports org.bouncycastle.math.ec;
+    exports org.bouncycastle.math.ec.custom.djb;
+    exports org.bouncycastle.math.ec.custom.gm;
+    exports org.bouncycastle.math.ec.custom.sec;
+    exports org.bouncycastle.math.ec.endo;
+    exports org.bouncycastle.math.field;
+    exports org.bouncycastle.math.raw;
+    exports org.bouncycastle.util;
+    exports org.bouncycastle.util.encoders;
+    exports org.bouncycastle.util.io;
+    exports org.bouncycastle.util.io.pem;
+    exports org.bouncycastle.util.test;
+}

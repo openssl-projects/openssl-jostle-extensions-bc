@@ -34,6 +34,13 @@ ext.bundle_version = deriveOSGIVersion(version.toString())
 // The exclusion mirrors bc-java prov/build.gradle:261; the fork carries none today.
 ext.osgiExportPattern = '!org.bouncycastle.internal.*,org.bouncycastle.*'
 
+// What each module-info.java requires of the others, so compileJava9Java can put those jars on
+// --module-path. Kept beside the descriptors it serves; the descriptors remain the source of truth.
+ext.moduleRequires = [
+    core: [], util: ['core'], pkix: ['core', 'util'],
+    pg: ['core', 'util'], tls: ['core', 'util'], mail: ['core', 'util', 'pkix'],
+]
+
 allprojects {
     tasks.withType(Javadoc).configureEach {
         options.addStringOption('Xdoclint:none', '-quiet')
@@ -69,6 +76,28 @@ subprojects {
             java {
                 srcDir rootProject.file('testsupport/src/main/java')
             }
+        }
+    }
+
+    // module-info.java needs release 9 and main compiles at release 8, so the descriptor gets its
+    // own source set and is shipped under META-INF/versions/9 where a release-8 consumer never
+    // looks. Extra module-path entries (the provider jar, mail's javax jars and stubs) come from
+    // java9ExtraModulePath, which a module sets for itself.
+    sourceSets {
+        java9 {
+            java {
+                srcDirs = ['src/main/java9']
+            }
+        }
+    }
+
+    // A closure, not a list: jostleProviderJar() is defined at the foot of this file, after
+    // this block is evaluated.
+    ext.java9ExtraModulePath = { -> [rootProject.jostleProviderJar()] }
+
+    dependencies {
+        java9Implementation files(sourceSets.main.output.classesDirs) {
+            builtBy compileJava
         }
     }
 
@@ -175,8 +204,36 @@ subprojects {
     ext.artifactBaseName = "bc${project.name == 'core' ? 'core' : project.name}-jsl"
 
     afterEvaluate {
+        // Deliberately sourceCompatibility/targetCompatibility rather than options.release: under
+        // --release 9 java.activation is a real platform module exporting javax.activation, which
+        // collides with the `activation` automatic module mail's descriptor also names. Safe here
+        // because this source set holds module-info.java alone and compiles against no platform API.
+        tasks.named('compileJava9Java').configure {
+            sourceCompatibility = 9
+            targetCompatibility = 9
+            options.sourcepath = files(['src/main/java', 'src/main/java9'])
+            options.compilerArgs << '-implicit:none'
+
+            def required = rootProject.ext.moduleRequires[project.name]
+            required.each { dependsOn ":${it}:jar" }
+
+            doFirst {
+                def entries = required.collect {
+                    rootProject.project(":${it}").tasks.getByName('jar').archiveFile.get().asFile.path
+                } + project.ext.java9ExtraModulePath().collect { it.toString() }
+
+                options.compilerArgs += ['--module-path', entries.join(File.pathSeparator)]
+            }
+        }
+
         jar {
             archiveBaseName = project.ext.artifactBaseName
+
+            // The descriptor is read by a JDK 9+ consumer only; release-8 consumers see the jar
+            // exactly as before.
+            into('META-INF/versions/9') {
+                from sourceSets.java9.output
+            }
 
             // OSGi bundle headers (processed by the bnd builder plugin).
             String v = rootProject.ext.bundle_version
@@ -191,7 +248,7 @@ subprojects {
                 "Specification-Version"     : "1.0",
                 "Implementation-Vendor"     : "BouncyCastle.org",
                 "Implementation-Version"    : project.version,
-                "Automatic-Module-Name"     : "org.bouncycastle.jsl.${project.name}",
+                "Multi-Release"             : "true",
                 "Bundle-Name"               : project.ext.artifactBaseName,
                 "Bundle-SymbolicName"       : project.ext.artifactBaseName,
                 "Bundle-Version"            : v,
@@ -271,7 +328,12 @@ tasks.register('checkBundlePackages') {
 
             new java.util.jar.JarFile(loc.jar.get().asFile).withCloseable { jf ->
                 jf.entries().each { e ->
-                    if (e.name.endsWith('.class') && e.name.contains('/'))
+                    // META-INF/versions/<n>/ holds the module descriptor and any multi-release
+                    // overlay; deriving a package from those paths invents one per version
+                    // directory (586 of them on the jostle jar, measured).
+                    if (e.name.endsWith('.class') && e.name.contains('/')
+                            && !e.name.startsWith('META-INF/')
+                            && !e.name.endsWith('/module-info.class'))
                     {
                         inJar << e.name.substring(0, e.name.lastIndexOf('/')).replace('/', '.')
                     }

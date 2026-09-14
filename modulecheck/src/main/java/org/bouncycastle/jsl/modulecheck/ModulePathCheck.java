@@ -5,9 +5,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Method;
 import java.security.MessageDigest;
 import java.security.Provider;
 import java.security.Security;
+import java.util.ServiceLoader;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cmp.PKIBody;
@@ -80,6 +84,98 @@ public class ModulePathCheck
                 assertNull(type.getName() + " carries a module name on the class path", module.getName());
             }
         }
+    }
+
+    /**
+     * A descriptor that exports less than the jar holds is invisible until a consumer reaches for
+     * the missing package. The bundle guard asserts the jar's contents against what the module
+     * compiled; this asserts the descriptor against the same set, so the two cannot drift.
+     */
+    @Test
+    public void exportsMatchContents()
+    {
+        for (Object[] row : MODULES)
+        {
+            Class<?> type = (Class<?>)row[0];
+            Module module = type.getModule();
+
+            if (!ON_MODULE_PATH)
+            {
+                assertNull(type.getName() + " has a descriptor on the class path", module.getDescriptor());
+                continue;
+            }
+
+            if (!module.getName().startsWith("org.bouncycastle.jsl."))
+            {
+                continue;
+            }
+
+            Set<String> exported = new TreeSet<String>();
+            for (java.lang.module.ModuleDescriptor.Exports e : module.getDescriptor().exports())
+            {
+                exported.add(e.source());
+            }
+
+            // Same exclusion as the bnd export pattern.
+            Set<String> held = new TreeSet<String>();
+            for (String p : module.getPackages())
+            {
+                if (!p.startsWith("org.bouncycastle.internal."))
+                {
+                    held.add(p);
+                }
+            }
+
+            assertEquals(module.getName(), held, exported);
+        }
+    }
+
+    /**
+     * The descriptor's provides clause and the class-path services file must agree, or the JSSE
+     * provider is discoverable on one path and not the other.
+     */
+    @Test
+    public void jsseProviderIsDiscoverableAsAService()
+    {
+        boolean found = false;
+
+        for (ServiceLoader.Provider<Provider> candidate : ServiceLoader.load(Provider.class).stream()
+            .collect(java.util.stream.Collectors.toList()))
+        {
+            if ("org.bouncycastle.jsse.provider.BouncyCastleJsseProvider".equals(candidate.type().getName()))
+            {
+                found = true;
+            }
+        }
+
+        assertTrue("BouncyCastleJsseProvider was not found by ServiceLoader", found);
+    }
+
+    /**
+     * mail's javax dependences are {@code requires static}, so they resolve only when named. This
+     * fails with NoClassDefFoundError rather than an assertion if they were not, which is the
+     * point: an identity pin on a type that extends java.lang.Exception would pass while the
+     * module was unusable.
+     */
+    @Test
+    public void mailReachesJavaxMail()
+        throws Exception
+    {
+        Class<?> smimeUtil = Class.forName("org.bouncycastle.mail.smime.SMIMEUtil");
+        boolean touches = false;
+
+        for (Method method : smimeUtil.getDeclaredMethods())
+        {
+            for (Class<?> parameter : method.getParameterTypes())
+            {
+                if (parameter.getName().startsWith("javax.mail"))
+                {
+                    touches = true;
+                }
+            }
+        }
+
+        assertTrue("SMIMEUtil resolved no javax.mail parameter type", touches);
     }
 
     /**

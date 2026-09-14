@@ -719,10 +719,28 @@ having proved nothing. A cell whose `BC_JDK<n>` is unset prints `SKIPPED <cell>`
 and `moduleLegsCheck` fails if every cell was skipped — an unset variable made jostle's legs vanish
 silently before MT-96.
 
-When E2 replaces the automatic modules with real descriptors, mail's `requires static java.mail /
-java.activation` clause is first exercised here, and the leg may need the javax jars on the path.
-The legs also start asserting `isNamed()` against real descriptors rather than derived names, which
-is how you tell the descriptors took effect instead of the jars quietly staying automatic.
+**`requires static` is not resolved by default.** mail's javax dependences are declared under all
+four names those libraries go by (`mail`, `java.mail`, `activation`, `java.activation`) and all four
+are `static`, because a hard requires on any one breaks the rest. Static means optional at run time:
+the module resolves without them and its smime types then fail on use. So the legs put the javax
+jars on the module path AND name them in `--add-modules`. Falsified 2026-09-14 by dropping
+`mail,activation` from `--add-modules`: `mailReachesJavaxMail` fails with `NoClassDefFoundError`,
+not an assertion. An identity pin alone would not have caught it — `SMIMEException` extends
+`java.lang.Exception` and loads happily in a module that cannot reach javax.mail.
+
+The other two assertions and how they were falsified: `exportsMatchContents` compares each
+descriptor's `exports()` against `Module.getPackages()` minus the `internal` prefix, so the
+descriptor cannot drift from what the bundle guard says the jar holds — removing one `exports` line
+from util's descriptor turns it RED. `jsseProviderIsDiscoverableAsAService` finds
+`BouncyCastleJsseProvider` through `ServiceLoader` on all three cells; removing the `provides`
+clause from tls's descriptor turns the module-path cells RED and leaves the control GREEN, which is
+the point of shipping the class-path services file beside it.
+
+**The bundle guard had to learn about multi-release jars.** `checkBundlePackages` derived a package
+from every `.class` entry containing a slash, which on a multi-release jar invents one per version
+directory — measured against the jostle jar, which is already multi-release: 586 phantom packages
+such as `META-INF.versions.25.org.openssl.jostle.jcajce.provider`. It now skips `META-INF/` and any
+`module-info.class`.
 
 ## Known gaps
 

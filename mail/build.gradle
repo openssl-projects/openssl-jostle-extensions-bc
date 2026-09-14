@@ -6,3 +6,33 @@ dependencies {
     implementation group: 'javax.mail', name: 'mail', version: '1.4'
     implementation group: 'javax.activation', name: 'activation', version: '1.1.1'
 }
+
+// module-info declares javax.mail/javax.activation under all four names those libraries are known
+// by, so all four must be observable when it compiles. Only the 1.4.x pair can be supplied for
+// real - two automatic modules exporting javax.mail would be a resolution error - so the java.*
+// names are empty stub jars, named only by their file names. They carry no classes and are neither
+// needed nor shipped at run time.
+def moduleNameStubDir = layout.buildDirectory.dir('module-name-stubs')
+
+def moduleNameStubJars = tasks.register('moduleNameStubJars') {
+    description = 'Empty jars supplying the java.mail and java.activation module names at compile time.'
+}
+
+['java.mail', 'java.activation'].each { stubName ->
+    def stub = tasks.register("stubJar_${stubName.replace('.', '_')}", Jar) {
+        archiveFileName = "${stubName}.jar"
+        destinationDirectory = moduleNameStubDir
+    }
+    moduleNameStubJars.configure { dependsOn stub }
+}
+
+ext.java9ExtraModulePath = {
+    ->
+    [rootProject.jostleProviderJar()] +
+        configurations.compileClasspath.filter {
+            it.name.startsWith('mail-') || it.name.startsWith('activation-')
+        }.files.toList() +
+        [moduleNameStubDir.get().asFile]
+}
+
+tasks.named('compileJava9Java').configure { dependsOn moduleNameStubJars }

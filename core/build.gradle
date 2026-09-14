@@ -15,16 +15,22 @@
 // rootProject modulecheck/ because the guard is the project's; the source set is here for the
 // java plugin.
 
+// mail's javax dependences are `requires static`, so they are not resolved unless named: the
+// javax jars go on the path and --add-modules names them, or the mail module resolves and its
+// smime types then fail on use.
 def moduleLegJars = {
     ->
     rootProject.subprojects.collect { it.tasks.named('jar').get().archiveFile.get().asFile } +
-        [rootProject.jostleProviderJar()]
+        [rootProject.jostleProviderJar()] +
+        project(':mail').configurations.compileClasspath.filter {
+            it.name.startsWith('mail-') || it.name.startsWith('activation-')
+        }.files.toList()
 }
 
 def moduleLegNames = [
     'org.bouncycastle.jsl.core', 'org.bouncycastle.jsl.util', 'org.bouncycastle.jsl.pkix',
     'org.bouncycastle.jsl.pg', 'org.bouncycastle.jsl.tls', 'org.bouncycastle.jsl.mail',
-    'org.openssl.jostle.prov'
+    'org.openssl.jostle.prov', 'mail', 'activation'
 ].join(',')
 
 configurations {
