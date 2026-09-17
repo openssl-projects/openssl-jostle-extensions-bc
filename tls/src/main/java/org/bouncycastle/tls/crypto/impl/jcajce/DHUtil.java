@@ -7,21 +7,21 @@ import java.security.spec.KeySpec;
 
 import javax.crypto.spec.DHParameterSpec;
 
-import org.bouncycastle.jcajce.spec.DHDomainParameterSpec;
-import org.bouncycastle.jcajce.spec.DHExtendedPublicKeySpec;
 import org.bouncycastle.tls.crypto.DHGroup;
+// JSL reads Q only from its own spec, and refuses any other DHParameterSpec.
+import org.openssl.jostle.jcajce.spec.DHDomainParameterSpec;
+import org.openssl.jostle.jcajce.spec.DHExtendedPublicKeySpec;
 
 class DHUtil
 {
     static AlgorithmParameterSpec createInitSpec(DHGroup dhGroup)
     {
-        // NOTE: A BC-specific spec, so other providers probably won't see Q 
         return new DHDomainParameterSpec(dhGroup.getP(), dhGroup.getQ(), dhGroup.getG(), dhGroup.getL());
     }
 
     static KeySpec createPublicKeySpec(BigInteger y, DHParameterSpec dhSpec)
     {
-        // NOTE: A BC-specific spec, so other providers probably won't see Q 
+        // The peer key must decode to the same X9.42 form as the local key, or doPhase refuses it.
         return new DHExtendedPublicKeySpec(y, dhSpec);
     }
 
@@ -79,11 +79,6 @@ class DHUtil
         }
 
         return null;
-    }
-
-    static BigInteger getQ(DHParameterSpec dhSpec)
-    {
-        return dhSpec instanceof DHDomainParameterSpec ? ((DHDomainParameterSpec)dhSpec).getQ() : null;
     }
 
     static boolean isGroupSupported(JcaTlsCrypto crypto, DHGroup dhGroup)
