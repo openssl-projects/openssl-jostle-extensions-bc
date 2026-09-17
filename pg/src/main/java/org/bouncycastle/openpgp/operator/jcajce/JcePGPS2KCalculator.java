@@ -7,9 +7,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 
 import org.bouncycastle.bcpg.S2K;
-import org.bouncycastle.jcajce.spec.Argon2KeySpec;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.operator.PGPS2KCalculator;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.Argon2KeySpec;
 
 /**
  * A {@link PGPS2KCalculator} for the JCA/JCE OpenPGP operators. The Argon2 key (RFC 9580 sec. 3.7.1.4)

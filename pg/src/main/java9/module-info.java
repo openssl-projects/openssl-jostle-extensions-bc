@@ -5,6 +5,7 @@ module org.bouncycastle.jsl.pg
     requires java.logging;
     requires org.bouncycastle.jsl.util;
     requires transitive org.bouncycastle.jsl.core;
+    requires org.openssl.jostle.prov;
 
     exports org.bouncycastle.apache.bzip2;
     exports org.bouncycastle.bcpg;

@@ -4,8 +4,6 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyPacket;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
-import org.bouncycastle.jcajce.spec.EdDSAParameterSpec;
-import org.bouncycastle.jcajce.spec.XDHParameterSpec;
 import org.bouncycastle.jcajce.util.DefaultJcaJceHelper;
 import org.bouncycastle.jcajce.util.NamedJcaJceHelper;
 import org.bouncycastle.jcajce.util.ProviderJcaJceHelper;
@@ -13,6 +11,9 @@ import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyPair;
 import org.bouncycastle.openpgp.operator.PGPKeyPairGenerator;
 import org.bouncycastle.openpgp.operator.PGPKeyPairGeneratorProvider;
+// JSL accepts no foreign spec type, and registers no generic "XDH" generator - X25519 and X448
+// are named services that need no parameters.
+import org.openssl.jostle.jcajce.spec.EdDSAParameterSpec;
 
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
@@ -109,7 +110,7 @@ public class JcaPGPKeyPairGeneratorProvider
             try
             {
                 KeyPairGenerator gen = helper.createKeyPairGenerator("EDDSA");
-                gen.initialize(new EdDSAParameterSpec("Ed25519"));
+                gen.initialize(EdDSAParameterSpec.ED25519);
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.Ed25519, keyPair, creationTime);
             }
@@ -126,7 +127,7 @@ public class JcaPGPKeyPairGeneratorProvider
             try
             {
                 KeyPairGenerator gen = helper.createKeyPairGenerator("EDDSA");
-                gen.initialize(new EdDSAParameterSpec("Ed448"));
+                gen.initialize(EdDSAParameterSpec.ED448);
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.Ed448, keyPair, creationTime);
             }
@@ -142,8 +143,7 @@ public class JcaPGPKeyPairGeneratorProvider
         {
             try
             {
-                KeyPairGenerator gen = helper.createKeyPairGenerator("XDH");
-                gen.initialize(new XDHParameterSpec("X25519"));
+                KeyPairGenerator gen = helper.createKeyPairGenerator("X25519");
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.X25519, keyPair, creationTime);
             }
@@ -159,8 +159,7 @@ public class JcaPGPKeyPairGeneratorProvider
         {
             try
             {
-                KeyPairGenerator gen = helper.createKeyPairGenerator("XDH");
-                gen.initialize(new XDHParameterSpec("X448"));
+                KeyPairGenerator gen = helper.createKeyPairGenerator("X448");
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.X448, keyPair, creationTime);
             }
@@ -182,7 +181,7 @@ public class JcaPGPKeyPairGeneratorProvider
             try
             {
                 KeyPairGenerator gen = helper.createKeyPairGenerator("EDDSA");
-                gen.initialize(new EdDSAParameterSpec("Ed25519"));
+                gen.initialize(EdDSAParameterSpec.ED25519);
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.EDDSA_LEGACY, keyPair, creationTime);
             }
@@ -203,8 +202,7 @@ public class JcaPGPKeyPairGeneratorProvider
 
             try
             {
-                KeyPairGenerator gen = helper.createKeyPairGenerator("XDH");
-                gen.initialize(new XDHParameterSpec("X25519"));
+                KeyPairGenerator gen = helper.createKeyPairGenerator("X25519");
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.ECDH, keyPair, creationTime);
             }

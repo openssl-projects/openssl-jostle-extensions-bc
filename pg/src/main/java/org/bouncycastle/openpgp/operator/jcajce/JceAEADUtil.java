@@ -16,7 +16,6 @@ import org.bouncycastle.bcpg.AEADUtils;
 import org.bouncycastle.bcpg.SymmetricEncIntegrityPacket;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyUtils;
-import org.bouncycastle.jcajce.spec.HKDFParameterSpec;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPSessionKey;
 import org.bouncycastle.openpgp.PGPUtil;
@@ -27,6 +26,8 @@ import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Pack;
 import org.bouncycastle.util.io.Streams;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.HKDFParameterSpec;
 
 class JceAEADUtil
     extends PGPAEADUtil

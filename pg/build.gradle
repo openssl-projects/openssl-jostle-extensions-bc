@@ -1,6 +1,7 @@
 dependencies {
     implementation project(':core')
     implementation project(':util')
-    // No provider jar: pg:compileJava succeeds without it; the provider is reached
-    // through JCA at run time, not by reference. tls is the one module that names it.
+    // The OpenPGP operators name JSL's Argon2, HKDF and EdDSA specs, so pg compiles against the
+    // provider. No JSL type reaches pg's exported API, so the requires is not transitive.
+    implementation files(rootProject.jostleProviderJar())
 }
