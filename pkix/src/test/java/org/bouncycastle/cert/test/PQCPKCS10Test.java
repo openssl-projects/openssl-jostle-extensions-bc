@@ -18,8 +18,6 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
-import org.bouncycastle.jcajce.spec.MLKEMParameterSpec;
 import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
@@ -29,6 +27,9 @@ import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequest;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.bouncycastle.util.Arrays;
+// The ML-DSA and ML-KEM generators refuse a foreign parameter spec: these must be Jostle's types.
+import org.openssl.jostle.jcajce.spec.MLDSAParameterSpec;
+import org.openssl.jostle.jcajce.spec.MLKEMParameterSpec;
 
 /**
  **/
