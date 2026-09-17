@@ -1,33 +1,34 @@
 package org.bouncycastle.jsl.test;
 
-import org.bouncycastle.jsl.test.JslTestProvider;
+import java.security.spec.InvalidKeySpecException;
 
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 
-import org.bouncycastle.jcajce.spec.ScryptKeySpec;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Hex;
+import org.junit.Before;
 import org.junit.Test;
+import org.openssl.jostle.jcajce.spec.ScryptKeySpec;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
- * Covers the scrypt key-derivation path now routed through JSL's native
- * {@code SecretKeyFactory("SCRYPT")} (OpenSSL). Verifies two things in one go:
- * <ul>
- *   <li>JSL's factory accepts BouncyCastle's {@code org.bouncycastle.jcajce.spec.ScryptKeySpec}
- *       (the type the satellite's PBES2/PKCS#8/PKCS#12 builders construct), and</li>
- *   <li>it produces the RFC 7914 §12 known-answer vector, i.e. the native OpenSSL scrypt agrees
- *       bit-for-bit with the reference.</li>
- * </ul>
- * Uses N=16384 (the RFC vector), so it runs in modest memory.
+ * The scrypt key-derivation path, routed through JSL's native {@code SecretKeyFactory("SCRYPT")}.
+ * <p>
+ * Two things: the native derivation reproduces the RFC 7914 sec. 12 known-answer vector, and the
+ * factory takes JSL's own spec only. The PBES2, PKCS#8 and PKCS#12 builders in this fork construct
+ * the JSL spec; BouncyCastle's same-named class is refused, which is what stops a caller reaching
+ * this factory with a spec whose parameters it would not read.
+ * <p>
+ * N=16384, the RFC's own parameters, so it runs in modest memory.
  */
 public class ScryptKdfTest
     extends JostleProviderTestBase
 {
-    @org.junit.Before
+    @Before
     public void gateOnProviderCapability()
     {
         JslTestProvider.assumeAlgorithm("SecretKeyFactory.SCRYPT");
@@ -42,15 +43,33 @@ public class ScryptKdfTest
         "d5432955613f0fcf62d49705242a9af9" + "e61e85dc0d651e40dfcf017b45575887");
 
     @Test
-    public void scryptNativeMatchesRfc7914AndAcceptsBcSpec()
+    public void scryptNativeMatchesRfc7914Vector()
         throws Exception
     {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("SCRYPT", JSL);
 
-        // BouncyCastle's ScryptKeySpec, derived through JSL/OpenSSL.
         SecretKey key = factory.generateSecret(new ScryptKeySpec(PASSWORD, SALT, N, R, P, DK_BITS));
 
         assertTrue("JSL native scrypt must match RFC 7914 vector",
             Arrays.areEqual(EXPECTED, key.getEncoded()));
+    }
+
+    @Test
+    public void bouncyCastlesScryptSpecIsRefused()
+        throws Exception
+    {
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("SCRYPT", JSL);
+
+        try
+        {
+            factory.generateSecret(
+                new org.bouncycastle.jcajce.spec.ScryptKeySpec(PASSWORD, SALT, N, R, P, DK_BITS));
+            fail("a foreign scrypt spec was accepted");
+        }
+        catch (InvalidKeySpecException e)
+        {
+            assertTrue("refusal did not name the spec it was handed: " + e.getMessage(),
+                e.getMessage().contains("org.bouncycastle.jcajce.spec.ScryptKeySpec"));
+        }
     }
 }

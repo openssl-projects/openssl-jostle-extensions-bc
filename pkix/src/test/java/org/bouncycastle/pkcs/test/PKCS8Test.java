@@ -125,14 +125,29 @@ public class PKCS8Test
         assertEquals(modulus, k.getModulus());
     }
 
+    /**
+     * scrypt is not a FIPS-approved KDF and neither FIPS module serves it. A TestCase subclass
+     * cannot skip via Assume, so this returns early and says so.
+     */
+    private boolean requireScrypt()
+    {
+        if (JslTestProvider.has("SecretKeyFactory", "SCRYPT"))
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " does not serve scrypt");
+        return false;
+    }
+
     public void testScrypt()
         throws Exception
     {
-        if (getJvmVersion() < 7)  // runs out of memory
+        if (!requireScrypt())
         {
             return;
         }
-        
+
         PKCS8EncryptedPrivateKeyInfo info = new PKCS8EncryptedPrivateKeyInfo(pkcs8Scrypt);
 
         PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("Rabbit".toCharArray()));
@@ -278,7 +293,7 @@ public class PKCS8Test
     public void testScryptEncryption()
         throws Exception
     {
-        if (getJvmVersion() < 7)      // runs out of memory
+        if (!requireScrypt())
         {
             return;
         }
@@ -300,29 +315,5 @@ public class PKCS8Test
         PrivateKeyInfo pkInfo = info.decryptPrivateKeyInfo(new JcePKCSPBEInputDecryptorProviderBuilder().setProvider(JslTestProvider.name()).build("Rabbit".toCharArray()));
 
         assertTrue(Arrays.areEqual(scryptKey, pkInfo.getEncoded()));
-    }
-
-    private static int getJvmVersion()
-    {
-        String version = System.getProperty("java.version");
-
-        if (version.startsWith("1.7"))
-        {
-            return 7;
-        }
-        if (version.startsWith("1.8"))
-        {
-            return 8;
-        }
-        if (version.startsWith("1.9"))
-        {
-            return 9;
-        }
-        if (version.startsWith("1.1"))
-        {
-            return 10;
-        }
-
-        return -1;
     }
 }
