@@ -9,6 +9,7 @@ import java.util.Map;
 
 import javax.crypto.Cipher;
 
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.cms.CMSORIforKEMOtherInfo;
@@ -18,13 +19,14 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.cms.KEMKeyWrapper;
-import org.bouncycastle.jcajce.spec.KTSParameterSpec;
 import org.bouncycastle.operator.DefaultKemEncapsulationLengthProvider;
 import org.bouncycastle.operator.GenericKey;
 import org.bouncycastle.operator.KemEncapsulationLengthProvider;
 import org.bouncycastle.operator.OperatorException;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Integers;
+// JSL takes the KDF as DER and accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.KTSParameterSpec;
 
 class JceCMSKEMKeyWrapper
     extends KEMKeyWrapper
@@ -143,7 +145,7 @@ class JceCMSKEMKeyWrapper
                       
                 try
                 {
-                    KTSParameterSpec ktsSpec = new KTSParameterSpec.Builder(CMSUtils.getWrapAlgorithmName(symWrapAlgorithm.getAlgorithm()), kekLength * 8, oriInfoEnc).withKdfAlgorithm(kdfAlgorithm).build();
+                    KTSParameterSpec ktsSpec = new KTSParameterSpec.Builder(CMSUtils.getWrapAlgorithmName(symWrapAlgorithm.getAlgorithm()), kekLength * 8, oriInfoEnc).withKdfAlgorithm(kdfAlgorithm.getEncoded(ASN1Encoding.DER)).build();
 
                     keyEncryptionCipher.init(Cipher.WRAP_MODE, publicKey, ktsSpec, random);
 
@@ -166,7 +168,7 @@ class JceCMSKEMKeyWrapper
 
                 try
                 {
-                    KTSParameterSpec ktsSpec = new KTSParameterSpec.Builder(CMSUtils.getWrapAlgorithmName(symWrapAlgorithm.getAlgorithm()), kekLength * 8, oriInfoEnc).withKdfAlgorithm(kdfAlgorithm).build();
+                    KTSParameterSpec ktsSpec = new KTSParameterSpec.Builder(CMSUtils.getWrapAlgorithmName(symWrapAlgorithm.getAlgorithm()), kekLength * 8, oriInfoEnc).withKdfAlgorithm(kdfAlgorithm.getEncoded(ASN1Encoding.DER)).build();
 
                     keyEncryptionCipher.init(Cipher.WRAP_MODE, publicKey, ktsSpec, random);
 

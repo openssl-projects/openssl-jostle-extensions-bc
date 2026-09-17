@@ -6,6 +6,7 @@ module org.bouncycastle.jsl.pkix
     requires java.naming;
     requires transitive org.bouncycastle.jsl.core;
     requires transitive org.bouncycastle.jsl.util;
+    requires org.openssl.jostle.prov;
 
     exports org.bouncycastle.cades;
     exports org.bouncycastle.cert;

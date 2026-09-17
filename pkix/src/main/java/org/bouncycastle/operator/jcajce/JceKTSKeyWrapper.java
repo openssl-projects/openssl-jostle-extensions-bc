@@ -16,11 +16,12 @@ import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.crypto.util.DEROtherInfo;
-import org.bouncycastle.jcajce.spec.KTSParameterSpec;
 import org.bouncycastle.operator.AsymmetricKeyWrapper;
 import org.bouncycastle.operator.GenericKey;
 import org.bouncycastle.operator.OperatorException;
 import org.bouncycastle.util.Arrays;
+// JSL accepts no foreign spec type. Its builder defaults to the same KDF3 with SHA-256 as BC.
+import org.openssl.jostle.jcajce.spec.KTSParameterSpec;
 
 public class JceKTSKeyWrapper
     extends AsymmetricKeyWrapper
