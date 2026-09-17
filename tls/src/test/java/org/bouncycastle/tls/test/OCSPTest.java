@@ -33,6 +33,25 @@ import junit.framework.TestCase;
 public class OCSPTest
     extends TestCase
 {
+    /**
+     * The responder signs with SHA-1, which a FIPS module refuses at initSign ("digest not
+     * allowed"). Until R12 the signer resolved through the JDK, which allowed it; now it resolves
+     * through the provider under test. A TestCase subclass cannot skip via Assume, so this returns
+     * early instead.
+     */
+    protected void runTest()
+        throws Throwable
+    {
+        if (!JslTestProvider.canSign("SHA1withRSA", "RSA", 2048))
+        {
+            System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+                + " cannot sign with SHA-1");
+            return;
+        }
+
+        super.runTest();
+    }
+
     interface OCSPResponder
     {
         OCSPResponse[] getResponses(Certificate certs)

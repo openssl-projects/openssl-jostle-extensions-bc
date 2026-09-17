@@ -18,9 +18,8 @@ import static org.junit.Assert.fail;
 
 /**
  * Production code must not resolve a provider by a name written into the source. A caller-supplied
- * name is fine; a literal binds this fork to whatever provider answers to it, which is how the
- * SunMSCAPI workaround stayed in the TLS crypto layer long after the fork stopped reaching any JDK
- * provider.
+ * name is fine; a literal binds this fork to whatever provider answers to it, whether or not that
+ * provider is the one the caller configured.
  * <p>
  * A source lint rather than a runtime cell, because the sites it guards are unreachable on this
  * platform and so no run would execute them.

@@ -102,6 +102,32 @@ Only when a diff is entirely (a) is a straight copy safe. The bucket-(b) list li
 
 **Say what you skipped.** Silent narrowing is the failure mode that hurts most here.
 
+## Naming a provider
+
+Production code never writes a provider name as a literal. The lint
+`NoForeignProviderNameInProductionTest` fails the build on `Security.getProvider("...")` anywhere in
+the main trees.
+
+Code that must name one reads `DefaultProviderName`, whose default is `"JSL"`.
+`DefaultJcaJceHelper` and its three siblings (`cert.jcajce.DefaultCertHelper`,
+`eac.jcajce.DefaultEACHelper`, `eac.operator.jcajce.DefaultEACHelper`) read it too, so a caller who
+sets no provider resolves through JSL rather than through whatever the JDK's installed order
+happens to serve. `DefaultProviderName.setProviderName(null)` restores the JDK's own resolution and
+is the documented revert for a consumer who wants it.
+
+Two families stay on the JDK deliberately, and the helper says so at each method:
+
+- **Certification path.** JSL serves `CertPathBuilder` and `CertPathValidator`, but its builder
+  refuses a caller-supplied `PKIXCertPathChecker`, which the TLS trust manager needs. It serves no
+  `CertStore` at all. Re-open these when Jostle accepts checkers.
+- **Key and trust stores.** A JSSE store is a PKCS12 or JKS file; JSL serves only its own store
+  type. `ExemptionMechanism` is likewise not served.
+
+`NoUnqualifiedServiceLookupInProductionTest` holds the line: a one-argument `getInstance` on a JCA
+service type, outside the helper seam, fails the build unless the file is on its allowlist. That
+allowlist may only shrink — a cell pins its size, and a stale entry fails too, so it cannot drift in
+either direction.
+
 ## Verification baselines
 
 Record and compare. Do not accept "it built".

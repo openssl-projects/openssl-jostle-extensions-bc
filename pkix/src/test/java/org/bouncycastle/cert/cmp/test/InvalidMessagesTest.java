@@ -17,6 +17,7 @@ import org.bouncycastle.cert.cmp.GeneralPKIMessage;
 import org.bouncycastle.cert.cmp.ProtectedPKIMessage;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.crypto.params.DSAParameters;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
@@ -112,7 +113,10 @@ public class InvalidMessagesTest
         }
         catch (CMPException e)
         {
-            Assert.assertEquals("unable to verify signature: exception on setup: java.security.NoSuchAlgorithmException: 1.2.840.113549.2.11 Signature not available", e.getMessage());
+            // The verifier names no provider, so it resolves through DefaultProviderName: the
+            // refusal identifies the provider that declined, not just the algorithm.
+            Assert.assertTrue(e.getMessage(), e.getMessage().contains("1.2.840.113549.2.11"));
+            Assert.assertTrue(e.getMessage(), e.getMessage().contains(DefaultProviderName.getProviderName()));
         }
     }
 
