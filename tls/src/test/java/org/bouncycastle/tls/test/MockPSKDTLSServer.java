@@ -19,6 +19,9 @@ import org.bouncycastle.util.encoders.Hex;
 class MockPSKDTLSServer
     extends PSKTlsServer
 {
+    // Short by default so that a PSK mismatch (which in DTLS shows as retransmission until timeout) fails quickly
+    private int handshakeTimeoutMillis = 1000;
+
     MockPSKDTLSServer()
     {
         this(false);
@@ -31,7 +34,12 @@ class MockPSKDTLSServer
 
     public int getHandshakeTimeoutMillis()
     {
-        return 1000;
+        return handshakeTimeoutMillis;
+    }
+
+    public void setHandshakeTimeoutMillis(int millis)
+    {
+        handshakeTimeoutMillis = millis;
     }
 
     public int getHandshakeResendTimeMillis()

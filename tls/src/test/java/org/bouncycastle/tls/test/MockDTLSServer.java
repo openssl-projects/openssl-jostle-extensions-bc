@@ -27,6 +27,8 @@ import org.bouncycastle.util.encoders.Hex;
 class MockDTLSServer
     extends DefaultTlsServer
 {
+    private int handshakeResendTimeMillis = 1000;
+
     MockDTLSServer()
     {
         this(org.bouncycastle.tls.test.TlsTestUtils.createTestCrypto());
@@ -35,6 +37,16 @@ class MockDTLSServer
     MockDTLSServer(TlsCrypto crypto)
     {
         super(crypto);
+    }
+
+    public int getHandshakeResendTimeMillis()
+    {
+        return handshakeResendTimeMillis;
+    }
+
+    public void setHandshakeResendTimeMillis(int millis)
+    {
+        handshakeResendTimeMillis = millis;
     }
 
     public void notifyAlertRaised(short alertLevel, short alertDescription, String message, Throwable cause)
