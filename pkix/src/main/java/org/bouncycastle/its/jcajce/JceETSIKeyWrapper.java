@@ -11,7 +11,6 @@ import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.its.ETSIKeyWrapper;
-import org.bouncycastle.jcajce.spec.IESKEMParameterSpec;
 import org.bouncycastle.jcajce.util.DefaultJcaJceHelper;
 import org.bouncycastle.jcajce.util.JcaJceHelper;
 import org.bouncycastle.jcajce.util.NamedJcaJceHelper;
@@ -20,6 +19,8 @@ import org.bouncycastle.oer.its.ieee1609dot2.EncryptedDataEncryptionKey;
 import org.bouncycastle.oer.its.ieee1609dot2.basetypes.EccP256CurvePoint;
 import org.bouncycastle.oer.its.ieee1609dot2.basetypes.EciesP256EncryptedKey;
 import org.bouncycastle.util.Arrays;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.IESKEMParameterSpec;
 
 public class JceETSIKeyWrapper
     implements ETSIKeyWrapper

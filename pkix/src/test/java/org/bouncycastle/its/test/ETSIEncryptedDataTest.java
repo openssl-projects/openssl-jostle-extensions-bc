@@ -100,14 +100,30 @@ public class ETSIEncryptedDataTest
     }
 
 
-    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
-    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
-    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
-    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
-    // so unlike the bare "CCM" alongside it this one is not ours to rename.
-    public void DISABLED_testDecryption()
+    /**
+     * The FIPS module draws key-generation randomness from its own DRBG and does not consume a
+     * caller-supplied SecureRandom, so a seeded SecureRandom cannot reproduce the vector's key
+     * there. JSL does consume it, and the vector was made with JSL.
+     */
+    private boolean requireTheProviderTheVectorWasMadeWith()
+    {
+        if (!JslTestProvider.isFips())
+        {
+            return true;
+        }
+        System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+            + " generates keys from its own DRBG, so a fixed seed cannot reproduce the vector's key");
+        return false;
+    }
+
+    public void testDecryption()
         throws Exception
     {
+        if (!requireTheProviderTheVectorWasMadeWith())
+        {
+            return;
+        }
+
 
 
         byte[] item = Hex.decode("03820101826cc2023b5115003e8083996da81b76fbdcaae0289abddfaf2b7198\n" +
@@ -187,12 +203,7 @@ public class ETSIEncryptedDataTest
         assertTrue(Arrays.areEqual(request.getItsId().getOctets(), Hex.decode("455453492d4954532d303031")));
     }
 
-    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
-    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
-    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
-    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
-    // so unlike the bare "CCM" alongside it this one is not ours to rename.
-    public void DISABLED_testEncryptionNist()
+    public void testEncryptionNist()
         throws Exception
     {
         KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
@@ -231,15 +242,9 @@ public class ETSIEncryptedDataTest
 
     }
 
-    // Disabled: MT-80, Cipher "ETSIKEMwithSHA256", same final blocker as the other three rows.
-    // Reached only after peeling off two layers that used to hide it, both re-measured 2026-09-09
-    // on jar 1df49922, and both worth keeping so this test is ready when MT-80 lands:
-    //   1. The 32-byte FixedSecureRandom ran short of OpenSSL's 64-byte EC keygen draw. MT-79 now
-    //      surfaces the caller's exception as the cause, which is how that was finally readable:
-    //      ArrayIndexOutOfBoundsException "last source index 64 out of bounds for byte[32]".
-    //   2. brainpoolP256r1 is absent from the FIPS modules but PRESENT on JSL, so the curve is a
-    //      per-configuration gate, not a flat gap - hence supportsCurve() below.
-    public void DISABLED_testEncryptionTele()
+    // brainpoolP256r1 is absent from the FIPS modules but present on JSL, so the curve is a
+    // per-configuration gate rather than a flat gap - hence supportsCurve() below.
+    public void testEncryptionTele()
         throws Exception
     {
         if (!supportsCurve("brainpoolP256r1"))
@@ -313,14 +318,15 @@ public class ETSIEncryptedDataTest
     }
 
 
-    // Disabled: re-measured 2026-09-09 on jar 1df49922, and the reason CHANGED. It is no longer
-    // MT-69: that NPE is fixed in this jar. The blocker now is Cipher "ETSIKEMwithSHA256", asked
-    // for by our own its/jcajce/JceETSIKeyWrapper:43 and JcaETSIDataDecryptor:37, which JSL does
-    // not serve. That is BC's ETSI ITS KEM name; there is no JCA-canonical spelling to switch to,
-    // so unlike the bare "CCM" alongside it this one is not ours to rename.
-    public void DISABLED_testEncryptionMulti()
+    public void testEncryptionMulti()
         throws Exception
     {
+        // One of the two recipients is on brainpoolP256r1, which the FIPS modules do not serve.
+        if (!supportsCurve("brainpoolP256r1"))
+        {
+            return;
+        }
+
 
         Object[][] items = new Object[][]{
             getRecipient("RCP1", "P-256"),
