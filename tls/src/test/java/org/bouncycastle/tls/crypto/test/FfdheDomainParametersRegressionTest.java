@@ -34,12 +34,10 @@ import static org.junit.Assert.fail;
 /**
  * The FFDHE subgroup order has to survive into the provider's DH parameters.
  * <p>
- * JSL reads Q only from its own {@code DHDomainParameterSpec}. BouncyCastle's same-named class
- * extends {@code javax.crypto.spec.DHParameterSpec}, so it is ACCEPTED and its Q is then dropped -
- * no exception on either side, just a domain without its subgroup order. The wrapper this exercises
- * also swallows every exception and answers null, which would turn a refusal into a group quietly
- * disappearing from the supported set. Both failure modes are silent, so this pins the value
- * rather than the call.
+ * JSL reads Q only from its own {@code DHDomainParameterSpec} and refuses any other
+ * {@code DHParameterSpec} subclass typed. The wrapper this exercises answers null on any exception,
+ * so a refusal reaches the caller as a group leaving the supported set with nothing reported. This
+ * pins the value rather than the call.
  */
 public class FfdheDomainParametersRegressionTest
 {
@@ -116,8 +114,8 @@ public class FfdheDomainParametersRegressionTest
 
     /**
      * A peer value the provider rejects is refused when the key is imported, not later at
-     * {@code doPhase}. Measured: 1 and p-1 are refused; the check is a degenerate-value check, not
-     * a subgroup-membership test - 7 is accepted for ffdhe2048 although 7^q mod p != 1.
+     * {@code doPhase}. The check refuses the degenerate values; nothing here states whether
+     * subgroup membership is verified.
      */
     @Test
     public void aDegeneratePeerValueIsRefusedAtImport()
