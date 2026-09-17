@@ -8,6 +8,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateParsingException;
@@ -37,6 +38,7 @@ import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509ExtensionUtils;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.util.Integers;
 
@@ -52,7 +54,31 @@ public class JcaX509ExtensionUtils
     public JcaX509ExtensionUtils()
         throws NoSuchAlgorithmException
     {
-        super(new SHA1DigestCalculator(MessageDigest.getInstance("SHA1")));
+        super(new SHA1DigestCalculator(sha1()));
+    }
+
+    /**
+     * The constructor above declares only NoSuchAlgorithmException, and widening a public
+     * constructor is not this change's business, so a provider that is not registered is reported
+     * as NoSuchAlgorithmException with the provider named in the message.
+     */
+    private static MessageDigest sha1()
+        throws NoSuchAlgorithmException
+    {
+        String providerName = DefaultProviderName.getProviderName();
+        if (providerName == null)
+        {
+            return MessageDigest.getInstance("SHA1");
+        }
+
+        try
+        {
+            return MessageDigest.getInstance("SHA1", providerName);
+        }
+        catch (NoSuchProviderException e)
+        {
+            throw new NoSuchAlgorithmException("SHA1 not available: " + e.getMessage());
+        }
     }
 
     public JcaX509ExtensionUtils(DigestCalculator calculator)

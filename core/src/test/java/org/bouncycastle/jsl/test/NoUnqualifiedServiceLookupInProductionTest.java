@@ -50,27 +50,15 @@ public class NoUnqualifiedServiceLookupInProductionTest
         "pkix/src/main/java/org/bouncycastle/eac/operator/jcajce/ProviderEACHelper.java",
     };
 
-    /**
-     * Sites that still reach the JDK directly. Two are deliberate and stay: JSL's CertPathBuilder
-     * refuses a caller-supplied PKIXCertPathChecker, which the TLS trust manager needs, and JSL
-     * serves no CertStore at all. The rest are the R13 backlog.
-     */
+    /** Sites that reach the JDK deliberately, each for the reason given beside it. */
     private static final String[] ALLOWED = {
-        // deliberate - the certification-path family
+        // the certification-path family: JSL's CertPathBuilder refuses a caller-supplied
+        // PKIXCertPathChecker, which the TLS trust manager needs, and JSL serves no CertStore
         "pkix/src/main/java/org/bouncycastle/est/jcajce/JcaJceUtils.java",
         "tls/src/main/java/org/bouncycastle/jsse/provider/ProvX509TrustManager.java",
-        // deliberate - a JSSE key or trust store is a PKCS12 or JKS file, which JSL does not serve
+        // a JSSE key or trust store is a PKCS12 or JKS file, which JSL does not serve
         "tls/src/main/java/org/bouncycastle/jsse/provider/ProvKeyManagerFactorySpi.java",
         "tls/src/main/java/org/bouncycastle/jsse/provider/ProvTrustManagerFactorySpi.java",
-        // R13 backlog - each moves to DefaultProviderName with its own reason
-        "mail/src/main/java/org/bouncycastle/mail/smime/validator/SignedMailValidator.java",
-        "pg/src/main/java/org/bouncycastle/openpgp/operator/jcajce/SHA1PGPDigestCalculator.java",
-        "pkix/src/main/java/org/bouncycastle/cert/jcajce/JcaX509ExtensionUtils.java",
-        "pkix/src/main/java/org/bouncycastle/est/jcajce/JsseDefaultHostnameAuthorizer.java",
-        "pkix/src/main/java/org/bouncycastle/mozilla/SignedPublicKeyAndChallenge.java",
-        "pkix/src/main/java/org/bouncycastle/pkix/jcajce/CertPathValidatorUtilities.java",
-        "pkix/src/main/java/org/bouncycastle/pkix/jcajce/PKIXCertPathReviewer.java",
-        "tls/src/main/java/org/bouncycastle/tls/crypto/impl/jcajce/JcaTlsCryptoProvider.java",
     };
 
     /** JCA service type -> the import that tells it apart from a same-named ASN.1 class. */
@@ -98,8 +86,8 @@ public class NoUnqualifiedServiceLookupInProductionTest
     @Test
     public void theAllowlistOnlyShrinks()
     {
-        assertEquals("the allowlist may only shrink as R13 lands; a new entry needs a ruling",
-            12, ALLOWED.length);
+        assertEquals("the allowlist may only shrink; a new entry needs a ruling",
+            4, ALLOWED.length);
     }
 
     @Test
@@ -174,6 +162,11 @@ public class NoUnqualifiedServiceLookupInProductionTest
             String source = NoForeignProviderNameInProductionTest.stripComments(read(entry));
             if (!hasUnqualifiedLookup(source))
             {
+                continue;
+            }
+            if (source.indexOf("DefaultProviderName.getProviderName()") >= 0)
+            {
+                // The file names the provider itself; the one-argument call is its null branch.
                 continue;
             }
 

@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 import javax.net.ssl.SSLSession;
 import javax.security.auth.x500.X500Principal;
 
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1String;
 import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
@@ -63,7 +64,10 @@ public class JsseDefaultHostnameAuthorizer
 
         try
         {
-            CertificateFactory fac = CertificateFactory.getInstance("X509");
+            String providerName = DefaultProviderName.getProviderName();
+            CertificateFactory fac = providerName == null
+                ? CertificateFactory.getInstance("X509")
+                : CertificateFactory.getInstance("X509", providerName);
             X509Certificate cert = (
                 java.security.cert.X509Certificate)fac.generateCertificate(
                 new ByteArrayInputStream((context.getPeerCertificates()[0]).getEncoded()));

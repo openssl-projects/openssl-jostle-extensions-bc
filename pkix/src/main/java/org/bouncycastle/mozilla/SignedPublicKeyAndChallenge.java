@@ -11,6 +11,7 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.X509EncodedKeySpec;
 
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.asn1.ASN1BitString;
 import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1Primitive;
@@ -132,7 +133,11 @@ public class SignedPublicKeyAndChallenge
         Signature sig = null;
         if (provider == null)
         {
-            sig = Signature.getInstance(spkacSeq.getSignatureAlgorithm().getAlgorithm().getId());
+            // No provider named by the caller: this library's own default, not the JDK's order.
+            String providerName = DefaultProviderName.getProviderName();
+            sig = providerName == null
+                ? Signature.getInstance(spkacSeq.getSignatureAlgorithm().getAlgorithm().getId())
+                : Signature.getInstance(spkacSeq.getSignatureAlgorithm().getAlgorithm().getId(), providerName);
         }
         else
         {

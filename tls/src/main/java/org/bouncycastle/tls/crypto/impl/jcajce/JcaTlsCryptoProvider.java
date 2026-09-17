@@ -95,14 +95,8 @@ public class JcaTlsCryptoProvider
 
             if (random == null)
             {
-                if (helper instanceof DefaultJcaJceHelper)
-                {
-                    random = SecureRandom.getInstance("DEFAULT");
-                }
-                else
-                {
-                    random = SecureRandom.getInstance("DEFAULT", helper.createMessageDigest("SHA-512").getProvider());
-                }
+                // The helper names the provider, whichever kind it is, so one call covers both.
+                random = helper.createSecureRandom("DEFAULT");
             }
 
             return create(random, new NonceEntropySource(helper, random));

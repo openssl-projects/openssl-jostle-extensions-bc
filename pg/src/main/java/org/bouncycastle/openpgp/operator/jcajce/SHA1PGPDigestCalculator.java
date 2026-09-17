@@ -2,12 +2,15 @@ package org.bouncycastle.openpgp.operator.jcajce;
 
 import java.io.OutputStream;
 import java.security.MessageDigest;
+import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 
 import org.bouncycastle.bcpg.HashAlgorithmTags;
 import org.bouncycastle.jcajce.io.OutputStreamFactory;
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.openpgp.operator.PGPDigestCalculator;
 import org.bouncycastle.util.Exceptions;
+
 class SHA1PGPDigestCalculator
     implements PGPDigestCalculator
 {
@@ -17,10 +20,15 @@ class SHA1PGPDigestCalculator
     {
         try
         {
-            digest = MessageDigest.getInstance("SHA1");
+            String providerName = DefaultProviderName.getProviderName();
+            digest = providerName == null
+                ? MessageDigest.getInstance("SHA1")
+                : MessageDigest.getInstance("SHA1", providerName);
         }
-        catch (NoSuchAlgorithmException e)
+        catch (GeneralSecurityException e)
         {
+            // Widened from NoSuchAlgorithmException: naming a provider adds NoSuchProviderException,
+            // and this constructor declares neither.
             throw Exceptions.illegalStateException("cannot find SHA-1", e);
         }
     }

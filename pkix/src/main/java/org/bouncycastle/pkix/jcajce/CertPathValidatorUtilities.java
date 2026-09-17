@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.security.NoSuchProviderException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
@@ -34,6 +35,7 @@ import java.util.Set;
 
 import javax.security.auth.x500.X500Principal;
 
+import org.bouncycastle.jcajce.util.DefaultProviderName;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Enumerated;
 import org.bouncycastle.asn1.ASN1InputStream;
@@ -260,9 +262,16 @@ class CertPathValidatorUtilities
         CertificateFactory certFact = null;
         try
         {
-            certFact = CertificateFactory.getInstance("X.509");
+            String providerName = DefaultProviderName.getProviderName();
+            certFact = providerName == null
+                ? CertificateFactory.getInstance("X.509")
+                : CertificateFactory.getInstance("X.509", providerName);
         }
         catch (CertificateException e)
+        {
+            throw new AnnotatedException(e.getMessage(), e);
+        }
+        catch (NoSuchProviderException e)
         {
             throw new AnnotatedException(e.getMessage(), e);
         }
@@ -531,7 +540,10 @@ class CertPathValidatorUtilities
                 dsaPubKey.getY(), dsaParams.getP(), dsaParams.getQ(), dsaParams.getG());
             try
             {
-                KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+                String providerName = DefaultProviderName.getProviderName();
+                KeyFactory keyFactory = providerName == null
+                    ? KeyFactory.getInstance("DSA")
+                    : KeyFactory.getInstance("DSA", providerName);
                 return keyFactory.generatePublic(dsaPubKeySpec);
             }
             catch (Exception exception)
