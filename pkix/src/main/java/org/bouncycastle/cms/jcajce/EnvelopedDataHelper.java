@@ -48,7 +48,6 @@ import org.bouncycastle.cms.CMSAlgorithm;
 import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.PasswordRecipient;
-import org.bouncycastle.jcajce.spec.HKDFParameterSpec;
 import org.bouncycastle.operator.AsymmetricKeyUnwrapper;
 import org.bouncycastle.operator.DefaultSecretKeySizeProvider;
 import org.bouncycastle.operator.GenericKey;
@@ -59,6 +58,8 @@ import org.bouncycastle.operator.jcajce.JceAsymmetricKeyUnwrapper;
 import org.bouncycastle.operator.jcajce.JceKTSKeyUnwrapper;
 import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.Strings;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.HKDFParameterSpec;
 
 public class EnvelopedDataHelper
 {

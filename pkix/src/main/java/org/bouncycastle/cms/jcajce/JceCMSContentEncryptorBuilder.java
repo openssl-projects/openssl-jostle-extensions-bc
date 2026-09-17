@@ -25,7 +25,6 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import javax.crypto.SecretKeyFactory;
-import org.bouncycastle.jcajce.spec.HKDFParameterSpec;
 import org.bouncycastle.jcajce.io.CipherOutputStream;
 import org.bouncycastle.operator.DefaultSecretKeySizeProvider;
 import org.bouncycastle.operator.GenericKey;
@@ -35,6 +34,8 @@ import org.bouncycastle.operator.OutputEncryptor;
 import org.bouncycastle.operator.SecretKeySizeProvider;
 import org.bouncycastle.operator.jcajce.JceGenericKey;
 import org.bouncycastle.util.Strings;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.HKDFParameterSpec;
 
 /**
  * Builder for the content encryptor used in CMS {@code EnvelopedData},
