@@ -35,10 +35,10 @@ public class CheckNameConstraintsTest
 
         CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
-        X509Certificate root = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
-        X509Certificate ca1 = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));
-        X509Certificate ca2 = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca2.crt"));
-        X509Certificate leaf = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-leaf.crt"));
+        X509Certificate root = load(cf, "mal-root.crt");
+        X509Certificate ca1 = load(cf, "mal-ca1.crt");
+        X509Certificate ca2 = load(cf, "mal-ca2.crt");
+        X509Certificate leaf = load(cf, "mal-leaf.crt");
 
         List certchain = new ArrayList();
         certchain.add(root);
@@ -64,8 +64,8 @@ public class CheckNameConstraintsTest
         JslTestProvider.install();
 
         CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
-        X509Certificate rootCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
-        X509Certificate endCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));
+        X509Certificate rootCert = load(cf, "mal-root.crt");
+        X509Certificate endCert = load(cf, "mal-ca1.crt");
 
         // create CertStore to support path building
         List list = new ArrayList();
@@ -102,8 +102,8 @@ public class CheckNameConstraintsTest
 
         CertificateFactory cf = CertificateFactory.getInstance("X.509", JslTestProvider.name());
 
-        X509Certificate rootCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-root.crt"));
-        X509Certificate endCert = (X509Certificate) cf.generateCertificate(TestResourceFinder.findTestResource("pkix", "mal-ca1.crt"));
+        X509Certificate rootCert = load(cf, "mal-root.crt");
+        X509Certificate endCert = load(cf, "mal-ca1.crt");
         
         List list = new ArrayList();
         list.add(endCert);
@@ -119,5 +119,34 @@ public class CheckNameConstraintsTest
         param.setDate(new Date(1744869361113L)); // 17th April 2025
 
         cpv.validate(certPath, param);
+    }
+
+    /**
+     * These fixtures are about 1.2 MB each, over JSL's 1 MiB per-certificate ceiling. The ceiling is
+     * read on every call, so raise it for the parse only and put the previous value back; the rest
+     * of the JVM keeps the default. CertificateCeilingTest pins the refusal this lifts.
+     */
+    private static X509Certificate load(CertificateFactory cf, String fileName)
+        throws Exception
+    {
+        String ceiling = "org.openssl.jostle.x509.max_certificate_bytes";
+        String prior = System.getProperty(ceiling);
+        System.setProperty(ceiling, Integer.toString(2 * 1024 * 1024));
+        try
+        {
+            return (X509Certificate)cf.generateCertificate(
+                TestResourceFinder.findTestResource("pkix", fileName));
+        }
+        finally
+        {
+            if (prior == null)
+            {
+                System.clearProperty(ceiling);
+            }
+            else
+            {
+                System.setProperty(ceiling, prior);
+            }
+        }
     }
 }
