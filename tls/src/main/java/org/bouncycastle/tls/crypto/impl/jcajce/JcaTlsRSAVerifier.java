@@ -42,21 +42,13 @@ public class JcaTlsRSAVerifier
         this.publicKey = publicKey;
     }
 
+    /**
+     * Upstream returns a stream verifier here only for the one provider whose raw RSA signature is
+     * not in the TLS 1.2 format. This fork resolves everything through JSL, so the raw verifier is
+     * always the right one.
+     */
     public TlsStreamVerifier getStreamVerifier(DigitallySigned digitallySigned) throws IOException
     {
-        SignatureAndHashAlgorithm algorithm = digitallySigned.getAlgorithm();
-
-        /*
-         * NOTE: The SunMSCAPI provider's "NoneWithRSA" can't produce/verify RSA signatures in the correct format for TLS 1.2
-         */
-        if (algorithm != null
-            && algorithm.getSignature() == SignatureAlgorithm.rsa
-            && JcaUtils.isSunMSCAPIProviderActive()
-            && isSunMSCAPIRawVerifier())
-        {
-            return crypto.createStreamVerifier(digitallySigned, publicKey);
-        }
-
         return null;
     }
 
@@ -111,18 +103,4 @@ public class JcaTlsRSAVerifier
         return rawVerifier;
     }
 
-    protected boolean isSunMSCAPIRawVerifier() throws IOException
-    {
-        try
-        {
-            Signature rawVerifier = getRawVerifier();
-
-            return JcaUtils.isSunMSCAPIProvider(rawVerifier.getProvider());
-        }
-        catch (GeneralSecurityException e)
-        {
-            // Assume the worst!
-            return true;
-        }
-    }
 }

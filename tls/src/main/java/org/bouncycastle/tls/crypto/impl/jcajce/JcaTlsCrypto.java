@@ -511,21 +511,11 @@ public class JcaTlsCrypto
 
     public boolean hasAnyStreamVerifiers(Vector signatureAndHashAlgorithms)
     {
-        boolean isRSAStreamVerifier = JcaUtils.isSunMSCAPIProviderActive();
-
         for (int i = 0, count = signatureAndHashAlgorithms.size(); i < count; ++i)
         {
             SignatureAndHashAlgorithm algorithm = (SignatureAndHashAlgorithm)signatureAndHashAlgorithms.elementAt(i);
             switch (algorithm.getSignature())
             {
-            case SignatureAlgorithm.rsa:
-            {
-                if (isRSAStreamVerifier)
-                {
-                    return true;
-                }
-                break;
-            }
             case SignatureAlgorithm.dsa:
             {
                 if (HashAlgorithm.getOutputSize(algorithm.getHash()) != 20)
@@ -811,8 +801,7 @@ public class JcaTlsCrypto
             return SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature)
                 && hasCryptoHashAlgorithm(CryptoHashAlgorithm.md5);
         case HashAlgorithm.sha224:
-            // Somewhat overkill, but simpler for now. It's also consistent with SunJSSE behaviour.
-            return !JcaUtils.isSunMSCAPIProviderActive() && hasSignatureAlgorithm(signature);
+            return hasSignatureAlgorithm(signature);
         default:
             return hasSignatureAlgorithm(signature);
         }
@@ -1069,14 +1058,14 @@ public class JcaTlsCrypto
                         }
                         catch (NoSuchAlgorithmException e2)
                         {
-                            // SunMSCAPI only registers the generic name - the digest is carried by the parameter.
+                            // A provider may register only the generic name - the digest is carried by the parameter.
                             algorithmName = "RSASSA-PSS";
                             dummySigner = helper.createSignature(algorithmName);
                         }
                     }
                     else if (upperAlg.endsWith("WITHRSASSA-PSS"))
                     {
-                        // SunMSCAPI only registers the generic name - the digest is carried by the parameter.
+                        // A provider may register only the generic name - the digest is carried by the parameter.
                         algorithmName = "RSASSA-PSS";
                         dummySigner = helper.createSignature(algorithmName);
                     }
@@ -1344,8 +1333,7 @@ public class JcaTlsCrypto
                     return Boolean.valueOf(SignatureAlgorithm.rsa == signature && hasSignatureAlgorithm(signature)
                         && hasCryptoHashAlgorithm(CryptoHashAlgorithm.md5));
                 case CryptoHashAlgorithm.sha224:
-                    // Somewhat overkill, but simpler for now. It's also consistent with SunJSSE behaviour.
-                    return Boolean.valueOf(!JcaUtils.isSunMSCAPIProviderActive() && hasSignatureAlgorithm(signature));
+                    return Boolean.valueOf(hasSignatureAlgorithm(signature));
                 default:
                     return Boolean.valueOf(hasSignatureAlgorithm(signature));
                 }

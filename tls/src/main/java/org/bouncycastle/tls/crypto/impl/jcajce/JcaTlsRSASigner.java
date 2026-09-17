@@ -99,19 +99,13 @@ public class JcaTlsRSASigner
         }
     }
 
+    /**
+     * Upstream returns a stream signer here only for the one provider whose raw RSA signature is
+     * not in the TLS 1.2 format. This fork resolves everything through JSL, so the raw signer is
+     * always the right one.
+     */
     public TlsStreamSigner getStreamSigner(SignatureAndHashAlgorithm algorithm) throws IOException
     {
-        /*
-         * NOTE: The SunMSCAPI provider's "NoneWithRSA" can't produce/verify RSA signatures in the correct format for TLS 1.2
-         */
-        if (algorithm != null
-            && SignatureAlgorithm.rsa == algorithm.getSignature()
-            && JcaUtils.isSunMSCAPIProviderActive()
-            && isSunMSCAPIRawSigner())
-        {
-            return crypto.createStreamSigner(algorithm, privateKey, true);
-        }
-
         return null;
     }
 
@@ -125,18 +119,4 @@ public class JcaTlsRSASigner
         return rawSigner;
     }
 
-    protected boolean isSunMSCAPIRawSigner() throws IOException
-    {
-        try
-        {
-            Signature rawSigner = getRawSigner();
-
-            return JcaUtils.isSunMSCAPIProvider(rawSigner.getProvider());
-        }
-        catch (GeneralSecurityException e)
-        {
-            // Assume the worst!
-            return true;
-        }
-    }
 }
