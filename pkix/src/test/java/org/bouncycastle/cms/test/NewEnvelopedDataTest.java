@@ -127,7 +127,7 @@ import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.io.Streams;
 
-// Migrated from bc-java for JSL. 22 methods run green: RSA key-transport with AES content
+// Migrated from bc-java for JSL. The enabled methods cover RSA key-transport with AES content
 // (incl. all OAEP digest variants + HKDF), both finite-field DH key-agreement recipients
 // (testEphemeralStaticDHAgreement, testStaticStaticDHAgreement), AES-192/256 KEK, DES-EDE3-CBC
 // content (testContentType etc.), and the originator/unprotected-attribute tests.
@@ -135,8 +135,8 @@ import org.bouncycastle.util.io.Streams;
 //   - absent ciphers: CAST5, RC2, RC4, single-DES, SEED, Camellia (keygen/KEK/keytrans).
 //   - KEM variants: ML-KEM KTS supports only X9.44 KDF3 (these use other KDF OIDs); RSA-KEM
 //     (ISO 18033, 1.0.18033.*) is absent.
-//   - EC/agreement variants: ECMQV, ECKA-EG, X25519/X448 CMS key-agreement; the EC-key-agree
-//     vectors (need plain "ECDH" by name); DISABLED_testECKeyAgree agrees fine but asserts a specific curve OID.
+//   - EC/agreement variants: ECMQV, ECKA-EG; the EC-key-agree vectors (need plain "ECDH" by
+//     name); DISABLED_testECKeyAgree agrees fine but asserts a specific curve OID.
 //   - misc: AEAD KEK with non-standard GCM tag len 11 (JDK GCMParameters rejects); OAEP params
 //     carried in-cert (DISABLED_testKeyTransOAEPInCert); 3DES-short / alg-mapping edge cases.
 // GOST/SM2/Bc-operator and PBE-password methods were dropped at migration (not migratable).
@@ -742,6 +742,26 @@ public class NewEnvelopedDataTest
         System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
             + " does not serve " + paramSet + " (a 3.1.2 module has no ML-KEM; a 3.5.8 module does)");
         return false;
+    }
+
+    /**
+     * RFC 8418 X25519/X448 CMS agreement. A FIPS module need not serve the XDH curves at all, and
+     * a TestCase subclass cannot skip via Assume, so this returns early and names the service that
+     * is missing rather than asserting which module lacks it.
+     */
+    private boolean requireXdhAgreement()
+    {
+        for (String service : new String[]{"KeyPairGenerator.X25519", "KeyPairGenerator.X448",
+            "KeyAgreement.X25519", "KeyAgreement.X448"})
+        {
+            if (!JslTestProvider.supports(service))
+            {
+                System.out.println("[skipped] " + getName() + ": " + JslTestProvider.name()
+                    + " does not serve " + service);
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -2855,11 +2875,13 @@ public class NewEnvelopedDataTest
 
 
     // Regression test for https://github.com/bcgit/bc-java/issues/1845 - RFC 8418 X25519/X448 in CMS.
-        // DISABLED: CMS OID-lookup gap: no KeyAgreement for the RFC 8418 OID
-        // 1.2.840.113549.1.9.16.3.19. X25519/X448 agreement itself works by name.
-    public void DISABLED_testRFC8418X25519AndX448()
+    public void testRFC8418X25519AndX448()
         throws Exception
     {
+        if (!requireXdhAgreement())
+        {
+            return;
+        }
         doRFC8418Round("X25519", CMSAlgorithm.ECDH_HKDF_SHA256);
         doRFC8418Round("X25519", CMSAlgorithm.ECDH_HKDF_SHA384);
         doRFC8418Round("X25519", CMSAlgorithm.ECDH_HKDF_SHA512);

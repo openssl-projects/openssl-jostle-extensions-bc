@@ -33,11 +33,13 @@ import org.bouncycastle.cms.AbstractKeyAgreeRecipient;
 import org.bouncycastle.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.jcajce.spec.MQVParameterSpec;
-import org.bouncycastle.jcajce.spec.UserKeyingMaterialSpec;
 import org.bouncycastle.operator.DefaultSecretKeySizeProvider;
 import org.bouncycastle.operator.SecretKeySizeProvider;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Pack;
+// JSL accepts no foreign spec type. MQV has no JSL equivalent, so that branch keeps BC's spec
+// and is refused there.
+import org.openssl.jostle.jcajce.spec.UserKeyingMaterialSpec;
 
 public abstract class JceKeyAgreeRecipient
     extends AbstractKeyAgreeRecipient
