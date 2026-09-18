@@ -1,7 +1,10 @@
 package org.bouncycastle.jsl.test;
 
+import java.security.GeneralSecurityException;
+import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.util.Date;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -51,27 +54,60 @@ public class PgpEcKeyPairCurveTest
     public void everyNamedCurveGeneratesAnEcdhKeyPairThatConvertsBack()
         throws Exception
     {
-        for (ASN1ObjectIdentifier curve : CURVES)
-        {
-            implTestCurve(curve, PublicKeyAlgorithmTags.ECDH);
-        }
+        implTestEveryCurve(PublicKeyAlgorithmTags.ECDH);
     }
 
     @Test
     public void everyNamedCurveGeneratesAnEcdsaKeyPairThatConvertsBack()
         throws Exception
     {
+        implTestEveryCurve(PublicKeyAlgorithmTags.ECDSA);
+    }
+
+    /**
+     * Per curve, not per test: the FIPS modules serve the three NIST curves and refuse all three
+     * brainpool ones, so a single gate would either skip everything or fail. A curve the provider
+     * will not generate is skipped with a marker line, and the count of curves that did run is
+     * asserted - otherwise this passes by testing nothing.
+     */
+    private void implTestEveryCurve(int algorithmTag)
+        throws Exception
+    {
+        JslTestProvider.assumeAlgorithm("KeyPairGenerator.EC");
+
+        int ran = 0;
         for (ASN1ObjectIdentifier curve : CURVES)
         {
-            implTestCurve(curve, PublicKeyAlgorithmTags.ECDSA);
+            if (!canGenerate(curve))
+            {
+                System.out.println("[skipped] " + JslTestProvider.name() + " does not serve curve "
+                    + curve.getId());
+                continue;
+            }
+            implTestCurve(curve, algorithmTag);
+            ran++;
+        }
+        assertTrue("no curve was generated at all", ran > 0);
+    }
+
+    private static boolean canGenerate(ASN1ObjectIdentifier curve)
+    {
+        try
+        {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
+            gen.initialize(new ECGenParameterSpec(curve.getId()));
+            gen.generateKeyPair();
+            return true;
+        }
+        catch (GeneralSecurityException e)
+        {
+            return false;
         }
     }
 
     private void implTestCurve(ASN1ObjectIdentifier curve, int algorithmTag)
         throws Exception
     {
-        JslTestProvider.assumeAlgorithm("KeyPairGenerator.EC");
-
         PGPKeyPairGenerator gen = new JcaPGPKeyPairGeneratorProvider()
             .setProvider(JslTestProvider.name())
             .get(PublicKeyPacket.VERSION_4, new Date());
