@@ -2488,7 +2488,7 @@ public class NewEnvelopedDataTest
         // key agreement, wrapping an AES-128 content-encryption key. Closes
         // github #790 — without the dispatch fix in CMSUtils the encode side throws
         // "Unknown key agreement algorithm" and the decode side (in pre-2.85 BC)
-        // fell through to a null UserKeyingMaterialSpec, producing the wrong shared
+        // fell through to a null user keying material spec, producing the wrong shared
         // secret and a "checksum failed" InvalidKeyException from the AES key unwrap.
         ASN1ObjectIdentifier[] kdfs = new ASN1ObjectIdentifier[]{
             CMSAlgorithm.ECKA_EG_X963KDF_SHA256,
