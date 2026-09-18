@@ -3,13 +3,13 @@ package org.bouncycastle.jsl.test;
 import java.security.SecureRandom;
 import java.util.Date;
 
-import org.bouncycastle.bcpg.PublicKeyPacket;
-import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
-import org.bouncycastle.bcpg.S2K;
-import org.bouncycastle.openpgp.PGPKeyPair;
-import org.bouncycastle.openpgp.operator.PGPKeyPairGenerator;
-import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyPairGeneratorProvider;
-import org.bouncycastle.openpgp.operator.jcajce.JcePGPS2KCalculator;
+import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
+import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
+import org.bouncycastle.jsl.bcpg.S2K;
+import org.bouncycastle.jsl.openpgp.PGPKeyPair;
+import org.bouncycastle.jsl.openpgp.operator.PGPKeyPairGenerator;
+import org.bouncycastle.jsl.openpgp.operator.jcajce.JcaPGPKeyPairGeneratorProvider;
+import org.bouncycastle.jsl.openpgp.operator.jcajce.JcePGPS2KCalculator;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -51,7 +51,7 @@ public class PgpJostleSpecRegressionTest
         byte[] again = new JcePGPS2KCalculator().setProvider(JslTestProvider.name())
             .makeKey(PASSPHRASE, s2k, 32);
         assertTrue("the same passphrase and S2K must derive the same key",
-            org.bouncycastle.util.Arrays.areEqual(key, again));
+            org.bouncycastle.jsl.util.Arrays.areEqual(key, again));
     }
 
     @Test

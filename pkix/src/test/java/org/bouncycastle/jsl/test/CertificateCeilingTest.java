@@ -5,7 +5,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 
-import org.bouncycastle.test.TestResourceFinder;
+import org.bouncycastle.jsl.test.TestResourceFinder;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

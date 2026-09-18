@@ -1,0 +1,82 @@
+package org.bouncycastle.jsl.cert.crmf.jcajce;
+
+import java.io.IOException;
+import java.security.Provider;
+import java.security.PublicKey;
+
+import javax.security.auth.x500.X500Principal;
+
+import org.bouncycastle.jsl.asn1.ASN1Encoding;
+import org.bouncycastle.jsl.asn1.crmf.CertReqMsg;
+import org.bouncycastle.jsl.asn1.x500.X500Name;
+import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jsl.cert.crmf.CRMFException;
+import org.bouncycastle.jsl.cert.crmf.CertificateRequestMessage;
+import org.bouncycastle.jsl.util.Exceptions;
+
+public class JcaCertificateRequestMessage
+    extends CertificateRequestMessage
+{
+    private CRMFHelper helper = CRMFHelper.createDefaultHelper();
+
+    public JcaCertificateRequestMessage(byte[] certReqMsg)
+    {
+        this(CertReqMsg.getInstance(certReqMsg));
+    }
+
+    public JcaCertificateRequestMessage(CertificateRequestMessage certReqMsg)
+    {
+        this(certReqMsg.toASN1Structure());
+    }
+
+    public JcaCertificateRequestMessage(CertReqMsg certReqMsg)
+    {
+        super(certReqMsg);
+    }
+
+    public JcaCertificateRequestMessage setProvider(String providerName)
+    {
+        this.helper = CRMFHelper.createNamedHelper(providerName);
+
+        return this;
+    }
+
+    public JcaCertificateRequestMessage setProvider(Provider provider)
+    {
+        this.helper = CRMFHelper.createProviderHelper(provider);
+
+        return this;
+    }
+
+    public X500Principal getSubjectX500Principal()
+    {
+        X500Name subject = this.getCertTemplate().getSubject();
+
+        if (subject != null)
+        {
+            try
+            {
+                return new X500Principal(subject.getEncoded(ASN1Encoding.DER));
+            }
+            catch (IOException e)
+            {
+                throw Exceptions.illegalStateException("unable to construct DER encoding of name", e);
+            }
+        }
+
+        return null;
+    }
+
+    public PublicKey getPublicKey()
+        throws CRMFException
+    {
+        SubjectPublicKeyInfo subjectPublicKeyInfo = getCertTemplate().getPublicKey();
+
+        if (subjectPublicKeyInfo != null)
+        {
+            return helper.toPublicKey(subjectPublicKeyInfo);
+        }
+
+        return null;
+    }
+}

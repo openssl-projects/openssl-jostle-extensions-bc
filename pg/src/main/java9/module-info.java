@@ -7,19 +7,19 @@ module org.bouncycastle.jsl.pg
     requires transitive org.bouncycastle.jsl.core;
     requires org.openssl.jostle.prov;
 
-    exports org.bouncycastle.apache.bzip2;
-    exports org.bouncycastle.bcpg;
-    exports org.bouncycastle.bcpg.attr;
-    exports org.bouncycastle.bcpg.sig;
-    exports org.bouncycastle.gpg;
-    exports org.bouncycastle.gpg.keybox;
-    exports org.bouncycastle.gpg.keybox.jcajce;
-    exports org.bouncycastle.openpgp;
-    exports org.bouncycastle.openpgp.api;
-    exports org.bouncycastle.openpgp.api.exception;
-    exports org.bouncycastle.openpgp.api.jcajce;
-    exports org.bouncycastle.openpgp.api.util;
-    exports org.bouncycastle.openpgp.jcajce;
-    exports org.bouncycastle.openpgp.operator;
-    exports org.bouncycastle.openpgp.operator.jcajce;
+    exports org.bouncycastle.jsl.apache.bzip2;
+    exports org.bouncycastle.jsl.bcpg;
+    exports org.bouncycastle.jsl.bcpg.attr;
+    exports org.bouncycastle.jsl.bcpg.sig;
+    exports org.bouncycastle.jsl.gpg;
+    exports org.bouncycastle.jsl.gpg.keybox;
+    exports org.bouncycastle.jsl.gpg.keybox.jcajce;
+    exports org.bouncycastle.jsl.openpgp;
+    exports org.bouncycastle.jsl.openpgp.api;
+    exports org.bouncycastle.jsl.openpgp.api.exception;
+    exports org.bouncycastle.jsl.openpgp.api.jcajce;
+    exports org.bouncycastle.jsl.openpgp.api.util;
+    exports org.bouncycastle.jsl.openpgp.jcajce;
+    exports org.bouncycastle.jsl.openpgp.operator;
+    exports org.bouncycastle.jsl.openpgp.operator.jcajce;
 }

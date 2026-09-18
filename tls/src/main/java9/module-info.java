@@ -7,15 +7,15 @@ module org.bouncycastle.jsl.tls
     requires transitive org.bouncycastle.jsl.core;
     requires transitive org.openssl.jostle.prov;
 
-    exports org.bouncycastle.jsse;
-    exports org.bouncycastle.jsse.java.security;
-    exports org.bouncycastle.jsse.provider;
-    exports org.bouncycastle.jsse.util;
-    exports org.bouncycastle.tls;
-    exports org.bouncycastle.tls.crypto;
-    exports org.bouncycastle.tls.crypto.impl;
-    exports org.bouncycastle.tls.crypto.impl.jcajce;
-    exports org.bouncycastle.tls.crypto.impl.jcajce.srp;
+    exports org.bouncycastle.jsl.jsse;
+    exports org.bouncycastle.jsl.jsse.java.security;
+    exports org.bouncycastle.jsl.jsse.provider;
+    exports org.bouncycastle.jsl.jsse.util;
+    exports org.bouncycastle.jsl.tls;
+    exports org.bouncycastle.jsl.tls.crypto;
+    exports org.bouncycastle.jsl.tls.crypto.impl;
+    exports org.bouncycastle.jsl.tls.crypto.impl.jcajce;
+    exports org.bouncycastle.jsl.tls.crypto.impl.jcajce.srp;
 
-    provides java.security.Provider with org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
+    provides java.security.Provider with org.bouncycastle.jsl.jsse.provider.BouncyCastleJsseProvider;
 }

@@ -1,0 +1,428 @@
+package org.bouncycastle.jsl.pkcs.util;
+
+import java.io.IOException;
+import java.math.BigInteger;
+import java.security.Provider;
+
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.PBEParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import javax.security.auth.DestroyFailedException;
+import javax.security.auth.Destroyable;
+
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
+import org.bouncycastle.jsl.asn1.ASN1Encoding;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1ParsingException;
+import org.bouncycastle.jsl.asn1.ASN1Primitive;
+import org.bouncycastle.jsl.asn1.DERNull;
+import org.bouncycastle.jsl.asn1.DEROctetString;
+import org.bouncycastle.jsl.asn1.pkcs.ContentInfo;
+import org.bouncycastle.jsl.asn1.pkcs.EncryptedData;
+import org.bouncycastle.jsl.asn1.pkcs.MacData;
+import org.bouncycastle.jsl.asn1.pkcs.PBKDF2Params;
+import org.bouncycastle.jsl.asn1.pkcs.PBMAC1Params;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.pkcs.Pfx;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.asn1.x509.DigestInfo;
+import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.JcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
+import org.bouncycastle.jsl.util.BigIntegers;
+import org.bouncycastle.jsl.util.Exceptions;
+import org.bouncycastle.jsl.util.Properties;
+
+/**
+ * Utility class for re-encoding PKCS#12 files to definite length.
+ * <p>
+ * Replaces {@link org.bouncycastle.jsl.jce.PKCS12Util}; this class additionally
+ * understands RFC 9579 PBMAC1 protected PFX files.
+ * </p>
+ */
+public class PKCS12Util
+{
+    private static final BigInteger DEFAULT_MAX_IT_COUNT = BigInteger.valueOf(5000000);
+
+    /**
+     * Just re-encode the outer layer of the PKCS#12 file to definite length encoding.
+     *
+     * @param berPKCS12File - original PKCS#12 file
+     * @return a byte array representing the DER encoding of the PFX structure
+     * @throws IOException
+     */
+    public static byte[] convertToDefiniteLength(byte[] berPKCS12File)
+        throws IOException
+    {
+        Pfx pfx = Pfx.getInstance(berPKCS12File);
+
+        return pfx.getEncoded(ASN1Encoding.DER);
+    }
+
+    /**
+     * Re-encode the PKCS#12 structure to definite length encoding at the inner layer
+     * as well, recomputing the MAC accordingly.
+     *
+     * @param berPKCS12File - original PKCS12 file.
+     * @return a byte array representing the DER encoding of the PFX structure.
+     * @throws IOException on parsing, encoding errors.
+     */
+    public static byte[] convertToDefiniteLength(byte[] berPKCS12File, char[] passwd)
+        throws IOException
+    {
+        return convertToDefiniteLength(berPKCS12File, passwd, new DefaultJcaJceHelper());
+    }
+
+    /**
+     * Re-encode the PKCS#12 structure to definite length encoding at the inner layer
+     * as well, recomputing the MAC accordingly.
+     *
+     * @param berPKCS12File - original PKCS12 file.
+     * @param provider - provider name to use for MAC calculation.
+     * @return a byte array representing the DER encoding of the PFX structure.
+     * @throws IOException on parsing, encoding errors.
+     */
+    public static byte[] convertToDefiniteLength(byte[] berPKCS12File, char[] passwd, String provider)
+        throws IOException
+    {
+        return convertToDefiniteLength(berPKCS12File, passwd, new NamedJcaJceHelper(provider));
+    }
+
+    /**
+     * Re-encode the PKCS#12 structure to definite length encoding at the inner layer
+     * as well, recomputing the MAC accordingly.
+     *
+     * @param berPKCS12File - original PKCS12 file.
+     * @param provider - provider to use for MAC calculation.
+     * @return a byte array representing the DER encoding of the PFX structure.
+     * @throws IOException on parsing, encoding errors.
+     */
+    public static byte[] convertToDefiniteLength(byte[] berPKCS12File, char[] passwd, Provider provider)
+        throws IOException
+    {
+        return convertToDefiniteLength(berPKCS12File, passwd, new ProviderJcaJceHelper(provider));
+    }
+
+    private static byte[] convertToDefiniteLength(byte[] berPKCS12File, char[] passwd, JcaJceHelper helper)
+        throws IOException
+    {
+        Pfx pfx = Pfx.getInstance(berPKCS12File);
+
+        ContentInfo info = pfx.getAuthSafe();
+
+        ASN1Primitive obj = ASN1Primitive.fromByteArray(getContentOctets(info));
+
+        byte[] contentOctets = obj.getEncoded(ASN1Encoding.DER);
+
+        info = new ContentInfo(info.getContentType(), DEROctetString.withContents(contentOctets));
+
+        MacData mData = pfx.getMacData();
+        try
+        {
+            AlgorithmIdentifier macAlgID = mData.getMac().getAlgorithmId();
+            byte[] salt = mData.getSalt();
+            int itCount = validateIterationCount(mData.getIterationCount());
+            byte[] res = calculatePbeMac(helper, macAlgID, salt, itCount, passwd, contentOctets);
+
+            // Avoid replacing e.g. PBMAC1 parameters
+            if (macAlgID.getParameters() == null)
+            {
+                macAlgID = new AlgorithmIdentifier(macAlgID.getAlgorithm(), DERNull.INSTANCE);
+            }
+
+            DigestInfo dInfo = new DigestInfo(macAlgID, res);
+
+            mData = new MacData(dInfo, salt, itCount);
+        }
+        catch (Exception e)
+        {
+            throw Exceptions.ioException("error constructing MAC: " + e.toString(), e);
+        }
+
+        pfx = new Pfx(info, mData);
+
+        return pfx.getEncoded(ASN1Encoding.DER);
+    }
+
+    /**
+     * Return the content of a ContentInfo, raising {@link ASN1ParsingException} if absent.
+     *
+     * @param contentInfo the ContentInfo to inspect.
+     * @return the carried content.
+     * @throws IOException on ASN.1 parsing errors.
+     */
+    public static ASN1Encodable getContent(ContentInfo contentInfo) throws IOException
+    {
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new ASN1ParsingException("ContentInfo content missing");
+        }
+
+        return content;
+    }
+
+    /**
+     * Return the octets carried by a ContentInfo, raising {@link ASN1ParsingException} if the
+     * content is absent or not an {@code OCTET STRING}.
+     *
+     * @param contentInfo the ContentInfo to inspect.
+     * @return the content octets.
+     * @throws IOException on ASN.1 parsing errors.
+     */
+    public static byte[] getContentOctets(ContentInfo contentInfo) throws IOException
+    {
+        return ASN1OctetString.getInstance(getContent(contentInfo)).getOctets();
+    }
+
+    /**
+     * Return the ciphertext octets of an {@link EncryptedData}, raising
+     * {@link ASN1ParsingException} if absent.
+     *
+     * @param encryptedData the EncryptedData to inspect.
+     * @return the encrypted-content octet string.
+     * @throws IOException on ASN.1 parsing errors.
+     */
+    public static ASN1OctetString getEncryptedContent(EncryptedData encryptedData) throws IOException
+    {
+        ASN1OctetString content = encryptedData.getContent();
+        if (content == null)
+        {
+            throw new ASN1ParsingException("EncryptedContentInfo content missing");
+        }
+
+        return content;
+    }
+
+    // The RFC 9579 sec. 9 floor for a PBMAC1 MAC key (RFC-9579.txt:212-213, a RECOMMENDED reject
+    // rather than a MUST); see validateMacKeyLength, which is the only thing that applies it - a
+    // PBES2 content-encryption keyLength legitimately goes below it.
+    private static final BigInteger MIN_MAC_KEY_LENGTH = BigInteger.valueOf(20);
+    // Any keyLength beyond this is rejected as abusive, whatever it is sizing.
+    private static final BigInteger MAX_KEY_LENGTH = BigInteger.valueOf(1024);
+
+    /**
+     * Validate a PBKDF2 keyLength from a PFX. As with the iteration count, the value arrives in a
+     * PFX whose MAC has not been checked yet and sizes the derivation output, so it has to be
+     * bounded before deriving; it is also multiplied by 8 at the call sites, which overflows to a
+     * negative bit count for a large enough value.
+     *
+     * @param keyLength the keyLength from the wire.
+     * @return the validated keyLength in bytes.
+     * @throws IllegalStateException if the keyLength is absent, not positive, or larger than the
+     *         maximum supported.
+     */
+    public static int validateKeyLength(BigInteger keyLength)
+    {
+        if (keyLength == null || keyLength.signum() <= 0)
+        {
+            throw new IllegalStateException("keyLength must be positive");
+        }
+
+        if (keyLength.compareTo(MAX_KEY_LENGTH) > 0)
+        {
+            throw new IllegalStateException("keyLength " + keyLength + " greater than " + MAX_KEY_LENGTH);
+        }
+
+        return BigIntegers.intValueExact(keyLength);
+    }
+
+    /**
+     * Validate a PBKDF2 keyLength that will size a <b>PBMAC1 MAC key</b>. As
+     * {@link #validateKeyLength(BigInteger)}, plus the floor RFC 9579 sec. 9 recommends
+     * (RFC-9579.txt:212-213): "It's RECOMMENDED to reject any KDF parameters that specify key
+     * lengths less than 20 octets." A MAC key of one or two octets is brute-forceable, so a PFX
+     * declaring one would have its integrity MAC checked against a key an attacker can guess
+     * without knowing the password. Sec. 5 has the length SHOULD match the HMAC output size, so no
+     * conforming file comes near the floor.
+     * <p>
+     * This is deliberately separate from {@link #validateKeyLength(BigInteger)}, which also bounds
+     * the PBES2 <i>content-encryption</i> keyLength - where 16 octets (AES-128) is legal and BC
+     * writes it itself. The upper bound stays at 1024 rather than the HMAC output size for the
+     * mirror-image reason: BC's PKCS12-PBMAC1 keystore asked for a 256-octet MAC key up to release
+     * 1.86, so a cap at the output size would refuse files BC itself produced.
+     *
+     * @param keyLength the keyLength from the wire.
+     * @return the validated keyLength in bytes.
+     * @throws IllegalStateException if the keyLength is absent, not positive, below 20 octets, or
+     *         larger than the maximum supported.
+     */
+    public static int validateMacKeyLength(BigInteger keyLength)
+    {
+        int length = validateKeyLength(keyLength);
+
+        if (keyLength.compareTo(MIN_MAC_KEY_LENGTH) < 0)
+        {
+            throw new IllegalStateException("keyLength " + keyLength + " less than " + MIN_MAC_KEY_LENGTH);
+        }
+
+        return length;
+    }
+
+    /**
+     * Validate an iteration count from a PFX, enforcing the cap configured via the
+     * {@link org.bouncycastle.jsl.util.Properties#PKCS12_MAX_IT_COUNT} security property (default
+     * 5,000,000). Negative values and values that do not fit in a signed 32-bit integer are
+     * also rejected.
+     *
+     * @param ic the iteration count from the wire.
+     * @return the validated iteration count as an {@code int}.
+     * @throws IllegalStateException if the iteration count is negative, larger than the
+     *         configured maximum, or does not fit in a signed 32-bit integer.
+     */
+    public static int validateIterationCount(BigInteger ic)
+    {
+        if (ic.signum() < 0)
+        {
+            throw new IllegalStateException("negative iteration count found");
+        }
+        if (ic.bitLength() > 31)
+        {
+            throw new IllegalStateException("iteration counts >= 2^31 are not suppported");
+        }
+
+        BigInteger max = Properties.asBigInteger(Properties.PKCS12_MAX_IT_COUNT);
+        if (max == null)
+        {
+            max = DEFAULT_MAX_IT_COUNT;
+        }
+
+        if (ic.compareTo(max) > 0)
+        {
+            throw new IllegalStateException("iteration count " + ic + " greater than " + max);
+        }
+
+        return BigIntegers.intValueExact(ic);
+    }
+
+    private static byte[] calculatePbeMac(
+        JcaJceHelper        helper,
+        AlgorithmIdentifier macAlgID,
+        byte[]              salt,
+        int                 itCount,
+        char[]              password,
+        byte[]              data)
+        throws Exception
+    {
+        ASN1ObjectIdentifier oid = macAlgID.getAlgorithm();
+
+        if (PKCSObjectIdentifiers.id_PBMAC1.equals(oid))
+        {
+            return calculatePBMAC1(helper, macAlgID, password, data);
+        }
+
+        PBEParameterSpec defParams = new PBEParameterSpec(salt, itCount);
+
+        SecretKeyFactory keyFact = helper.createSecretKeyFactory(oid.getId());
+        SecretKey key = keyFact.generateSecret(new PBEKeySpec(password));
+
+        try
+        {
+            Mac mac = helper.createMac(oid.getId());
+
+            mac.init(key, defParams);
+            mac.update(data);
+
+            return mac.doFinal();
+        }
+        finally
+        {
+            try
+            {
+                // SecretKey only extends Destroyable from JDK 1.8; guard via the
+                // Destroyable interface (JDK 1.4) so this is a no-op on older JREs.
+                if (key instanceof Destroyable)
+                {
+                    ((Destroyable)key).destroy();
+                }
+            }
+            catch (DestroyFailedException e)
+            {
+                // ignore
+            }
+        }
+    }
+
+    private static byte[] calculatePBMAC1(JcaJceHelper helper, AlgorithmIdentifier macAlgID, char[] password, byte[] data)
+        throws Exception
+    {
+        PBMAC1Params pbmac1Params = PBMAC1Params.getInstance(macAlgID.getParameters());
+        if (pbmac1Params == null)
+        {
+            throw new IOException("If the DigestAlgorithmIdentifier is id-PBMAC1, then the parameters field must contain valid PBMAC1-params parameters.");
+        }
+        if (!PKCSObjectIdentifiers.id_PBKDF2.equals(pbmac1Params.getKeyDerivationFunc().getAlgorithm()))
+        {
+            throw new IOException("Unsupported PBMAC1 key derivation function: " + pbmac1Params.getKeyDerivationFunc().getAlgorithm());
+        }
+
+        PBKDF2Params pbkdf2Params = PBKDF2Params.getInstance(pbmac1Params.getKeyDerivationFunc().getParameters());
+        if (pbkdf2Params.getKeyLength() == null)
+        {
+            throw new IOException("Key length must be present when using PBMAC1.");
+        }
+
+        // Derive the MAC key with PBKDF2 and compute the HMAC through the provider (e.g. JSL/OpenSSL),
+        // matching the SecretKeyFactory/Mac path used for the non-PBMAC1 MAC above.
+        String pbkdf2Alg = getPBKDF2Name(pbkdf2Params.getPrf().getAlgorithm());
+        String hmacAlg = getHMacName(pbmac1Params.getMessageAuthScheme().getAlgorithm());
+        int keySizeBits = BigIntegers.intValueExact(pbkdf2Params.getKeyLength()) * 8;
+
+        SecretKeyFactory keyFact = helper.createSecretKeyFactory(pbkdf2Alg);
+        SecretKey key = keyFact.generateSecret(new PBEKeySpec(
+            password, pbkdf2Params.getSalt(), validateIterationCount(pbkdf2Params.getIterationCount()), keySizeBits));
+
+        try
+        {
+            Mac mac = helper.createMac(hmacAlg);
+            mac.init(new SecretKeySpec(key.getEncoded(), hmacAlg));
+            mac.update(data);
+            return mac.doFinal();
+        }
+        finally
+        {
+            try
+            {
+                if (key != null)
+                {
+                    key.destroy();
+                }
+            }
+            catch (DestroyFailedException e)
+            {
+                // ignore
+            }
+        }
+    }
+
+    private static String getPBKDF2Name(ASN1ObjectIdentifier prfId)
+    {
+        if (PKCSObjectIdentifiers.id_hmacWithSHA256.equals(prfId))
+        {
+            return "PBKDF2WITHHMACSHA256";
+        }
+        if (PKCSObjectIdentifiers.id_hmacWithSHA512.equals(prfId))
+        {
+            return "PBKDF2WITHHMACSHA512";
+        }
+        throw new IllegalArgumentException("unknown prf id " + prfId);
+    }
+
+    private static String getHMacName(ASN1ObjectIdentifier macId)
+    {
+        if (PKCSObjectIdentifiers.id_hmacWithSHA256.equals(macId))
+        {
+            return "HMACSHA256";
+        }
+        if (PKCSObjectIdentifiers.id_hmacWithSHA512.equals(macId))
+        {
+            return "HMACSHA512";
+        }
+        throw new IllegalArgumentException("unknown mac id " + macId);
+    }
+}

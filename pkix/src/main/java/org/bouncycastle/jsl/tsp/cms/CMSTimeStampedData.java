@@ -1,0 +1,285 @@
+package org.bouncycastle.jsl.tsp.cms;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import org.bouncycastle.jsl.asn1.ASN1IA5String;
+import org.bouncycastle.jsl.asn1.ASN1InputStream;
+import org.bouncycastle.jsl.asn1.cms.AttributeTable;
+import org.bouncycastle.jsl.asn1.cms.CMSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.cms.ContentInfo;
+import org.bouncycastle.jsl.asn1.cms.Evidence;
+import org.bouncycastle.jsl.asn1.cms.TimeStampAndCRL;
+import org.bouncycastle.jsl.asn1.cms.TimeStampTokenEvidence;
+import org.bouncycastle.jsl.asn1.cms.TimeStampedData;
+import org.bouncycastle.jsl.cms.CMSException;
+import org.bouncycastle.jsl.operator.DigestCalculator;
+import org.bouncycastle.jsl.operator.DigestCalculatorProvider;
+import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.tsp.TimeStampToken;
+import org.bouncycastle.jsl.util.Exceptions;
+
+/**
+ * In-memory holder for an RFC 5544 TimeStampedData object - a document (or a URI
+ * referencing one) bound to the temporal evidence (a chain of RFC 3161 time stamp
+ * tokens) that proves it existed before a given point in time.
+ * <p>
+ * The wrapped {@link ContentInfo} must be of type id-ct-timestampedData; the
+ * encapsulated TimeStampedData carries the optional dataUri, MetaData and content
+ * along with the Evidence holding the time stamp chain. Use
+ * {@link CMSTimeStampedDataParser} for a streaming alternative.
+ * </p>
+ */
+public class CMSTimeStampedData
+{
+    private TimeStampedData timeStampedData;
+    private ContentInfo contentInfo;
+    private TimeStampDataUtil util;
+
+    public CMSTimeStampedData(ContentInfo contentInfo)
+    {
+        this.initialize(contentInfo);
+    }
+
+    public CMSTimeStampedData(InputStream in)
+        throws IOException
+    {
+        try
+        {
+            ContentInfo contentInfo = ContentInfo.getInstance(new ASN1InputStream(in).readObject());
+            if (contentInfo == null)
+            {
+                // An empty/truncated stream decodes to null; report it directly as the declared exception.
+                throw new IOException("No content found.");
+            }
+            initialize(contentInfo);
+        }
+        catch (ClassCastException e)
+        {
+            // A malformed byte[] / InputStream surfaces from this multi-layer decode as one of three
+            // specific runtime types: ClassCastException (a wrong-type ASN.1 slot),
+            // IllegalArgumentException (the getInstance() malformed-input contract plus the null-content
+            // / size / Evidence guards in initialize(), asn1.cms.MetaData and TimeStampDataUtil), and
+            // IllegalStateException (the shared ASN.1 parse layer's wrong-context-tag signal from
+            // ASN1UniversalType.fromExplicit / fromImplicit*, which throw IllegalStateException by design
+            // for the parser and are deliberately left unchanged). Catch these specific types - as the
+            // recently added CMS byte[]/InputStream guards do - and convert to the declared IOException;
+            // a broad catch (RuntimeException) is intentionally avoided.
+            throw Exceptions.ioException("Malformed content: " + e, e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw Exceptions.ioException("Malformed content: " + e, e);
+        }
+        catch (IllegalStateException e)
+        {
+            throw Exceptions.ioException("Malformed content: " + e, e);
+        }
+    }
+
+    public CMSTimeStampedData(byte[] baseData)
+        throws IOException
+    {
+        this(new ByteArrayInputStream(baseData));
+    }
+
+    private void initialize(ContentInfo contentInfo)
+    {
+        // An empty/truncated stream decodes to a null ContentInfo (ASN1InputStream.readObject() -> null
+        // -> ContentInfo.getInstance(null) -> null); reject it here rather than dereferencing null below.
+        if (contentInfo == null)
+        {
+            throw new IllegalArgumentException("No content found.");
+        }
+
+        this.contentInfo = contentInfo;
+
+        if (CMSObjectIdentifiers.timestampedData.equals(contentInfo.getContentType()))
+        {
+            this.timeStampedData = TimeStampedData.getInstance(contentInfo.getContent());
+            // A ContentInfo carrying the timestampedData OID but no content yields a null here
+            // (TimeStampedData.getInstance(null) == null), which would NPE in TimeStampDataUtil.
+            if (this.timeStampedData == null)
+            {
+                throw new IllegalArgumentException("Malformed content - missing timestamped data");
+            }
+        }
+        else
+        {
+            throw new IllegalArgumentException("Malformed content - type must be " + CMSObjectIdentifiers.timestampedData.getId());
+        }
+
+        util = new TimeStampDataUtil(this.timeStampedData);
+    }
+
+    /**
+     * Calculate the hash over the last time stamp element in the evidence chain, as
+     * required to obtain the next time stamp token that extends the chain (per RFC 5544
+     * each token is computed over its preceding element).
+     *
+     * @param calculator the digest calculator to use.
+     * @return the digest of the DER encoding of the most recent TimeStampAndCRL.
+     * @throws CMSException if the hash cannot be calculated.
+     */
+    public byte[] calculateNextHash(DigestCalculator calculator)
+        throws CMSException
+    {
+        return util.calculateNextHash(calculator);
+    }
+
+    /**
+     * Return a new timeStampedData object with the additional token attached to the end
+     * of the evidence chain. The new token is expected to time stamp the previous chain
+     * element (see {@link #calculateNextHash}), extending the validity of the earlier
+     * tokens.
+     *
+     * @param token the time stamp token to append.
+     * @return a new CMSTimeStampedData carrying the extended evidence chain.
+     * @throws CMSException if the new structure cannot be built.
+     */
+    public CMSTimeStampedData addTimeStamp(TimeStampToken token)
+        throws CMSException
+    {
+        TimeStampAndCRL[] timeStamps = util.getTimeStamps();
+        TimeStampAndCRL[] newTimeStamps = new TimeStampAndCRL[timeStamps.length + 1];
+
+        System.arraycopy(timeStamps, 0, newTimeStamps, 0, timeStamps.length);
+
+        newTimeStamps[timeStamps.length] = new TimeStampAndCRL(token.toCMSSignedData().toASN1Structure());
+
+        return new CMSTimeStampedData(new ContentInfo(CMSObjectIdentifiers.timestampedData, new TimeStampedData(timeStampedData.getDataUriIA5(), timeStampedData.getMetaData(), timeStampedData.getContent(), new Evidence(new TimeStampTokenEvidence(newTimeStamps)))));
+    }
+
+    /**
+     * Return the encapsulated content, if present.
+     *
+     * @return the content octets, or null if no content is carried (e.g. a dataUri is used instead).
+     */
+    public byte[] getContent()
+    {
+        if (timeStampedData.getContent() != null)
+        {
+            return timeStampedData.getContent().getOctets();
+        }
+
+        return null;
+    }
+
+    /**
+     * Return the dataUri referencing the time-stamped document, if present.
+     *
+     * @return the dataUri, or null if none was set.
+     * @throws URISyntaxException if the stored value is not a valid URI.
+     */
+    public URI getDataUri()
+        throws URISyntaxException
+    {
+        ASN1IA5String dataURI = this.timeStampedData.getDataUriIA5();
+
+        if (dataURI != null)
+        {
+            return new URI(dataURI.getString());
+        }
+
+        return null;
+    }
+
+    public String getFileName()
+    {
+        return util.getFileName();
+    }
+
+    public String getMediaType()
+    {
+        return util.getMediaType();
+    }
+
+    public AttributeTable getOtherMetaData()
+    {
+        return util.getOtherMetaData();
+    }
+
+    /**
+     * Return the time stamp tokens making up the evidence chain, in order.
+     *
+     * @return an array of the time stamp tokens present in the message.
+     * @throws CMSException if a token cannot be parsed.
+     */
+    public TimeStampToken[] getTimeStampTokens()
+        throws CMSException
+    {
+        return util.getTimeStampTokens();
+    }
+
+    /**
+     * Initialise the passed in calculator with the MetaData for this message, if it is
+     * required as part of the initial message imprint calculation.
+     *
+     * @param calculator the digest calculator to be initialised.
+     * @throws CMSException if the MetaData is required and cannot be processed
+     */
+    public void initialiseMessageImprintDigestCalculator(DigestCalculator calculator)
+        throws CMSException
+    {
+        util.initialiseMessageImprintDigestCalculator(calculator);
+    }
+
+    /**
+     * Returns an appropriately initialised digest calculator based on the message imprint algorithm
+     * described in the first time stamp in the TemporalData for this message. If the metadata is required
+     * to be included in the digest calculation, the returned calculator will be pre-initialised.
+     *
+     * @param calculatorProvider  a provider of DigestCalculator objects.
+     * @return an initialised digest calculator.
+     * @throws OperatorCreationException if the provider is unable to create the calculator.
+     */
+    public DigestCalculator getMessageImprintDigestCalculator(DigestCalculatorProvider calculatorProvider)
+        throws OperatorCreationException
+    {
+        return util.getMessageImprintDigestCalculator(calculatorProvider);
+    }
+
+    /**
+     * Validate the digests present in the TimeStampTokens contained in the CMSTimeStampedData.
+     *
+     * @param calculatorProvider provider for digest calculators
+     * @param dataDigest the calculated data digest for the message
+     * @throws ImprintDigestInvalidException if an imprint digest fails to compare
+     * @throws CMSException  if an exception occurs processing the message.
+     */
+    public void validate(DigestCalculatorProvider calculatorProvider, byte[] dataDigest)
+        throws ImprintDigestInvalidException, CMSException
+    {
+        util.validate(calculatorProvider, dataDigest);
+    }
+
+    /**
+     * Validate the passed in timestamp token against the tokens and data present in the message.
+     *
+     * @param calculatorProvider provider for digest calculators
+     * @param dataDigest the calculated data digest for the message.
+     * @param timeStampToken  the timestamp token of interest.
+     * @throws ImprintDigestInvalidException if the token is not present in the message, or an imprint digest fails to compare.
+     * @throws CMSException if an exception occurs processing the message.
+     */
+    public void validate(DigestCalculatorProvider calculatorProvider, byte[] dataDigest, TimeStampToken timeStampToken)
+        throws ImprintDigestInvalidException, CMSException
+    {
+        util.validate(calculatorProvider, dataDigest, timeStampToken);
+    }
+
+    /**
+     * Return the DER encoding of the underlying timestampedData ContentInfo.
+     *
+     * @return the encoded ContentInfo.
+     * @throws IOException if encoding fails.
+     */
+    public byte[] getEncoded()
+        throws IOException
+    {
+        return contentInfo.getEncoded();
+    }
+}

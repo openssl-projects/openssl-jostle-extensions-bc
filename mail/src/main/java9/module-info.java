@@ -14,9 +14,9 @@ module org.bouncycastle.jsl.mail
     requires static activation;
     requires static java.activation;
 
-    exports org.bouncycastle.mail.smime;
-    exports org.bouncycastle.mail.smime.examples;
-    exports org.bouncycastle.mail.smime.handlers;
-    exports org.bouncycastle.mail.smime.util;
-    exports org.bouncycastle.mail.smime.validator;
+    exports org.bouncycastle.jsl.mail.smime;
+    exports org.bouncycastle.jsl.mail.smime.examples;
+    exports org.bouncycastle.jsl.mail.smime.handlers;
+    exports org.bouncycastle.jsl.mail.smime.util;
+    exports org.bouncycastle.jsl.mail.smime.validator;
 }

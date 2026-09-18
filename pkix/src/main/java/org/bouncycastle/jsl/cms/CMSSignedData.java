@@ -1,0 +1,801 @@
+package org.bouncycastle.jsl.cms;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
+import org.bouncycastle.jsl.asn1.ASN1EncodableVector;
+import org.bouncycastle.jsl.asn1.ASN1InputStream;
+import org.bouncycastle.jsl.asn1.ASN1Integer;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1Set;
+import org.bouncycastle.jsl.asn1.DERNull;
+import org.bouncycastle.jsl.asn1.DLSet;
+import org.bouncycastle.jsl.asn1.cms.ContentInfo;
+import org.bouncycastle.jsl.asn1.cms.SignedData;
+import org.bouncycastle.jsl.asn1.cms.SignerInfo;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.cert.X509AttributeCertificateHolder;
+import org.bouncycastle.jsl.cert.X509CRLHolder;
+import org.bouncycastle.jsl.cert.X509CertificateHolder;
+import org.bouncycastle.jsl.operator.DefaultDigestAlgorithmIdentifierFinder;
+import org.bouncycastle.jsl.operator.DigestAlgorithmIdentifierFinder;
+import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.util.Encodable;
+import org.bouncycastle.jsl.util.Store;
+
+/**
+ * general class for handling a pkcs7-signature message.
+ * <p>
+ * A simple example of usage - note, in the example below the validity of
+ * the certificate isn't verified, just the fact that one of the certs
+ * matches the given signer...
+ *
+ * <pre>
+ *  Store                   certStore = s.getCertificates();
+ *  SignerInformationStore  signers = s.getSignerInfos();
+ *  Collection              c = signers.getSigners();
+ *  Iterator                it = c.iterator();
+ *
+ *  while (it.hasNext())
+ *  {
+ *      SignerInformation   signer = (SignerInformation)it.next();
+ *      Collection          certCollection = certStore.getMatches(signer.getSID());
+ *
+ *      Iterator              certIt = certCollection.iterator();
+ *      X509CertificateHolder cert = (X509CertificateHolder)certIt.next();
+ *
+ *      if (signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(DefaultProviderName.getProviderName()).build(cert)))
+ *      {
+ *          verified++;
+ *      }
+ *  }
+ * </pre>
+ */
+public class CMSSignedData
+    implements Encodable
+{
+    private static final CMSSignedHelper HELPER = CMSSignedHelper.INSTANCE;
+    private static final DefaultDigestAlgorithmIdentifierFinder DIGEST_ALG_ID_FINDER =
+        new DefaultDigestAlgorithmIdentifierFinder();
+
+    private final SignedData signedData;
+    private final ContentInfo contentInfo;
+    private final CMSTypedData signedContent;
+    private final Map hashes;
+
+    // Lazily constructed
+    private SignerInformationStore signerInfoStore;
+
+    private CMSSignedData(ASN1ObjectIdentifier contentType, SignedData signedData, CMSTypedData signedContent,
+        SignerInformationStore signerInfoStore)
+    {
+        this.signedData = signedData;
+        this.contentInfo = new ContentInfo(contentType, signedData);
+        this.signedContent = signedContent;
+        this.hashes = null;
+        this.signerInfoStore = signerInfoStore;
+    }
+
+    /**
+     * Create a CMSSignedData object from its encoding, the SignedData carrying its encapsulated
+     * (attached) content.
+     *
+     * @param sigBlock the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                 array must hold the entire encoding and nothing extra - trailing bytes beyond
+     *                 the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
+    public CMSSignedData(
+        byte[] sigBlock)
+        throws CMSException
+    {
+        this(CMSUtils.readContentInfo(sigBlock));
+    }
+
+    /**
+     * Create a CMSSignedData object for a detached signature, supplying the previously detached
+     * content separately.
+     *
+     * @param signedContent the content that was detached from the signature.
+     * @param sigBlock      the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                      array must hold the entire encoding and nothing extra - trailing bytes
+     *                      beyond the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
+    public CMSSignedData(
+        CMSProcessable signedContent,
+        byte[] sigBlock)
+        throws CMSException
+    {
+        this(signedContent, CMSUtils.readContentInfo(sigBlock));
+    }
+
+    /**
+     * Create a CMSSignedData object for a detached signature, with the content digests precomputed.
+     *
+     * @param hashes   a map of precomputed digests for the content, indexed by digest algorithm.
+     * @param sigBlock the complete encoding of the SignedData structure (a CMS ContentInfo). The
+     *                 array must hold the entire encoding and nothing extra - trailing bytes beyond
+     *                 the SignedData are not permitted.
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
+    public CMSSignedData(
+        Map hashes,
+        byte[] sigBlock)
+        throws CMSException
+    {
+        this(hashes, CMSUtils.readContentInfo(sigBlock));
+    }
+
+    /**
+     * Create a CMSSignedData object for a detached signature, reading the signature from a stream
+     * and supplying the previously detached content separately.
+     *
+     * @param signedContent the content that was detached from the signature.
+     * @param sigData       a stream positioned at the start of the SignedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
+    public CMSSignedData(
+        CMSProcessable signedContent,
+        InputStream sigData)
+        throws CMSException
+    {
+        this(signedContent, CMSUtils.readContentInfo(new ASN1InputStream(sigData)));
+    }
+
+    /**
+     * Create a CMSSignedData object from a stream, the SignedData carrying its encapsulated
+     * (attached) content.
+     *
+     * @param sigData a stream positioned at the start of the SignedData encoding (a CMS ContentInfo).
+     * @throws CMSException if the encoding cannot be parsed as a SignedData.
+     */
+    public CMSSignedData(
+        InputStream sigData)
+        throws CMSException
+    {
+        this(CMSUtils.readContentInfo(sigData));
+    }
+
+    /**
+     * Create a CMSSignedData object for a detached signature from an already-parsed ContentInfo,
+     * supplying the previously detached content separately.
+     *
+     * @param signedContent the content that was detached from the signature.
+     * @param sigData        the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
+    public CMSSignedData(
+        final CMSProcessable signedContent,
+        ContentInfo sigData)
+        throws CMSException
+    {
+        if (signedContent instanceof CMSTypedData)
+        {
+            this.signedContent = (CMSTypedData)signedContent;
+        }
+        else
+        {
+            this.signedContent = new CMSTypedData()
+            {
+                public ASN1ObjectIdentifier getContentType()
+                {
+                    return signedData.getEncapContentInfo().getContentType();
+                }
+
+                public void write(OutputStream out)
+                    throws IOException, CMSException
+                {
+                    signedContent.write(out);
+                }
+
+                public Object getContent()
+                {
+                    return signedContent.getContent();
+                }
+            };
+        }
+
+        this.contentInfo = sigData;
+        this.signedData = getSignedData();
+        this.hashes = null;
+    }
+
+    /**
+     * Create a CMSSignedData object for a detached signature from an already-parsed ContentInfo,
+     * with the content digests precomputed.
+     *
+     * @param hashes  a map of precomputed digests for the content, indexed by digest algorithm.
+     * @param sigData the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
+    public CMSSignedData(
+        Map hashes,
+        ContentInfo sigData)
+        throws CMSException
+    {
+        this.hashes = hashes;
+        this.contentInfo = sigData;
+        this.signedData = getSignedData();
+        this.signedContent = null;
+    }
+
+    /**
+     * Create a CMSSignedData object from an already-parsed ContentInfo, the SignedData carrying its
+     * encapsulated content (if any).
+     *
+     * @param sigData the ContentInfo carrying the SignedData.
+     * @throws CMSException if the ContentInfo does not hold a well-formed SignedData.
+     */
+    public CMSSignedData(
+        ContentInfo sigData)
+        throws CMSException
+    {
+        this.contentInfo = sigData;
+        this.signedData = getSignedData();
+        this.hashes = null;
+
+        //
+        // this can happen if the signed message is sent simply to send a
+        // certificate chain.
+        //
+        ASN1Encodable content = signedData.getEncapContentInfo().getContent();
+        if (content != null)
+        {
+            if (content instanceof ASN1OctetString)
+            {
+                this.signedContent = new CMSProcessableByteArray(signedData.getEncapContentInfo().getContentType(),
+                    ((ASN1OctetString)content).getOctets());
+            }
+            else
+            {
+                this.signedContent = new PKCS7ProcessableObject(signedData.getEncapContentInfo().getContentType(), content);
+            }
+        }
+        else
+        {
+            this.signedContent = null;
+        }
+    }
+
+    private SignedData getSignedData()
+        throws CMSException
+    {
+        ASN1Encodable content = contentInfo.getContent();
+        if (content == null)
+        {
+            throw new CMSException("Missing content.");
+        }
+
+        try
+        {
+            return SignedData.getInstance(content);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+    }
+
+    /**
+     * Return the version number for this object
+     */
+    public int getVersion()
+    {
+        return signedData.getVersion().intValueExact();
+    }
+
+    /**
+     * Return a copy of this CMSSignedData with the SignedData version field forced to the given
+     * value, leaving every other field unchanged.
+     * <p>
+     * The version is normally recomputed from the content per RFC 5652 sec. 5.1 (for example, a
+     * non-id-data eContentType implies version 3), including by {@link #replaceSigners} and
+     * {@link #addDigestAlgorithm}. This method lets a producer pin a specific version for interop
+     * with profiles that require one - notably Microsoft Authenticode, whose signatures must carry
+     * version 1 even though their SPC_INDIRECT_DATA eContentType would otherwise compute to 3.
+     *
+     * @param version the CMSVersion value to set.
+     * @return a new CMSSignedData carrying the supplied version.
+     */
+    public CMSSignedData asVersion(int version)
+    {
+        SignedData current = this.signedData;
+        SignedData newContent = new SignedData(new ASN1Integer(version), current.getDigestAlgorithms(),
+            current.getEncapContentInfo(), current.getCertificates(), current.getCRLs(), current.getSignerInfos());
+
+        return new CMSSignedData(this.contentInfo.getContentType(), newContent, this.signedContent,
+            this.signerInfoStore);
+    }
+
+    /**
+     * return the collection of signers that are associated with the
+     * signatures for the message.
+     */
+    public SignerInformationStore getSignerInfos()
+    {
+        if (signerInfoStore == null)
+        {
+            ASN1Set s = signedData.getSignerInfos();
+            List signerInfos = new ArrayList();
+
+            for (int i = 0; i != s.size(); i++)
+            {
+                SignerInfo info = SignerInfo.getInstance(s.getObjectAt(i));
+                ASN1ObjectIdentifier contentType = signedData.getEncapContentInfo().getContentType();
+
+                if (hashes == null)
+                {
+                    signerInfos.add(new SignerInformation(info, contentType, signedContent, null));
+                }
+                else
+                {
+                    Object obj = hashes.keySet().iterator().next();
+                    byte[] hash = (obj instanceof String) ? (byte[])hashes.get(info.getDigestAlgorithm().getAlgorithm().getId()) : (byte[])hashes.get(info.getDigestAlgorithm().getAlgorithm());
+
+                    signerInfos.add(new SignerInformation(info, contentType, null, hash));
+                }
+            }
+
+            signerInfoStore = new SignerInformationStore(signerInfos);
+        }
+
+        return signerInfoStore;
+    }
+
+    /**
+     * Return if this is object represents a detached signature.
+     *
+     * @return true if this message represents a detached signature, false otherwise.
+     */
+    public boolean isDetachedSignature()
+    {
+        return signedData.getEncapContentInfo().getContent() == null && signedData.getSignerInfos().size() > 0;
+    }
+
+    /**
+     * Return if this is object represents a certificate management message.
+     *
+     * @return true if the message has no signers or content, false otherwise.
+     */
+    public boolean isCertificateManagementMessage()
+    {
+        return signedData.getEncapContentInfo().getContent() == null && signedData.getSignerInfos().size() == 0;
+    }
+
+    /**
+     * Return any X.509 certificate objects in this SignedData structure as a Store of X509CertificateHolder objects.
+     *
+     * @return a Store of X509CertificateHolder objects.
+     */
+    public Store<X509CertificateHolder> getCertificates()
+    {
+        return HELPER.getCertificates(signedData.getCertificates());
+    }
+
+    /**
+     * Return any X.509 CRL objects in this SignedData structure as a Store of X509CRLHolder objects.
+     *
+     * @return a Store of X509CRLHolder objects.
+     */
+    public Store<X509CRLHolder> getCRLs()
+    {
+        return HELPER.getCRLs(signedData.getCRLs());
+    }
+
+    /**
+     * Return any X.509 attribute certificate objects in this SignedData structure as a Store of X509AttributeCertificateHolder objects.
+     *
+     * @return a Store of X509AttributeCertificateHolder objects.
+     */
+    public Store<X509AttributeCertificateHolder> getAttributeCertificates()
+    {
+        return HELPER.getAttributeCertificates(signedData.getCertificates());
+    }
+
+    /**
+     * Return any OtherRevocationInfo OtherRevInfo objects of the type indicated by otherRevocationInfoFormat in
+     * this SignedData structure.
+     *
+     * @param otherRevocationInfoFormat OID of the format type been looked for.
+     * @return a Store of ASN1Encodable objects representing any objects of otherRevocationInfoFormat found.
+     */
+    public Store getOtherRevocationInfo(ASN1ObjectIdentifier otherRevocationInfoFormat)
+    {
+        return HELPER.getOtherRevocationInfo(otherRevocationInfoFormat, signedData.getCRLs());
+    }
+
+    /**
+     * Return the digest algorithm identifiers for the SignedData object
+     *
+     * @return the set of digest algorithm identifiers
+     */
+    public Set<AlgorithmIdentifier> getDigestAlgorithmIDs()
+    {
+        Set<AlgorithmIdentifier> digests = new HashSet<AlgorithmIdentifier>();
+
+        for (Enumeration en = signedData.getDigestAlgorithms().getObjects(); en.hasMoreElements(); )
+        {
+            digests.add(AlgorithmIdentifier.getInstance(en.nextElement()));
+        }
+
+        return Collections.unmodifiableSet(digests);
+    }
+
+    /**
+     * Return the a string representation of the OID associated with the
+     * encapsulated content info structure carried in the signed data.
+     *
+     * @return the OID for the content type.
+     */
+    public String getSignedContentTypeOID()
+    {
+        return signedData.getEncapContentInfo().getContentType().getId();
+    }
+
+    /**
+     * Return the ASN1ObjectIdentifier associated with the encapsulated content info structure
+     * carried in the signed data.
+     *
+     * @return the OID for the content type.
+     */
+    public ASN1ObjectIdentifier getSignedContentType()
+    {
+        return signedData.getEncapContentInfo().getContentType();
+    }
+
+    public CMSTypedData getSignedContent()
+    {
+        return signedContent;
+    }
+
+    /**
+     * return the ContentInfo
+     */
+    public ContentInfo toASN1Structure()
+    {
+        return contentInfo;
+    }
+
+    /**
+     * return the ASN.1 encoded representation of this object.
+     */
+    public byte[] getEncoded()
+        throws IOException
+    {
+        return contentInfo.getEncoded();
+    }
+
+    /**
+     * return the ASN.1 encoded representation of this object using the specified encoding.
+     *
+     * @param encoding the ASN.1 encoding format to use ("BER", "DL", or "DER").
+     */
+    public byte[] getEncoded(String encoding)
+        throws IOException
+    {
+        return contentInfo.getEncoded(encoding);
+    }
+
+    /**
+     * Verify all the SignerInformation objects and their associated counter signatures attached
+     * to this CMS SignedData object.
+     *
+     * @param verifierProvider a provider of SignerInformationVerifier objects.
+     * @return true if all verify, false otherwise.
+     * @throws CMSException if an exception occurs during the verification process.
+     */
+    public boolean verifySignatures(SignerInformationVerifierProvider verifierProvider)
+        throws CMSException
+    {
+        return verifySignatures(verifierProvider, false);
+    }
+
+    /**
+     * Verify all the SignerInformation objects and optionally their associated counter signatures attached
+     * to this CMS SignedData object.
+     *
+     * @param verifierProvider        a provider of SignerInformationVerifier objects.
+     * @param ignoreCounterSignatures if true don't check counter signatures. If false check counter signatures as well.
+     * @return true if all verify, false otherwise.
+     * @throws CMSException if an exception occurs during the verification process.
+     */
+    public boolean verifySignatures(SignerInformationVerifierProvider verifierProvider, boolean ignoreCounterSignatures)
+        throws CMSException
+    {
+        Collection signers = this.getSignerInfos().getSigners();
+
+        // Fail closed on a degenerate SignedData with no SignerInfos (RFC 5652 permits an empty
+        // signerInfos SET, e.g. a certs-only structure). Falling through the loop to "return true"
+        // would report vacuous success, so a caller using this as its authenticity check would accept
+        // unsigned, attacker-supplied content. Callers expecting a certs-only structure should use
+        // getCertificates() instead.
+        if (signers.isEmpty())
+        {
+            throw new CMSException("no signers present in SignedData");
+        }
+
+        for (Iterator it = signers.iterator(); it.hasNext(); )
+        {
+            SignerInformation signer = (SignerInformation)it.next();
+
+            try
+            {
+                SignerInformationVerifier verifier = verifierProvider.get(signer.getSID());
+
+                if (!signer.verify(verifier))
+                {
+                    return false;
+                }
+
+                if (!ignoreCounterSignatures)
+                {
+                    Collection counterSigners = signer.getCounterSignatures().getSigners();
+
+                    for (Iterator cIt = counterSigners.iterator(); cIt.hasNext(); )
+                    {
+                        if (!verifyCounterSignature((SignerInformation)cIt.next(), verifierProvider))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            catch (OperatorCreationException e)
+            {
+                throw new CMSException("failure in verifier provider: " + e.getMessage(), e);
+            }
+        }
+
+        return true;
+    }
+
+    private boolean verifyCounterSignature(SignerInformation counterSigner, SignerInformationVerifierProvider verifierProvider)
+        throws OperatorCreationException, CMSException
+    {
+        SignerInformationVerifier counterVerifier = verifierProvider.get(counterSigner.getSID());
+
+        if (!counterSigner.verify(counterVerifier))
+        {
+            return false;
+        }
+
+        Collection counterSigners = counterSigner.getCounterSignatures().getSigners();
+        for (Iterator cIt = counterSigners.iterator(); cIt.hasNext(); )
+        {
+            if (!verifyCounterSignature((SignerInformation)cIt.next(), verifierProvider))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Return a new CMSSignedData which guarantees to have the passed in digestAlgorithm
+     * in it. Uses the current DigestAlgorithmIdentifierFinder for creating the digest sets.
+     *
+     * @param signedData      the signed data object to be used as a base.
+     * @param digestAlgorithm the digest algorithm to be added to the signed data.
+     * @return a new signed data object.
+     */
+    public static CMSSignedData addDigestAlgorithm(CMSSignedData signedData, AlgorithmIdentifier digestAlgorithm)
+    {
+        return addDigestAlgorithm(signedData, digestAlgorithm, DIGEST_ALG_ID_FINDER);
+    }
+
+    /**
+     * Return a new CMSSignedData which guarantees to have the passed in digestAlgorithm
+     * in it. Uses the passed in DigestAlgorithmIdentifierFinder for creating the digest sets.
+     *
+     * @param signedData      the signed data object to be used as a base.
+     * @param digestAlgorithm the digest algorithm to be added to the signed data.
+     * @param digestAlgIdFinder      the digest algorithmID map to generate the digest set with.
+     * @return a new signed data object.
+     */
+    public static CMSSignedData addDigestAlgorithm(CMSSignedData signedData, AlgorithmIdentifier digestAlgorithm,
+        DigestAlgorithmIdentifierFinder digestAlgIdFinder)
+    {
+        Set<AlgorithmIdentifier> digestAlgorithms = signedData.getDigestAlgorithmIDs();
+        AlgorithmIdentifier digestAlg = HELPER.fixDigestAlgID(digestAlgorithm, digestAlgIdFinder);
+
+        //
+        // if the algorithm is already present there is no need to add it.
+        //
+        if (digestAlgorithms.contains(digestAlg))
+        {
+            return signedData;
+        }
+
+        //
+        // build up the new set
+        //
+        Set<AlgorithmIdentifier> digestAlgs = new HashSet<AlgorithmIdentifier>();
+
+        Iterator it = digestAlgorithms.iterator();
+        while (it.hasNext())
+        {
+            digestAlgs.add(HELPER.fixDigestAlgID((AlgorithmIdentifier)it.next(), digestAlgIdFinder));
+        }
+        digestAlgs.add(digestAlg);
+
+        ASN1Set digestSet = CMSUtils.convertToDlSet(digestAlgs);
+
+        SignedData oldContent = signedData.signedData;
+
+        SignedData newContent = new SignedData(digestSet, oldContent.getEncapContentInfo(),
+            oldContent.getCertificates(), oldContent.getCRLs(), oldContent.getSignerInfos());
+
+        return new CMSSignedData(signedData.contentInfo.getContentType(), newContent, signedData.getSignedContent(),
+            signedData.signerInfoStore);
+    }
+
+    /**
+     * Replace the SignerInformation store associated with this
+     * CMSSignedData object with the new one passed in using the current
+     * DigestAlgorithmIdentifierFinder for creating the digest sets. You would
+     * probably only want to do this if you wanted to change the unsigned
+     * attributes associated with a signer, or perhaps delete one.
+     *
+     * @param signedData             the signed data object to be used as a base.
+     * @param signerInformationStore the new signer information store to use.
+     * @return a new signed data object.
+     */
+    public static CMSSignedData replaceSigners(CMSSignedData signedData, SignerInformationStore signerInformationStore)
+    {
+        return replaceSigners(signedData, signerInformationStore, DIGEST_ALG_ID_FINDER);
+    }
+
+    /**
+     * Replace the SignerInformation store associated with this
+     * CMSSignedData object with the new one passed in using the passed in
+     * DigestAlgorithmIdentifierFinder for creating the digest sets. You would
+     * probably only want to do this if you wanted to change the unsigned
+     * attributes associated with a signer, or perhaps delete one.
+     *
+     * @param signedData             the signed data object to be used as a base.
+     * @param signerInformationStore the new signer information store to use.
+     * @param digestAlgIdFinder      the digest algorithmID map to generate the digest set with.
+     * @return a new signed data object.
+     */
+    public static CMSSignedData replaceSigners(CMSSignedData signedData, SignerInformationStore signerInformationStore,
+        DigestAlgorithmIdentifierFinder digestAlgIdFinder)
+    {
+        //
+        // replace the signers in the SignedData object
+        //
+        Set<AlgorithmIdentifier> digestAlgs = new HashSet<AlgorithmIdentifier>();
+
+        Collection<SignerInformation> signers = signerInformationStore.getSigners();
+        ASN1EncodableVector vec = new ASN1EncodableVector(signers.size());
+
+        Iterator it = signers.iterator();
+        while (it.hasNext())
+        {
+            SignerInformation signer = (SignerInformation)it.next();
+            CMSUtils.addDigestAlgs(digestAlgs, signer, digestAlgIdFinder);
+            vec.add(signer.toASN1Structure());
+        }
+
+        // keep ourselves compatible with what was there before - issue with
+        // NULL appearing and disappearing in AlgorithmIdentifier parameters.
+        Set<AlgorithmIdentifier> oldDigestAlgs = signedData.getDigestAlgorithmIDs();
+        AlgorithmIdentifier[] oldDigestAlgIds = (AlgorithmIdentifier[])oldDigestAlgs.toArray(new AlgorithmIdentifier[oldDigestAlgs.size()]);
+        AlgorithmIdentifier[] newDigestAlgIds = (AlgorithmIdentifier[])digestAlgs.toArray(new AlgorithmIdentifier[digestAlgs.size()]);
+
+        compareAndReplaceAlgIds(oldDigestAlgIds, newDigestAlgIds);
+
+        ASN1Set digestSet = new DLSet(newDigestAlgIds);
+        ASN1Set signerSet = new DLSet(vec);
+
+        SignedData oldContent = signedData.signedData;
+
+        SignedData newContent = new SignedData(digestSet, oldContent.getEncapContentInfo(),
+            oldContent.getCertificates(), oldContent.getCRLs(), signerSet);
+
+        return new CMSSignedData(signedData.contentInfo.getContentType(), newContent, signedData.getSignedContent(),
+            signerInformationStore);
+    }
+
+    private static void compareAndReplaceAlgIds(AlgorithmIdentifier[] oldDigestAlgIds, AlgorithmIdentifier[] newDigestAlgIds)
+    {
+        for (int i = 0; i != newDigestAlgIds.length; i++)
+        {
+            AlgorithmIdentifier newId = newDigestAlgIds[i];
+
+            for (int j = 0; j != oldDigestAlgIds.length; j++)
+            {
+                AlgorithmIdentifier oldId = oldDigestAlgIds[j];
+                if (newId.getAlgorithm().equals(oldId.getAlgorithm()))
+                {
+                    if (newId.getParameters() == null || DERNull.INSTANCE.equals(newId.getParameters()))
+                    {
+                        newDigestAlgIds[i] = oldId;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Replace the certificate and CRL information associated with this
+     * CMSSignedData object with the new one passed in.
+     *
+     * @param signedData   the signed data object to be used as a base.
+     * @param certificates the new certificates to be used.
+     * @param attrCerts    the new attribute certificates to be used.
+     * @param revocations  the new CRLs to be used - a collection of X509CRLHolder objects, OtherRevocationInfoFormat, or both.
+     * @return a new signed data object.
+     * @throws CMSException if there is an error processing the CertStore
+     */
+    public static CMSSignedData replaceCertificatesAndCRLs(
+        CMSSignedData signedData,
+        Store certificates,
+        Store attrCerts,
+        Store revocations)
+        throws CMSException
+    {
+        //
+        // replace the certs and revocations in the SignedData object
+        //
+        ASN1Set certSet = null;
+        ASN1Set crlSet = null;
+
+        if (certificates != null || attrCerts != null)
+        {
+            List certs = new ArrayList();
+
+            if (certificates != null)
+            {
+                certs.addAll(CMSUtils.getCertificatesFromStore(certificates));
+            }
+            if (attrCerts != null)
+            {
+                certs.addAll(CMSUtils.getAttributeCertificatesFromStore(attrCerts));
+            }
+
+            ASN1Set set = CMSUtils.createBerSetFromList(certs);
+
+            if (set.size() != 0)
+            {
+                certSet = set;
+            }
+        }
+
+        if (revocations != null)
+        {
+            ASN1Set set = CMSUtils.createBerSetFromList(CMSUtils.getCRLsFromStore(revocations));
+
+            if (set.size() != 0)
+            {
+                crlSet = set;
+            }
+        }
+
+        SignedData oldContent = signedData.signedData;
+
+        SignedData newContent = new SignedData(oldContent.getDigestAlgorithms(), oldContent.getEncapContentInfo(),
+            certSet, crlSet, oldContent.getSignerInfos());
+
+        return new CMSSignedData(signedData.contentInfo.getContentType(), newContent, signedData.getSignedContent(),
+            signedData.signerInfoStore);
+    }
+}

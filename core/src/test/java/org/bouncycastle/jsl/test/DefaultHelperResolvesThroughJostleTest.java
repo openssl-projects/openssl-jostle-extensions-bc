@@ -5,8 +5,8 @@ import java.security.NoSuchProviderException;
 
 import javax.crypto.Mac;
 
-import org.bouncycastle.jcajce.util.DefaultJcaJceHelper;
-import org.bouncycastle.jcajce.util.DefaultProviderName;
+import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.DefaultProviderName;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

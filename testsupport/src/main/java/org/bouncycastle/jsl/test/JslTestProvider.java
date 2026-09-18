@@ -4,7 +4,7 @@ import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.Security;
 
-import org.bouncycastle.jcajce.util.DefaultProviderName;
+import org.bouncycastle.jsl.jcajce.util.DefaultProviderName;
 import org.junit.Assume;
 import org.openssl.jostle.jcajce.provider.JostleProvider;
 import org.openssl.jostle.jcajce.provider.fips.JostleFIPSProvider;

@@ -6,17 +6,17 @@ import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Collection;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.cms.CMSAlgorithm;
-import org.bouncycastle.cms.CMSEnvelopedData;
-import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
-import org.bouncycastle.cms.CMSProcessableByteArray;
-import org.bouncycastle.cms.RecipientInformation;
-import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
-import org.bouncycastle.cms.jcajce.JceKeyAgreeEnvelopedRecipient;
-import org.bouncycastle.cms.jcajce.JceKeyAgreeRecipientInfoGenerator;
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.Strings;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.cms.CMSAlgorithm;
+import org.bouncycastle.jsl.cms.CMSEnvelopedData;
+import org.bouncycastle.jsl.cms.CMSEnvelopedDataGenerator;
+import org.bouncycastle.jsl.cms.CMSProcessableByteArray;
+import org.bouncycastle.jsl.cms.RecipientInformation;
+import org.bouncycastle.jsl.cms.jcajce.JceCMSContentEncryptorBuilder;
+import org.bouncycastle.jsl.cms.jcajce.JceKeyAgreeEnvelopedRecipient;
+import org.bouncycastle.jsl.cms.jcajce.JceKeyAgreeRecipientInfoGenerator;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.Strings;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;

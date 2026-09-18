@@ -13,10 +13,10 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.X509EncodedKeySpec;
 
-import org.bouncycastle.test.TestResourceFinder;
-import org.bouncycastle.util.encoders.Hex;
-import org.bouncycastle.util.io.pem.PemObject;
-import org.bouncycastle.util.io.pem.PemReader;
+import org.bouncycastle.jsl.test.TestResourceFinder;
+import org.bouncycastle.jsl.util.encoders.Hex;
+import org.bouncycastle.jsl.util.io.pem.PemObject;
+import org.bouncycastle.jsl.util.io.pem.PemReader;
 import org.junit.Test;
 
 /**

@@ -21,7 +21,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * Production code resolves JCA services through a {@link org.bouncycastle.jcajce.util.JcaJceHelper}
+ * Production code resolves JCA services through a {@link org.bouncycastle.jsl.jcajce.util.JcaJceHelper}
  * so a caller who names no provider still gets this library's provider. A one-argument
  * {@code getInstance} goes straight to the JDK's installed order instead, which is what the helper
  * seam exists to avoid.
@@ -36,29 +36,29 @@ public class NoUnqualifiedServiceLookupInProductionTest
 
     /** The helper implementations are where naming a provider is decided; they are the seam. */
     private static final String[] SEAM = {
-        "core/src/main/java/org/bouncycastle/jcajce/util/DefaultJcaJceHelper.java",
-        "core/src/main/java/org/bouncycastle/jcajce/util/NamedJcaJceHelper.java",
-        "core/src/main/java/org/bouncycastle/jcajce/util/ProviderJcaJceHelper.java",
-        "pkix/src/main/java/org/bouncycastle/cert/jcajce/DefaultCertHelper.java",
-        "pkix/src/main/java/org/bouncycastle/cert/jcajce/NamedCertHelper.java",
-        "pkix/src/main/java/org/bouncycastle/cert/jcajce/ProviderCertHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/jcajce/DefaultEACHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/jcajce/NamedEACHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/jcajce/ProviderEACHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/operator/jcajce/DefaultEACHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/operator/jcajce/NamedEACHelper.java",
-        "pkix/src/main/java/org/bouncycastle/eac/operator/jcajce/ProviderEACHelper.java",
+        "core/src/main/java/org/bouncycastle/jsl/jcajce/util/DefaultJcaJceHelper.java",
+        "core/src/main/java/org/bouncycastle/jsl/jcajce/util/NamedJcaJceHelper.java",
+        "core/src/main/java/org/bouncycastle/jsl/jcajce/util/ProviderJcaJceHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/cert/jcajce/DefaultCertHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/cert/jcajce/NamedCertHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/cert/jcajce/ProviderCertHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/jcajce/DefaultEACHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/jcajce/NamedEACHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/jcajce/ProviderEACHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/operator/jcajce/DefaultEACHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/operator/jcajce/NamedEACHelper.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/eac/operator/jcajce/ProviderEACHelper.java",
     };
 
     /** Sites that reach the JDK deliberately, each for the reason given beside it. */
     private static final String[] ALLOWED = {
         // the certification-path family: JSL's CertPathBuilder refuses a caller-supplied
         // PKIXCertPathChecker, which the TLS trust manager needs, and JSL serves no CertStore
-        "pkix/src/main/java/org/bouncycastle/est/jcajce/JcaJceUtils.java",
-        "tls/src/main/java/org/bouncycastle/jsse/provider/ProvX509TrustManager.java",
+        "pkix/src/main/java/org/bouncycastle/jsl/est/jcajce/JcaJceUtils.java",
+        "tls/src/main/java/org/bouncycastle/jsl/jsse/provider/ProvX509TrustManager.java",
         // a JSSE key or trust store is a PKCS12 or JKS file, which JSL does not serve
-        "tls/src/main/java/org/bouncycastle/jsse/provider/ProvKeyManagerFactorySpi.java",
-        "tls/src/main/java/org/bouncycastle/jsse/provider/ProvTrustManagerFactorySpi.java",
+        "tls/src/main/java/org/bouncycastle/jsl/jsse/provider/ProvKeyManagerFactorySpi.java",
+        "tls/src/main/java/org/bouncycastle/jsl/jsse/provider/ProvTrustManagerFactorySpi.java",
     };
 
     /** JCA service type -> the import that tells it apart from a same-named ASN.1 class. */

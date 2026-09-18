@@ -7,15 +7,15 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Date;
 
-import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.X509v3CertificateBuilder;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.ContentVerifierProvider;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
+import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x500.X500Name;
+import org.bouncycastle.jsl.cert.X509CertificateHolder;
+import org.bouncycastle.jsl.cert.X509v3CertificateBuilder;
+import org.bouncycastle.jsl.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jsl.operator.ContentSigner;
+import org.bouncycastle.jsl.operator.ContentVerifierProvider;
+import org.bouncycastle.jsl.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.jsl.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

@@ -1,0 +1,43 @@
+package org.bouncycastle.jsl.tsp.ers;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.bouncycastle.jsl.asn1.tsp.EvidenceRecord;
+import org.bouncycastle.jsl.operator.DigestCalculatorProvider;
+import org.bouncycastle.jsl.tsp.TSPException;
+
+/**
+ * Generator for RFC 4998 Evidence Records. An EvidenceRecord wraps one or more
+ * archive time-stamps (as a single ArchiveTimeStampChain in an
+ * ArchiveTimeStampSequence) created by an {@link ERSArchiveTimeStampGenerator}.
+ */
+public class ERSEvidenceRecordGenerator
+{
+    private final DigestCalculatorProvider digCalcProv;
+
+    public ERSEvidenceRecordGenerator(DigestCalculatorProvider digCalcProv)
+    {
+        this.digCalcProv = digCalcProv;
+    }
+
+    public ERSEvidenceRecord generate(ERSArchiveTimeStamp archiveTimeStamp)
+        throws TSPException, ERSException
+    {
+        return new ERSEvidenceRecord(
+            new EvidenceRecord(null, null, archiveTimeStamp.toASN1Structure()), digCalcProv);
+    }
+
+    public List<ERSEvidenceRecord> generate(List<ERSArchiveTimeStamp> archiveTimeStamps)
+        throws TSPException, ERSException
+    {
+        List<ERSEvidenceRecord> list = new ArrayList<ERSEvidenceRecord>(archiveTimeStamps.size());
+        for (int i = 0; i != archiveTimeStamps.size(); i++)
+        {
+            list.add(new ERSEvidenceRecord(
+                    new EvidenceRecord(null, null, ((ERSArchiveTimeStamp)archiveTimeStamps.get(i)).toASN1Structure()), digCalcProv));
+        }
+
+        return list;
+    }
+}

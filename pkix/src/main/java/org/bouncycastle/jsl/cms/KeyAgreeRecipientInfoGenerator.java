@@ -1,0 +1,78 @@
+package org.bouncycastle.jsl.cms;
+
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1Sequence;
+import org.bouncycastle.jsl.asn1.DERNull;
+import org.bouncycastle.jsl.asn1.DEROctetString;
+import org.bouncycastle.jsl.asn1.cms.KeyAgreeRecipientInfo;
+import org.bouncycastle.jsl.asn1.cms.OriginatorIdentifierOrKey;
+import org.bouncycastle.jsl.asn1.cms.OriginatorPublicKey;
+import org.bouncycastle.jsl.asn1.cms.RecipientInfo;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jsl.operator.GenericKey;
+
+public abstract class KeyAgreeRecipientInfoGenerator
+    implements RecipientInfoGenerator
+{
+    private final ASN1ObjectIdentifier keyAgreementOID;
+    private final ASN1ObjectIdentifier keyEncryptionOID;
+    private final SubjectPublicKeyInfo originatorKeyInfo;
+
+    protected KeyAgreeRecipientInfoGenerator(ASN1ObjectIdentifier keyAgreementOID,
+        SubjectPublicKeyInfo originatorKeyInfo, ASN1ObjectIdentifier keyEncryptionOID)
+    {
+        this.originatorKeyInfo = originatorKeyInfo;
+        this.keyAgreementOID = keyAgreementOID;
+        this.keyEncryptionOID = keyEncryptionOID;
+    }
+
+    public RecipientInfo generate(GenericKey contentEncryptionKey) throws CMSException
+    {
+        OriginatorPublicKey originatorPublicKey = createOriginatorPublicKey(originatorKeyInfo); 
+        OriginatorIdentifierOrKey originator = new OriginatorIdentifierOrKey(originatorPublicKey);
+
+        ASN1Encodable keyEncAlgParams = null;
+        if (CMSUtils.isDES(keyEncryptionOID) || PKCSObjectIdentifiers.id_alg_CMSRC2wrap.equals(keyEncryptionOID))
+        {
+            keyEncAlgParams = DERNull.INSTANCE;
+        }
+
+        AlgorithmIdentifier keyEncAlgorithm = new AlgorithmIdentifier(keyEncryptionOID, keyEncAlgParams);
+        AlgorithmIdentifier keyAgreeAlgorithm = new AlgorithmIdentifier(keyAgreementOID, keyEncAlgorithm);
+
+        ASN1Sequence recipients = generateRecipientEncryptedKeys(keyAgreeAlgorithm, keyEncAlgorithm, contentEncryptionKey);
+
+        ASN1OctetString ukm = DEROctetString.fromContentsOptional(getUserKeyingMaterial(keyAgreeAlgorithm));
+
+        return new RecipientInfo(new KeyAgreeRecipientInfo(originator, ukm, keyAgreeAlgorithm, recipients));
+    }
+
+    protected OriginatorPublicKey createOriginatorPublicKey(SubjectPublicKeyInfo originatorKeyInfo)
+    {
+        return new OriginatorPublicKey(originatorKeyInfo.getAlgorithm(), originatorKeyInfo.getPublicKeyData());
+    }
+
+    protected boolean isEC(ASN1ObjectIdentifier algorithmOID)
+    {
+        return CMSUtils.isEC(algorithmOID);
+    }
+
+    protected boolean isMQV(ASN1ObjectIdentifier algorithmOID)
+    {
+        return CMSUtils.isMQV(algorithmOID);
+    }
+
+    protected boolean isRFC2631(ASN1ObjectIdentifier algorithmOID)
+    {
+        return CMSUtils.isRFC2631(algorithmOID);
+    }
+
+    protected abstract ASN1Sequence generateRecipientEncryptedKeys(AlgorithmIdentifier keyAgreeAlgorithm,
+        AlgorithmIdentifier keyEncAlgorithm, GenericKey contentEncryptionKey) throws CMSException;
+
+    protected abstract byte[] getUserKeyingMaterial(AlgorithmIdentifier keyAgreeAlgorithm) throws CMSException;
+}

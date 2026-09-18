@@ -3,11 +3,11 @@ package org.bouncycastle.jsl.test;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.bouncycastle.cert.plants.ListMerkleTreeNodeSource;
-import org.bouncycastle.cert.plants.MerkleTreeHash;
-import org.bouncycastle.cert.plants.MerkleTreePrimitives;
-import org.bouncycastle.cert.plants.jcajce.JcaSha256MerkleTreeHash;
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.jsl.cert.plants.ListMerkleTreeNodeSource;
+import org.bouncycastle.jsl.cert.plants.MerkleTreeHash;
+import org.bouncycastle.jsl.cert.plants.MerkleTreePrimitives;
+import org.bouncycastle.jsl.cert.plants.jcajce.JcaSha256MerkleTreeHash;
+import org.bouncycastle.jsl.util.Arrays;
 import org.junit.BeforeClass;
 import org.junit.Test;
 

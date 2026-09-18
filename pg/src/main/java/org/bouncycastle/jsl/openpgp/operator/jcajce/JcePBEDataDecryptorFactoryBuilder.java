@@ -1,0 +1,214 @@
+package org.bouncycastle.jsl.openpgp.operator.jcajce;
+
+import java.security.GeneralSecurityException;
+import java.security.Provider;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.jsl.bcpg.AEADEncDataPacket;
+import org.bouncycastle.jsl.bcpg.SymmetricEncIntegrityPacket;
+import org.bouncycastle.jsl.bcpg.SymmetricKeyEncSessionPacket;
+import org.bouncycastle.jsl.bcpg.SymmetricKeyUtils;
+import org.bouncycastle.jsl.bcpg.UnsupportedPacketVersionException;
+import org.bouncycastle.jsl.openpgp.PGPException;
+import org.bouncycastle.jsl.openpgp.PGPSessionKey;
+import org.bouncycastle.jsl.openpgp.PGPUtil;
+import org.bouncycastle.jsl.openpgp.operator.PBEDataDecryptorFactory;
+import org.bouncycastle.jsl.openpgp.operator.PGPDataDecryptor;
+import org.bouncycastle.jsl.openpgp.operator.PGPDigestCalculatorProvider;
+import org.bouncycastle.jsl.util.Exceptions;
+/**
+ * Builder for {@link PBEDataDecryptorFactory} instances that obtain cryptographic primitives using
+ * the JCE API.
+ */
+public class JcePBEDataDecryptorFactoryBuilder
+{
+    private OperatorHelper helper = OperatorUtils.createDefaultHelper();
+    private JceAEADUtil aeadHelper = new JceAEADUtil(helper);
+    private PGPDigestCalculatorProvider calculatorProvider;
+
+    /**
+     * Base constructor - assume the required digest calculators can be provided from the same source as
+     * the cipher needed.
+     */
+    public JcePBEDataDecryptorFactoryBuilder()
+    {
+        this.calculatorProvider = null;
+    }
+
+    /**
+     * Base constructor.
+     *
+     * @param calculatorProvider a digest calculator provider to provide calculators to support the key generation calculation required.
+     */
+    public JcePBEDataDecryptorFactoryBuilder(PGPDigestCalculatorProvider calculatorProvider)
+    {
+        this.calculatorProvider = calculatorProvider;
+    }
+
+    /**
+     * Set the provider object to use for creating cryptographic primitives in the resulting factory the builder produces.
+     *
+     * @param provider provider object for cryptographic primitives.
+     * @return the current builder.
+     */
+    public JcePBEDataDecryptorFactoryBuilder setProvider(Provider provider)
+    {
+        this.helper = OperatorUtils.createProviderHelper(provider);
+        this.aeadHelper = new JceAEADUtil(helper);
+
+        return this;
+    }
+
+    /**
+     * Set the provider name to use for creating cryptographic primitives in the resulting factory the builder produces.
+     *
+     * @param providerName the name of the provider to reference for cryptographic primitives.
+     * @return the current builder.
+     */
+    public JcePBEDataDecryptorFactoryBuilder setProvider(String providerName)
+    {
+        this.helper = OperatorUtils.createNamedHelper(providerName);
+        this.aeadHelper = new JceAEADUtil(helper);
+
+        return this;
+    }
+
+    /**
+     * Construct a {@link PBEDataDecryptorFactory} to use to decrypt PBE encrypted data.
+     *
+     * @param passPhrase the pass phrase to use to generate keys in the resulting factory.
+     * @return a decryptor factory that can be used to generate PBE keys.
+     */
+    public PBEDataDecryptorFactory build(char[] passPhrase)
+    {
+        if (calculatorProvider == null)
+        {
+            try
+            {
+                calculatorProvider = new JcaPGPDigestCalculatorProviderBuilder(helper).build();
+            }
+            catch (PGPException e)
+            {
+                throw Exceptions.illegalStateException("digest calculator provider cannot be built with current helper", e);
+            }
+        }
+        return new PBEDataDecryptorFactory(passPhrase, calculatorProvider, new JcePGPS2KCalculator(helper))
+        {
+            @Override
+            public byte[] recoverSessionData(int keyAlgorithm, byte[] key, byte[] secKeyData)
+                throws PGPException
+            {
+                try
+                {
+                    if (secKeyData != null && secKeyData.length > 0)
+                    {
+                        String cipherName = PGPUtil.getSymmetricCipherName(keyAlgorithm);
+                        Cipher keyCipher = helper.createCipher(cipherName + "/CFB/NoPadding");
+                        keyCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, cipherName), new IvParameterSpec(new byte[keyCipher.getBlockSize()]));
+
+                        return keyCipher.doFinal(secKeyData);
+                    }
+                    else
+                    {
+                        byte[] keyBytes = new byte[key.length + 1];
+
+                        keyBytes[0] = (byte)keyAlgorithm;
+                        System.arraycopy(key, 0, keyBytes, 1, key.length);
+
+                        return keyBytes;
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw new PGPException("Exception recovering session info", e);
+                }
+            }
+
+            @Override
+            public byte[] recoverAEADEncryptedSessionData(SymmetricKeyEncSessionPacket keyData, byte[] ikm)
+                throws PGPException
+            {
+                if (keyData.getVersion() < SymmetricKeyEncSessionPacket.VERSION_5)
+                {
+                    throw new PGPException("SKESK packet MUST be version 5 or later.");
+                }
+
+                byte[] hkdfInfo = keyData.getAAData(); // between v5 and v6, these bytes differ
+
+                SecretKey secretKey;
+                if (keyData.getVersion() == SymmetricKeyEncSessionPacket.VERSION_5)
+                {
+                    secretKey = new SecretKeySpec(ikm, PGPUtil.getSymmetricCipherName(keyData.getEncAlgorithm()));
+                }
+                else if (keyData.getVersion() == SymmetricKeyEncSessionPacket.VERSION_6)
+                {
+                    // HKDF
+                    // secretKey := HKDF_sha256(ikm, hkdfInfo).generate()
+                    int kekLen = SymmetricKeyUtils.getKeyLengthInOctets(keyData.getEncAlgorithm());
+                    byte[] kek = JceAEADUtil.generateHKDFBytes(helper, ikm, null, hkdfInfo, kekLen);
+                    secretKey = new SecretKeySpec(kek, PGPUtil.getSymmetricCipherName(keyData.getEncAlgorithm()));
+                }
+                else
+                {
+                    throw new UnsupportedPacketVersionException("Unsupported SKESK packet version encountered: " + keyData.getVersion());
+                }
+
+                // AEAD
+                Cipher aead = aeadHelper.createAEADCipher(keyData.getEncAlgorithm(), keyData.getAeadAlgorithm());
+                int aeadMacLen = 128;
+                byte[] authTag = keyData.getAuthTag();
+                byte[] aeadIv = keyData.getIv();
+                byte[] encSessionKey = keyData.getSecKeyData();
+
+                // buf := encSessionKey || authTag
+                byte[] buf = new byte[encSessionKey.length + authTag.length];
+                System.arraycopy(encSessionKey, 0, buf, 0, encSessionKey.length);
+                System.arraycopy(authTag, 0, buf, encSessionKey.length, authTag.length);
+
+                // sessionData := AEAD(secretKey).decrypt(buf)
+                byte[] sessionData;
+                try
+                {
+                    JceAEADCipherUtil.setUpAeadCipher(aead, secretKey, Cipher.DECRYPT_MODE, aeadIv, aeadMacLen, hkdfInfo);
+
+                    sessionData = aead.doFinal(buf, 0, buf.length);
+                }
+                catch (GeneralSecurityException e)
+                {
+                    throw new PGPException("unable to open stream: " + e.getMessage());
+                }
+
+                return sessionData;
+
+            }
+
+            // OpenPGP v4
+            @Override
+            public PGPDataDecryptor createDataDecryptor(boolean withIntegrityPacket, int encAlgorithm, byte[] key)
+                throws PGPException
+            {
+                return helper.createDataDecryptor(withIntegrityPacket, encAlgorithm, key);
+            }
+
+            // OpenPGP v5
+            @Override
+            public PGPDataDecryptor createDataDecryptor(AEADEncDataPacket aeadEncDataPacket, PGPSessionKey sessionKey)
+                throws PGPException
+            {
+                return aeadHelper.createOpenPgpV5DataDecryptor(aeadEncDataPacket, sessionKey);
+            }
+
+            // OpenPGP v6
+            @Override
+            public PGPDataDecryptor createDataDecryptor(SymmetricEncIntegrityPacket seipd, PGPSessionKey sessionKey)
+                throws PGPException
+            {
+                return aeadHelper.createOpenPgpV6DataDecryptor(seipd, sessionKey);
+            }
+        };
+    }
+}

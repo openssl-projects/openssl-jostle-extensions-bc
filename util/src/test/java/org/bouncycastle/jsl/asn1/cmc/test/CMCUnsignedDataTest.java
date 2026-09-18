@@ -1,0 +1,69 @@
+package org.bouncycastle.jsl.asn1.cmc.test;
+
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
+import org.bouncycastle.jsl.asn1.ASN1Integer;
+import org.bouncycastle.jsl.asn1.DEROctetString;
+import org.bouncycastle.jsl.asn1.DERSequence;
+import org.bouncycastle.jsl.asn1.cmc.BodyPartID;
+import org.bouncycastle.jsl.asn1.cmc.BodyPartPath;
+import org.bouncycastle.jsl.asn1.cmc.CMCUnsignedData;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.util.test.SimpleTest;
+
+
+public class CMCUnsignedDataTest
+    extends SimpleTest
+{
+
+    public static void main(String[] args)
+    {
+        runTest(new CMCUnsignedDataTest());
+    }
+
+    @org.junit.Test
+    public void test() throws Exception {
+        org.bouncycastle.jsl.util.test.TestResult result = perform();
+        if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
+    }
+
+    public String getName()
+    {
+        return "CMCUnsignedDataTest";
+    }
+
+    public void performTest()
+        throws Exception
+    {
+        // Encode then decode
+        CMCUnsignedData data = new CMCUnsignedData(new BodyPartPath(new BodyPartID(10L)), PKCSObjectIdentifiers.certBag, new DEROctetString("Cats".getBytes()));
+        byte[] b = data.getEncoded();
+        CMCUnsignedData result = CMCUnsignedData.getInstance(data);
+
+        isEquals(data.getBodyPartPath(), result.getBodyPartPath());
+        isEquals(data.getIdentifier(), result.getIdentifier());
+        isEquals(data.getContent(), result.getContent());
+
+        // Sequence length must be 3
+
+        try
+        {
+            CMCUnsignedData.getInstance(new DERSequence(ASN1Integer.valueOf(10)));
+            fail("Must fail, sequence must be 3");
+        }
+        catch (Exception ex)
+        {
+            isEquals(ex.getClass(), IllegalArgumentException.class);
+        }
+
+        try
+        {
+            CMCUnsignedData.getInstance(new DERSequence(new ASN1Encodable[]{ASN1Integer.valueOf(10), ASN1Integer.valueOf(10), ASN1Integer.valueOf(10), ASN1Integer.valueOf(10)}));
+            fail("Must fail, sequence must be 3");
+        }
+        catch (Exception ex)
+        {
+            isEquals(ex.getClass(), IllegalArgumentException.class);
+        }
+
+    }
+}

@@ -3,16 +3,16 @@ package org.bouncycastle.jsl.test;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.cms.CMSAlgorithm;
-import org.bouncycastle.cms.CMSEnvelopedData;
-import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
-import org.bouncycastle.cms.CMSProcessableByteArray;
-import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
-import org.bouncycastle.cms.jcajce.JceKEKRecipientInfoGenerator;
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.encoders.Hex;
-import org.bouncycastle.util.test.FixedSecureRandom;
+import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.cms.CMSAlgorithm;
+import org.bouncycastle.jsl.cms.CMSEnvelopedData;
+import org.bouncycastle.jsl.cms.CMSEnvelopedDataGenerator;
+import org.bouncycastle.jsl.cms.CMSProcessableByteArray;
+import org.bouncycastle.jsl.cms.jcajce.JceCMSContentEncryptorBuilder;
+import org.bouncycastle.jsl.cms.jcajce.JceKEKRecipientInfoGenerator;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.encoders.Hex;
+import org.bouncycastle.jsl.util.test.FixedSecureRandom;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;

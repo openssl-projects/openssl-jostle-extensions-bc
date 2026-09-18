@@ -1,0 +1,136 @@
+package org.bouncycastle.jsl.pkcs.jcajce;
+
+import java.io.OutputStream;
+import java.security.Provider;
+
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.PBEParameterSpec;
+
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.DERNull;
+import org.bouncycastle.jsl.asn1.pkcs.PBMAC1Params;
+import org.bouncycastle.jsl.asn1.pkcs.PKCS12PBEParams;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.jcajce.PKCS12Key;
+import org.bouncycastle.jsl.jcajce.io.MacOutputStream;
+import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.JcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
+import org.bouncycastle.jsl.operator.GenericKey;
+import org.bouncycastle.jsl.operator.MacCalculator;
+import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.pkcs.PKCS12MacCalculatorBuilder;
+import org.bouncycastle.jsl.pkcs.PKCS12MacCalculatorBuilderProvider;
+import org.bouncycastle.jsl.pkcs.util.PKCS12Util;
+
+/**
+ * JCA-based {@link PKCS12MacCalculatorBuilderProvider} that handles both the legacy PKCS#12
+ * PBE-MAC (RFC 7292) and the RFC 9579 PBMAC1 protection schemes. The algorithm OID passed in
+ * selects which path is used: {@code id-PBMAC1} delegates to {@link JcePBMac1CalculatorBuilder};
+ * any other OID is treated as a {@code pkcs-12PbeIds} family algorithm.
+ */
+public class JcePKCS12MacCalculatorBuilderProvider
+    implements PKCS12MacCalculatorBuilderProvider
+{
+    private JcaJceHelper helper = new DefaultJcaJceHelper();
+
+    /**
+     * Base constructor.
+     */
+    public JcePKCS12MacCalculatorBuilderProvider()
+    {
+    }
+
+    public JcePKCS12MacCalculatorBuilderProvider setProvider(Provider provider)
+    {
+        this.helper = new ProviderJcaJceHelper(provider);
+
+        return this;
+    }
+
+    public JcePKCS12MacCalculatorBuilderProvider setProvider(String providerName)
+    {
+        this.helper = new NamedJcaJceHelper(providerName);
+
+        return this;
+    }
+
+    public PKCS12MacCalculatorBuilder get(final AlgorithmIdentifier algorithmIdentifier)
+    {
+        if (PKCSObjectIdentifiers.id_PBMAC1.equals(algorithmIdentifier.getAlgorithm()))
+        {
+            final PBMAC1Params pbmac1Params = PBMAC1Params.getInstance(algorithmIdentifier.getParameters());
+
+            return new PKCS12MacCalculatorBuilder()
+            {
+                public MacCalculator build(char[] password)
+                    throws OperatorCreationException
+                {
+                    return new JcePBMac1CalculatorBuilder(pbmac1Params).setHelper(helper).build(password);
+                }
+
+                public AlgorithmIdentifier getDigestAlgorithmIdentifier()
+                {
+                    return new AlgorithmIdentifier(PKCSObjectIdentifiers.id_PBMAC1, pbmac1Params);
+                }
+            };
+        }
+
+        return new PKCS12MacCalculatorBuilder()
+        {
+            public MacCalculator build(final char[] password)
+                throws OperatorCreationException
+            {
+                final PKCS12PBEParams pbeParams = PKCS12PBEParams.getInstance(algorithmIdentifier.getParameters());
+
+                try
+                {
+                    final ASN1ObjectIdentifier algorithm = algorithmIdentifier.getAlgorithm();
+
+                    final Mac mac = helper.createMac(algorithm.getId());
+
+                    PBEParameterSpec defParams = new PBEParameterSpec(pbeParams.getIV(), PKCS12Util.validateIterationCount(pbeParams.getIterations()));
+
+                    final SecretKey key = new PKCS12Key(password);
+
+                    mac.init(key, defParams);
+
+                    return new MacCalculator()
+                    {
+                        public AlgorithmIdentifier getAlgorithmIdentifier()
+                        {
+                            return new AlgorithmIdentifier(algorithm, pbeParams);
+                        }
+
+                        public OutputStream getOutputStream()
+                        {
+                            return new MacOutputStream(mac);
+                        }
+
+                        public byte[] getMac()
+                        {
+                            return mac.doFinal();
+                        }
+
+                        public GenericKey getKey()
+                        {
+                            return new GenericKey(getAlgorithmIdentifier(), key.getEncoded());
+                        }
+                    };
+                }
+                catch (Exception e)
+                {
+                    throw new OperatorCreationException("unable to create MAC calculator: " + e.getMessage(), e);
+                }
+            }
+
+            public AlgorithmIdentifier getDigestAlgorithmIdentifier()
+            {
+                return new AlgorithmIdentifier(algorithmIdentifier.getAlgorithm(), DERNull.INSTANCE);
+            }
+        };
+    }
+}

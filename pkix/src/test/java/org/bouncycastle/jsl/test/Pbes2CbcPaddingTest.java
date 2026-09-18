@@ -2,16 +2,16 @@ package org.bouncycastle.jsl.test;
 
 import java.security.KeyPairGenerator;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
-import org.bouncycastle.asn1.pkcs.EncryptedPrivateKeyInfo;
-import org.bouncycastle.asn1.pkcs.PBES2Parameters;
-import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.operator.OutputEncryptor;
-import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfoBuilder;
-import org.bouncycastle.pkcs.jcajce.JcePKCSPBEOutputEncryptorBuilder;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.pkcs.EncryptedPrivateKeyInfo;
+import org.bouncycastle.jsl.asn1.pkcs.PBES2Parameters;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.operator.OutputEncryptor;
+import org.bouncycastle.jsl.pkcs.PKCS8EncryptedPrivateKeyInfoBuilder;
+import org.bouncycastle.jsl.pkcs.jcajce.JcePKCSPBEOutputEncryptorBuilder;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

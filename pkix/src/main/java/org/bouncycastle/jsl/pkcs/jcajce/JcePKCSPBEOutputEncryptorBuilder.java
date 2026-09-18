@@ -1,0 +1,411 @@
+package org.bouncycastle.jsl.pkcs.jcajce;
+
+import java.io.OutputStream;
+import java.security.AlgorithmParameters;
+import java.security.Provider;
+import java.security.SecureRandom;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.ASN1Primitive;
+import org.bouncycastle.jsl.asn1.bc.BCObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.misc.MiscObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.misc.ScryptParams;
+import org.bouncycastle.jsl.asn1.pkcs.EncryptionScheme;
+import org.bouncycastle.jsl.asn1.pkcs.KeyDerivationFunc;
+import org.bouncycastle.jsl.asn1.pkcs.PBES2Parameters;
+import org.bouncycastle.jsl.asn1.pkcs.PBKDF2Params;
+import org.bouncycastle.jsl.asn1.pkcs.PKCS12PBEParams;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.crypto.util.PBKDF2Config;
+import org.bouncycastle.jsl.crypto.util.PBKDFConfig;
+import org.bouncycastle.jsl.crypto.util.ScryptConfig;
+import org.bouncycastle.jsl.jcajce.PKCS12KeyWithParameters;
+import org.bouncycastle.jsl.jcajce.io.CipherOutputStream;
+import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.JcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
+import org.bouncycastle.jsl.operator.AlgorithmNameFinder;
+import org.bouncycastle.jsl.operator.DefaultAlgorithmNameFinder;
+import org.bouncycastle.jsl.operator.DefaultSecretKeySizeProvider;
+import org.bouncycastle.jsl.operator.GenericKey;
+import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.operator.OutputEncryptor;
+import org.bouncycastle.jsl.operator.SecretKeySizeProvider;
+// JSL accepts no foreign spec type.
+import org.openssl.jostle.jcajce.spec.ScryptKeySpec;
+
+/**
+ * JCA-based builder for an {@link OutputEncryptor} that applies one of the password-based
+ * encryption schemes used to protect PKCS#8 / PKCS#12 payloads:
+ * <ul>
+ * <li>the legacy PKCS#12 {@code pkcs-12PbeIds} family (RFC 7292 Appendix C) — selected when
+ *     the constructor is passed one of those OIDs,</li>
+ * <li>PBES2 (RFC 8018) — selected for any other key-encryption algorithm; the embedded
+ *     key-derivation function may be PBKDF2 or scrypt (RFC 7914) via an explicit
+ *     {@link PBKDFConfig}.</li>
+ * </ul>
+ */
+public class JcePKCSPBEOutputEncryptorBuilder
+{
+    private final PBKDFConfig pbkdf;
+
+    private JcaJceHelper helper = new DefaultJcaJceHelper();
+    private ASN1ObjectIdentifier algorithm;
+    private ASN1ObjectIdentifier keyEncAlgorithm;
+    private SecureRandom random;
+    private SecretKeySizeProvider keySizeProvider = DefaultSecretKeySizeProvider.INSTANCE;
+    private AlgorithmNameFinder algorithmNameFinder = new DefaultAlgorithmNameFinder();
+    private int iterationCount = 1024;
+    private PBKDF2Config.Builder pbkdfBuilder = new PBKDF2Config.Builder();
+
+    /**
+     * Construct a builder for a single algorithm. If {@code keyEncryptionAlg} is a PKCS#12 PBE
+     * OID, the resulting encryptor uses the PKCS#12 wire profile; otherwise the encryptor uses
+     * PBES2 with the default PBKDF2 configuration and {@code keyEncryptionAlg} as the underlying
+     * encryption scheme.
+     *
+     * @param keyEncryptionAlg the algorithm identifier the encryptor should apply.
+     */
+    public JcePKCSPBEOutputEncryptorBuilder(ASN1ObjectIdentifier keyEncryptionAlg)
+    {
+        this.pbkdf = null;
+        if (isPKCS12(keyEncryptionAlg))
+        {
+            this.algorithm = keyEncryptionAlg;
+            this.keyEncAlgorithm = keyEncryptionAlg;
+        }
+        else
+        {
+            this.algorithm = PKCSObjectIdentifiers.id_PBES2;
+            this.keyEncAlgorithm = keyEncryptionAlg;
+        }
+    }
+
+    /**
+     * Constructor allowing different derivation functions such as PBKDF2 and scrypt.
+     *
+     * @param pbkdfAlgorithm key derivation algorithm definition to use.
+     * @param keyEncryptionAlg encryption algorithm to apply the derived key with.
+     */
+    public JcePKCSPBEOutputEncryptorBuilder(PBKDFConfig pbkdfAlgorithm, ASN1ObjectIdentifier keyEncryptionAlg)
+    {
+        this.algorithm = PKCSObjectIdentifiers.id_PBES2;
+        this.pbkdf = pbkdfAlgorithm;
+        this.keyEncAlgorithm = keyEncryptionAlg;
+    }
+
+    public JcePKCSPBEOutputEncryptorBuilder setProvider(Provider provider)
+    {
+        this.helper = new ProviderJcaJceHelper(provider);
+
+        return this;
+    }
+
+    public JcePKCSPBEOutputEncryptorBuilder setProvider(String providerName)
+    {
+        this.helper = new NamedJcaJceHelper(providerName);
+
+        return this;
+    }
+
+    public JcePKCSPBEOutputEncryptorBuilder setRandom(SecureRandom random)
+    {
+        this.random = random;
+
+        return this;
+    }
+
+    /**
+     * Set the lookup provider of AlgorithmIdentifier returning key_size_in_bits used to
+     * handle PKCS5 decryption.
+     *
+     * @param keySizeProvider a provider of integer secret key sizes.
+     * @return the current builder.
+     */
+    public JcePKCSPBEOutputEncryptorBuilder setKeySizeProvider(SecretKeySizeProvider keySizeProvider)
+    {
+        this.keySizeProvider = keySizeProvider;
+
+        return this;
+    }
+
+    /**
+     * Set the PRF to use for key generation. By default this is HmacSHA1.
+     *
+     * @param prf algorithm id for PRF.
+     * @return the current builder.
+     * @throws IllegalStateException if this builder was intialised with a PBKDFDef
+     */
+    public JcePKCSPBEOutputEncryptorBuilder setPRF(AlgorithmIdentifier prf)
+    {
+        if (pbkdf != null)
+        {
+            throw new IllegalStateException("set PRF count using PBKDFDef");
+        }
+        this.pbkdfBuilder.withPRF(prf);
+
+        return this;
+    }
+
+    /**
+     * Set the iteration count for the PBE calculation.
+     *
+     * @param iterationCount the iteration count to apply to the key creation.
+     * @return the current builder.
+     * @throws IllegalStateException if this builder was intialised with a PBKDFDef
+     */
+    public JcePKCSPBEOutputEncryptorBuilder setIterationCount(int iterationCount)
+    {
+        if (pbkdf != null)
+        {
+            throw new IllegalStateException("set iteration count using PBKDFDef");
+        }
+        this.iterationCount = iterationCount;
+        this.pbkdfBuilder.withIterationCount(iterationCount);
+
+        return this;
+    }
+
+    /**
+     * Bind the builder to a password and return a configured {@link OutputEncryptor}. Its
+     * algorithm identifier carries the freshly generated salt / iteration count / IV in the
+     * wire format appropriate to the chosen scheme.
+     *
+     * @param password the password used to derive the encryption key.
+     * @return a configured output encryptor.
+     * @throws OperatorCreationException if a JCE {@link Cipher} or {@link SecretKeyFactory}
+     *         cannot be created for the requested scheme.
+     */
+    public OutputEncryptor build(final char[] password)
+        throws OperatorCreationException
+    {
+        final Cipher cipher;
+        SecretKey key;
+
+        if (random == null)
+        {
+            random = new SecureRandom();
+        }
+
+        final AlgorithmIdentifier encryptionAlg;
+
+        try
+        {
+            if (isPKCS12(algorithm))
+            {
+                byte[] salt = new byte[20];
+
+                random.nextBytes(salt);
+
+                cipher = helper.createCipher(algorithm.getId());
+
+                cipher.init(Cipher.ENCRYPT_MODE, new PKCS12KeyWithParameters(password, salt, iterationCount));
+
+                encryptionAlg = new AlgorithmIdentifier(algorithm, new PKCS12PBEParams(salt, iterationCount));
+            }
+            else if (algorithm.equals(PKCSObjectIdentifiers.id_PBES2))
+            {
+                PBKDFConfig pbkDef = (pbkdf == null) ? pbkdfBuilder.build() : pbkdf;
+
+                if (MiscObjectIdentifiers.id_scrypt.equals(pbkDef.getAlgorithm()))
+                {
+                    ScryptConfig skdf = (ScryptConfig)pbkDef;
+
+                    byte[] salt = new byte[skdf.getSaltLength()];
+
+                    random.nextBytes(salt);
+
+                    ScryptParams params = new ScryptParams(
+                                                salt,
+                                                skdf.getCostParameter(),
+                                                skdf.getBlockSize(),
+                                                skdf.getParallelizationParameter());
+                    
+                    SecretKeyFactory keyFact = helper.createSecretKeyFactory("SCRYPT");
+
+                    key = keyFact.generateSecret(new ScryptKeySpec(password,
+                        salt, skdf.getCostParameter(), skdf.getBlockSize(), skdf.getParallelizationParameter(),
+                                                 keySizeProvider.getKeySize(new AlgorithmIdentifier(keyEncAlgorithm))));
+
+                    cipher = JceUtils.createCipher(helper, keyEncAlgorithm);
+
+                    cipher.init(Cipher.ENCRYPT_MODE, simplifyPbeKey(key), random);
+
+                    AlgorithmParameters algP = cipher.getParameters();
+
+                    PBES2Parameters algParams;
+
+                    if (algP != null)
+                    {
+                        algParams = new PBES2Parameters(
+                            new KeyDerivationFunc(MiscObjectIdentifiers.id_scrypt, params),
+                            new EncryptionScheme(keyEncAlgorithm, ASN1Primitive.fromByteArray(cipher.getParameters().getEncoded())));
+                    }
+                    else
+                    {
+                        algParams = new PBES2Parameters(
+                                new KeyDerivationFunc(MiscObjectIdentifiers.id_scrypt, params),
+                                new EncryptionScheme(keyEncAlgorithm));
+                    }
+                    encryptionAlg = new AlgorithmIdentifier(algorithm, algParams);
+                }
+                else
+                {
+                    PBKDF2Config pkdf = (PBKDF2Config)pbkDef;
+
+                    byte[] salt = new byte[pkdf.getSaltLength()];
+
+                    random.nextBytes(salt);
+
+                    SecretKeyFactory keyFact = helper.createSecretKeyFactory(JceUtils.getAlgorithm(pkdf.getPRF().getAlgorithm()));
+
+                    key = keyFact.generateSecret(new PBEKeySpec(password, salt, pkdf.getIterationCount(),
+                                            keySizeProvider.getKeySize(new AlgorithmIdentifier(keyEncAlgorithm))));
+
+                    cipher = JceUtils.createCipher(helper, keyEncAlgorithm);
+
+                    cipher.init(Cipher.ENCRYPT_MODE, simplifyPbeKey(key), random);
+
+                    AlgorithmParameters algP = cipher.getParameters();
+
+                    PBES2Parameters algParams;
+
+                    if (algP != null)
+                    {
+                        algParams = new PBES2Parameters(
+                            new KeyDerivationFunc(PKCSObjectIdentifiers.id_PBKDF2, new PBKDF2Params(salt, pkdf.getIterationCount(), pkdf.getPRF())),
+                            new EncryptionScheme(keyEncAlgorithm, ASN1Primitive.fromByteArray(cipher.getParameters().getEncoded())));
+                    }
+                    else
+                    {
+                        algParams = new PBES2Parameters(
+                            new KeyDerivationFunc(PKCSObjectIdentifiers.id_PBKDF2, new PBKDF2Params(salt, pkdf.getIterationCount(), pkdf.getPRF())),
+                            new EncryptionScheme(keyEncAlgorithm));
+                    }
+
+                    encryptionAlg = new AlgorithmIdentifier(algorithm, algParams);
+                }
+            }
+            else
+            {
+                throw new OperatorCreationException("unrecognised algorithm");
+            }
+
+            return new OutputEncryptor()
+            {
+                public AlgorithmIdentifier getAlgorithmIdentifier()
+                {
+                    return encryptionAlg;
+                }
+
+                public OutputStream getOutputStream(OutputStream out)
+                {
+                    return new CipherOutputStream(out, cipher);
+                }
+
+                public GenericKey getKey()
+                {
+                    if (isPKCS12(encryptionAlg.getAlgorithm()))
+                    {
+                        return new GenericKey(encryptionAlg, PKCS12PasswordToBytes(password));
+                    }
+                    else
+                    {
+                        return new GenericKey(encryptionAlg, PKCS5PasswordToBytes(password));
+                    }
+                }
+            };
+        }
+        catch (Exception e)
+        {
+            throw new OperatorCreationException("unable to create OutputEncryptor: " + e.getMessage(), e);
+        }
+    }
+
+    // some providers struggle with generic algorithm names in keys.
+    private SecretKey simplifyPbeKey(SecretKey key)
+    {
+        if (algorithmNameFinder.hasAlgorithmName(keyEncAlgorithm))
+        {
+            String algName = algorithmNameFinder.getAlgorithmName(keyEncAlgorithm);
+
+            if (algName.indexOf("AES") >= 0)
+            {
+                key = new SecretKeySpec(key.getEncoded(), "AES");
+            }
+        }
+
+        return key;
+    }
+
+    private boolean isPKCS12(ASN1ObjectIdentifier algorithm)
+    {
+        return algorithm.on(PKCSObjectIdentifiers.pkcs_12PbeIds)
+            || algorithm.on(BCObjectIdentifiers.bc_pbe_sha1_pkcs12)
+            || algorithm.on(BCObjectIdentifiers.bc_pbe_sha256_pkcs12);
+    }
+
+    /**
+     * converts a password to a byte array according to the scheme in
+     * PKCS5 (ascii, no padding)
+     *
+     * @param password a character array representing the password.
+     * @return a byte array representing the password.
+     */
+    private static byte[] PKCS5PasswordToBytes(
+        char[] password)
+    {
+        if (password != null)
+        {
+            byte[] bytes = new byte[password.length];
+
+            for (int i = 0; i != bytes.length; i++)
+            {
+                bytes[i] = (byte)password[i];
+            }
+
+            return bytes;
+        }
+        else
+        {
+            return new byte[0];
+        }
+    }
+
+    /**
+     * converts a password to a byte array according to the scheme in
+     * PKCS12 (unicode, big endian, 2 zero pad bytes at the end).
+     *
+     * @param password a character array representing the password.
+     * @return a byte array representing the password.
+     */
+    private static byte[] PKCS12PasswordToBytes(
+        char[] password)
+    {
+        if (password != null && password.length > 0)
+        {
+            // +1 for extra 2 pad bytes.
+            byte[] bytes = new byte[(password.length + 1) * 2];
+
+            for (int i = 0; i != password.length; i++)
+            {
+                bytes[i * 2] = (byte)(password[i] >>> 8);
+                bytes[i * 2 + 1] = (byte)password[i];
+            }
+
+            return bytes;
+        }
+        else
+        {
+            return new byte[0];
+        }
+    }
+}

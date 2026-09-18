@@ -5,9 +5,9 @@ import java.security.spec.InvalidKeySpecException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.Strings;
-import org.bouncycastle.util.encoders.Hex;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.Strings;
+import org.bouncycastle.jsl.util.encoders.Hex;
 import org.junit.Before;
 import org.junit.Test;
 import org.openssl.jostle.jcajce.spec.ScryptKeySpec;
@@ -63,13 +63,13 @@ public class ScryptKdfTest
         try
         {
             factory.generateSecret(
-                new org.bouncycastle.jcajce.spec.ScryptKeySpec(PASSWORD, SALT, N, R, P, DK_BITS));
+                new org.bouncycastle.jsl.jcajce.spec.ScryptKeySpec(PASSWORD, SALT, N, R, P, DK_BITS));
             fail("a foreign scrypt spec was accepted");
         }
         catch (InvalidKeySpecException e)
         {
             assertTrue("refusal did not name the spec it was handed: " + e.getMessage(),
-                e.getMessage().contains("org.bouncycastle.jcajce.spec.ScryptKeySpec"));
+                e.getMessage().contains("org.bouncycastle.jsl.jcajce.spec.ScryptKeySpec"));
         }
     }
 }

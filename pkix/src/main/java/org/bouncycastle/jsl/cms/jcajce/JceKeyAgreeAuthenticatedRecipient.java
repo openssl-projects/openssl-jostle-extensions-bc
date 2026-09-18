@@ -1,0 +1,57 @@
+package org.bouncycastle.jsl.cms.jcajce;
+
+import java.io.OutputStream;
+import java.security.Key;
+import java.security.PrivateKey;
+
+import javax.crypto.Mac;
+
+import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jsl.cms.CMSException;
+import org.bouncycastle.jsl.cms.RecipientOperator;
+import org.bouncycastle.jsl.jcajce.io.MacOutputStream;
+import org.bouncycastle.jsl.operator.GenericKey;
+import org.bouncycastle.jsl.operator.MacCalculator;
+import org.bouncycastle.jsl.operator.jcajce.JceGenericKey;
+
+public class JceKeyAgreeAuthenticatedRecipient
+    extends JceKeyAgreeRecipient
+{
+    public JceKeyAgreeAuthenticatedRecipient(PrivateKey recipientKey)
+    {
+        super(recipientKey);
+    }
+
+    public RecipientOperator getRecipientOperator(AlgorithmIdentifier keyEncryptionAlgorithm, final AlgorithmIdentifier contentMacAlgorithm, SubjectPublicKeyInfo senderPublicKey, ASN1OctetString userKeyingMaterial, byte[] encryptedContentKey)
+        throws CMSException
+    {
+        final Key secretKey = extractSecretKey(keyEncryptionAlgorithm, contentMacAlgorithm, senderPublicKey, userKeyingMaterial, encryptedContentKey);
+
+        final Mac dataMac = contentHelper.createContentMac(secretKey, contentMacAlgorithm);
+
+        return new RecipientOperator(new MacCalculator()
+        {
+            public AlgorithmIdentifier getAlgorithmIdentifier()
+            {
+                return contentMacAlgorithm;
+            }
+
+            public GenericKey getKey()
+            {
+                return new JceGenericKey(contentMacAlgorithm, secretKey);
+            }
+
+            public OutputStream getOutputStream()
+            {
+                return new MacOutputStream(dataMac);
+            }
+
+            public byte[] getMac()
+            {
+                return dataMac.doFinal();
+            }
+        });
+    }
+}

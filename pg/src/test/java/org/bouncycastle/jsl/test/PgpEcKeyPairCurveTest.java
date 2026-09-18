@@ -7,17 +7,17 @@ import java.security.PublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Date;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
-import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
-import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
-import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
-import org.bouncycastle.bcpg.PublicKeyPacket;
-import org.bouncycastle.openpgp.PGPKeyPair;
-import org.bouncycastle.openpgp.operator.PGPKeyPairGenerator;
-import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyConverter;
-import org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyPairGeneratorProvider;
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.sec.SECObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.teletrust.TeleTrusTObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x9.X9ObjectIdentifiers;
+import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
+import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
+import org.bouncycastle.jsl.openpgp.PGPKeyPair;
+import org.bouncycastle.jsl.openpgp.operator.PGPKeyPairGenerator;
+import org.bouncycastle.jsl.openpgp.operator.jcajce.JcaPGPKeyConverter;
+import org.bouncycastle.jsl.openpgp.operator.jcajce.JcaPGPKeyPairGeneratorProvider;
+import org.bouncycastle.jsl.util.Arrays;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -131,7 +131,7 @@ public class PgpEcKeyPairCurveTest
         assertNotNull(what + ": the private key did not convert back", priv);
 
         // The round trip has to reproduce the same public point, not merely produce some key.
-        PGPKeyPair again = new org.bouncycastle.openpgp.operator.jcajce.JcaPGPKeyPair(
+        PGPKeyPair again = new org.bouncycastle.jsl.openpgp.operator.jcajce.JcaPGPKeyPair(
             PublicKeyPacket.VERSION_4, algorithmTag,
             new java.security.KeyPair(pub, priv), new Date());
         assertTrue(what + ": the converted key is not the one generated",

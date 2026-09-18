@@ -8,7 +8,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.jsl.util.Arrays;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

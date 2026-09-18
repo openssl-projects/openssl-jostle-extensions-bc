@@ -1,0 +1,63 @@
+package org.bouncycastle.jsl.cms.jcajce;
+
+import java.security.AlgorithmParameters;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Provider;
+import java.security.SecureRandom;
+
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.cms.CMSException;
+
+public class JceAlgorithmIdentifierConverter
+{
+    private EnvelopedDataHelper helper = CMSUtils.createDefaultHelper();
+    private SecureRandom random;
+
+    public JceAlgorithmIdentifierConverter()
+    {
+    }
+
+    public JceAlgorithmIdentifierConverter setProvider(Provider provider)
+    {
+        this.helper = CMSUtils.createProviderHelper(provider);
+
+        return this;
+    }
+
+    public JceAlgorithmIdentifierConverter setProvider(String providerName)
+    {
+        this.helper = CMSUtils.createNamedHelper(providerName);
+
+        return this;
+    }
+
+    public AlgorithmParameters getAlgorithmParameters(AlgorithmIdentifier algorithmIdentifier)
+        throws CMSException
+    {
+        ASN1Encodable parameters = algorithmIdentifier.getParameters();
+
+        if (parameters == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            AlgorithmParameters params = helper.createAlgorithmParameters(algorithmIdentifier.getAlgorithm());
+
+            CMSUtils.loadParameters(params, algorithmIdentifier.getParameters());
+
+            return params;
+        }
+        catch (NoSuchAlgorithmException e)
+        {
+            throw new CMSException("can't find parameters for algorithm", e);
+        }
+        catch (NoSuchProviderException e)
+        {
+            throw new CMSException("can't find provider for algorithm", e);
+        }
+    }
+}

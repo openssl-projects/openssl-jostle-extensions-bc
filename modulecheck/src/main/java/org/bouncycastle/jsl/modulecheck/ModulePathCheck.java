@@ -13,13 +13,13 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.cmp.PKIBody;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.mail.smime.SMIMEException;
-import org.bouncycastle.openpgp.PGPPublicKey;
-import org.bouncycastle.tls.TlsUtils;
-import org.bouncycastle.util.encoders.Hex;
+import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.jsl.asn1.cmp.PKIBody;
+import org.bouncycastle.jsl.cert.X509CertificateHolder;
+import org.bouncycastle.jsl.mail.smime.SMIMEException;
+import org.bouncycastle.jsl.openpgp.PGPPublicKey;
+import org.bouncycastle.jsl.tls.TlsUtils;
+import org.bouncycastle.jsl.util.encoders.Hex;
 import org.junit.Test;
 import org.openssl.jostle.jcajce.provider.JostleProvider;
 
@@ -120,7 +120,7 @@ public class ModulePathCheck
             Set<String> held = new TreeSet<String>();
             for (String p : module.getPackages())
             {
-                if (!p.startsWith("org.bouncycastle.internal."))
+                if (!p.startsWith("org.bouncycastle.jsl.internal."))
                 {
                     held.add(p);
                 }
@@ -142,7 +142,7 @@ public class ModulePathCheck
         for (ServiceLoader.Provider<Provider> candidate : ServiceLoader.load(Provider.class).stream()
             .collect(java.util.stream.Collectors.toList()))
         {
-            if ("org.bouncycastle.jsse.provider.BouncyCastleJsseProvider".equals(candidate.type().getName()))
+            if ("org.bouncycastle.jsl.jsse.provider.BouncyCastleJsseProvider".equals(candidate.type().getName()))
             {
                 found = true;
             }
@@ -161,7 +161,7 @@ public class ModulePathCheck
     public void mailReachesJavaxMail()
         throws Exception
     {
-        Class<?> smimeUtil = Class.forName("org.bouncycastle.mail.smime.SMIMEUtil");
+        Class<?> smimeUtil = Class.forName("org.bouncycastle.jsl.mail.smime.SMIMEUtil");
         boolean touches = false;
 
         for (Method method : smimeUtil.getDeclaredMethods())

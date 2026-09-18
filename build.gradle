@@ -32,7 +32,7 @@ ext.bundle_version = deriveOSGIVersion(version.toString())
 // asn1 packages. `-exportcontents` only describes what the jar already holds, so one
 // broad pattern is safe and no per-module list has to be kept in step with the tree.
 // The exclusion mirrors bc-java prov/build.gradle:261; the fork carries none today.
-ext.osgiExportPattern = '!org.bouncycastle.internal.*,org.bouncycastle.*'
+ext.osgiExportPattern = '!org.bouncycastle.jsl.internal.*,org.bouncycastle.jsl.*'
 
 // What each module-info.java requires of the others, so compileJava9Java can put those jars on
 // --module-path. Kept beside the descriptors it serves; the descriptors remain the source of truth.
@@ -272,7 +272,7 @@ subprojects {
                 "Bundle-Version"            : v,
                 "Bundle-RequiredExecutionEnvironment" : "JavaSE-1.8",
                 "-exportcontents"           : exportHeader,
-                "Import-Package"            : "java.*;resolution:=optional,javax.*;resolution:=optional,org.bouncycastle.*;version=\"[${v},${project.maxVersion})\",*"
+                "Import-Package"            : "java.*;resolution:=optional,javax.*;resolution:=optional,org.bouncycastle.jsl.*;version=\"[${v},${project.maxVersion})\",*"
             )
         }
 

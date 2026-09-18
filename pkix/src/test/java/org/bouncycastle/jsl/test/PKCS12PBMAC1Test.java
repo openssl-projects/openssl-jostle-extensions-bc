@@ -2,11 +2,11 @@ package org.bouncycastle.jsl.test;
 
 import java.io.InputStream;
 
-import org.bouncycastle.asn1.pkcs.Pfx;
-import org.bouncycastle.pkcs.util.PKCS12Util;
-import org.bouncycastle.test.TestResourceFinder;
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.io.Streams;
+import org.bouncycastle.jsl.asn1.pkcs.Pfx;
+import org.bouncycastle.jsl.pkcs.util.PKCS12Util;
+import org.bouncycastle.jsl.test.TestResourceFinder;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.io.Streams;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;

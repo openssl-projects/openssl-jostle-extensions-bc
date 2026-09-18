@@ -5,15 +5,15 @@ import org.bouncycastle.jsl.test.JslTestProvider;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 
-import org.bouncycastle.cms.CMSAlgorithm;
-import org.bouncycastle.cms.CMSEnvelopedData;
-import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
-import org.bouncycastle.cms.CMSProcessableByteArray;
-import org.bouncycastle.cms.RecipientInformation;
-import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
-import org.bouncycastle.cms.jcajce.JceKEMEnvelopedRecipient;
-import org.bouncycastle.cms.jcajce.JceKEMRecipientInfoGenerator;
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.jsl.cms.CMSAlgorithm;
+import org.bouncycastle.jsl.cms.CMSEnvelopedData;
+import org.bouncycastle.jsl.cms.CMSEnvelopedDataGenerator;
+import org.bouncycastle.jsl.cms.CMSProcessableByteArray;
+import org.bouncycastle.jsl.cms.RecipientInformation;
+import org.bouncycastle.jsl.cms.jcajce.JceCMSContentEncryptorBuilder;
+import org.bouncycastle.jsl.cms.jcajce.JceKEMEnvelopedRecipient;
+import org.bouncycastle.jsl.cms.jcajce.JceKEMRecipientInfoGenerator;
+import org.bouncycastle.jsl.util.Arrays;
 import org.junit.Ignore;
 import org.junit.Test;
 

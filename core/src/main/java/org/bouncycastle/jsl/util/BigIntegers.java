@@ -1,0 +1,807 @@
+package org.bouncycastle.jsl.util;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import org.bouncycastle.jsl.math.raw.Mod;
+import org.bouncycastle.jsl.math.raw.Nat;
+
+/**
+ * BigInteger utilities.
+ */
+public final class BigIntegers
+{
+    public static final BigInteger ZERO = BigInteger.valueOf(0);
+    public static final BigInteger ONE = BigInteger.valueOf(1);
+    public static final BigInteger TWO = BigInteger.valueOf(2);
+
+    private static final BigInteger THREE = BigInteger.valueOf(3);
+
+    private static final int MAX_ITERATIONS = 1000;
+
+    /**
+     * Return the passed in value as an unsigned byte array.
+     *
+     * @param value the value to be converted.
+     * @return a byte array without a leading zero byte if present in the signed encoding.
+     */
+    public static byte[] asUnsignedByteArray(
+        BigInteger value)
+    {
+        byte[] bytes = value.toByteArray();
+
+        if (bytes[0] == 0 && bytes.length != 1)
+        {
+            byte[] tmp = new byte[bytes.length - 1];
+
+            System.arraycopy(bytes, 1, tmp, 0, tmp.length);
+
+            return tmp;
+        }
+
+        return bytes;
+    }
+
+    /**
+     * Return the passed in value as an unsigned byte array of the specified length, padded with
+     * leading zeros as necessary..
+     *
+     * @param length the fixed length of the result
+     * @param value  the value to be converted.
+     * @return a byte array padded to a fixed length with leading zeros.
+     */
+    public static byte[] asUnsignedByteArray(int length, BigInteger value)
+    {
+        byte[] bytes = value.toByteArray();
+        if (bytes.length == length)
+        {
+            return bytes;
+        }
+
+        int start = (bytes[0] == 0 && bytes.length != 1) ? 1 : 0;
+        int count = bytes.length - start;
+
+        if (count > length)
+        {
+            throw new IllegalArgumentException("standard length exceeded for value");
+        }
+
+        byte[] tmp = new byte[length];
+        System.arraycopy(bytes, start, tmp, tmp.length - count, count);
+        return tmp;
+    }
+
+    /**
+     * Write the passed in value as unsigned bytes to the specified buffer range, padded with
+     * leading zeros as necessary.
+     *
+     * @param value the value to be converted.
+     * @param buf   the buffer to which the value is written.
+     * @param off   the start offset in array <code>buf</code> at which the data is written.
+     * @param len   the fixed length of data written (possibly padded with leading zeros).
+     */
+    public static void asUnsignedByteArray(BigInteger value, byte[] buf, int off, int len)
+    {
+        byte[] bytes = value.toByteArray();
+        if (bytes.length == len)
+        {
+            System.arraycopy(bytes, 0, buf, off, len);
+            return;
+        }
+
+        int start = (bytes[0] == 0 && bytes.length != 1) ? 1 : 0;
+        int count = bytes.length - start;
+
+        if (count > len)
+        {
+            throw new IllegalArgumentException("standard length exceeded for value");
+        }
+
+        int padLen = len - count;
+        Arrays.fill(buf, off, off + padLen, (byte)0x00);
+        System.arraycopy(bytes, start, buf, off + padLen, count);
+    }
+
+
+    /**
+     * Return a random BigInteger not less than 'min' and not greater than 'max'
+     *
+     * @param min    the least value that may be generated
+     * @param max    the greatest value that may be generated
+     * @param random the source of randomness
+     * @return a random BigInteger value in the range [min,max]
+     */
+    public static BigInteger createRandomInRange(
+        BigInteger min,
+        BigInteger max,
+        SecureRandom random)
+    {
+        int cmp = min.compareTo(max);
+        if (cmp >= 0)
+        {
+            if (cmp > 0)
+            {
+                throw new IllegalArgumentException("'min' may not be greater than 'max'");
+            }
+
+            return min;
+        }
+
+        if (min.bitLength() > max.bitLength() / 2)
+        {
+            return createRandomInRange(ZERO, max.subtract(min), random).add(min);
+        }
+
+        for (int i = 0; i < MAX_ITERATIONS; ++i)
+        {
+            BigInteger x = createRandomBigInteger(max.bitLength(), random);
+            if (x.compareTo(min) >= 0 && x.compareTo(max) <= 0)
+            {
+                return x;
+            }
+        }
+
+        // fall back to a faster (restricted) method
+        return createRandomBigInteger(max.subtract(min).bitLength() - 1, random).add(min);
+    }
+
+
+    public static BigInteger fromUnsignedByteArray(byte[] buf)
+    {
+        return new BigInteger(1, buf);
+    }
+
+    public static BigInteger fromUnsignedByteArray(byte[] buf, int off, int length)
+    {
+        byte[] mag = buf;
+        if (off != 0 || length != buf.length)
+        {
+            mag = new byte[length];
+            System.arraycopy(buf, off, mag, 0, length);
+        }
+        return new BigInteger(1, mag);
+    }
+
+    public static byte byteValueExact(BigInteger x)
+    {
+        // don't use BigInteger.byteValueExact - not available on Android below API level 33
+        if (x.bitLength() > 7)
+        {
+            throw new ArithmeticException("BigInteger out of byte range");
+        }
+
+        return x.byteValue();
+    }
+
+    public static short shortValueExact(BigInteger x)
+    {
+        // don't use BigInteger.shortValueExact - not available on Android below API level 33
+        if (x.bitLength() > 15)
+        {
+            throw new ArithmeticException("BigInteger out of short range");
+        }
+
+        return x.shortValue();
+    }
+
+    public static int intValueExact(BigInteger x)
+    {
+        // don't use BigInteger.intValueExact - not available on Android below API level 33
+        if (x.bitLength() > 31)
+        {
+            throw new ArithmeticException("BigInteger out of int range");
+        }
+
+        return x.intValue();
+    }
+
+    public static long longValueExact(BigInteger x)
+    {
+        // don't use BigInteger.longValueExact - not available on Android below API level 33
+        if (x.bitLength() > 63)
+        {
+            throw new ArithmeticException("BigInteger out of long range");
+        }
+
+        return x.longValue();
+    }
+
+    /**
+     * Compare two non-negative values for equality without an early exit. Both are laid out as
+     * unsigned big-endian byte arrays of the fixed public length {@code maxLen} before the
+     * comparison, so the comparison itself is length-uniform.
+     * <p>
+     * Fixed-width encoding drops the two's-complement sign byte that {@link BigInteger#toByteArray()}
+     * prepends when the most-significant bit is set: without that, two values could serialise to
+     * different lengths (e.g. 256 vs 257 bytes for a 2048-bit value) purely according to that high
+     * bit, and the variable-time comparison would leak it. This is not perfectly constant-time -
+     * {@code java.math.BigInteger} has no constant-time serialisation, so the underlying
+     * {@code toByteArray()} still runs in time proportional to each value's magnitude - but the
+     * comparison no longer differs in length on the value's high bit. Intended for secret key
+     * material (RSA {@code d} and the CRT factors, DSA/DH/ElGamal/GOST {@code x}, EC {@code d}),
+     * which are all non-negative; the temporary unsigned encodings holding that secret material are
+     * zeroed before returning.
+     * <p>
+     * Both arguments must be non-null and non-negative; a negative value does not produce a meaningful
+     * result (and may throw {@link IllegalArgumentException}), and a null value throws
+     * {@link NullPointerException}.
+     *
+     * @param maxLen the public unsigned byte length both values are encoded to (e.g. from a group
+     *               order or modulus).
+     * @param a      the first value, non-null and non-negative.
+     * @param b      the second value, non-null and non-negative.
+     * @return true if {@code a} and {@code b} are numerically equal, false otherwise.
+     */
+    public static boolean areSecretValuesEqual(int maxLen, BigInteger a, BigInteger b)
+    {
+        byte[] aEnc = asUnsignedByteArray(maxLen, a);
+        byte[] bEnc = asUnsignedByteArray(maxLen, b);
+
+        boolean equal = Arrays.constantTimeAreEqual(aEnc, bEnc);
+
+        Arrays.clear(aEnc);
+        Arrays.clear(bEnc);
+
+        return equal;
+    }
+
+    public static boolean hasAnySmallFactors(BigInteger x)
+    {
+        if (!x.testBit(0))
+        {
+            return true;
+        }
+
+        BigInteger y = SMALL_PRIMES_PRODUCT;
+        if (x.bitLength() < SMALL_PRIMES_PRODUCT.bitLength())
+        {
+            y = x;
+            x = SMALL_PRIMES_PRODUCT;
+        }
+
+        return !BigIntegers.modOddIsCoprimeVar(x, y);
+    }
+
+    /**
+     * Return (X + Y) mod M for X and Y already in the range [0, M). The sum is formed at a fixed
+     * width and reduced by subtracting M unconditionally and then keeping or discarding the result
+     * with a mask, so neither the running time nor the memory access pattern depends on the values.
+     * <p>
+     * Use this rather than {@code X.add(Y).mod(M)} when either operand is secret. A reduction
+     * short-circuits when the value it is given is already less than the modulus, so a sum that
+     * crosses the top of M is distinguishable from one that does not. Where the other operand is
+     * public that difference is a threshold predicate on the secret one, and a public operand the
+     * caller does not control turns repeated observations into a search over the secret.
+     * </p>
+     *
+     * @param M the modulus, which must be positive.
+     * @param X a value in the range [0, M).
+     * @param Y a value in the range [0, M).
+     * @return (X + Y) mod M.
+     */
+    public static BigInteger modAdd(BigInteger M, BigInteger X, BigInteger Y)
+    {
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.compareTo(M) >= 0 || Y.signum() < 0 || Y.compareTo(M) >= 0)
+        {
+            throw new IllegalArgumentException("'X' and 'Y' must be in the range [0, M)");
+        }
+
+        // the extra bit of width means X + Y, which is less than 2M, cannot carry out of the top
+        // word, so one conditional subtraction of M is enough to reduce it
+        int bits = M.bitLength() + 1;
+        int[] m = Nat.fromBigInteger(bits, M);
+        int len = m.length;
+        int[] x = Nat.fromBigInteger(bits, X);
+        int[] y = Nat.fromBigInteger(bits, Y);
+        int[] z = Nat.create(len);
+        int[] t = Nat.create(len);
+
+        Nat.add(len, x, y, z);
+        int borrow = Nat.sub(len, z, m, t);     // t = z - M, borrow non-zero exactly when z < M
+        Nat.cmov(len, ~borrow, t, 0, z, 0);     // keep t unless the subtraction went negative
+
+        return Nat.toBigInteger(len, z);
+    }
+
+    /**
+     * Return (X - Y) mod M for X and Y already in the range [0, M). The difference is formed at a
+     * fixed width and brought back into range by adding M unconditionally and then keeping or
+     * discarding the result with a mask, so neither the running time nor the memory access pattern
+     * depends on the values.
+     * <p>
+     * Use this rather than {@code X.subtract(Y).mod(M)} when either operand is secret. A negative
+     * value costs the reduction more work than a non-negative one, so whether the difference
+     * underflowed is distinguishable, and that is a comparison between the two operands - which,
+     * where one of them is public, is a threshold predicate on the secret one.
+     * </p>
+     *
+     * @param M the modulus, which must be positive.
+     * @param X a value in the range [0, M).
+     * @param Y a value in the range [0, M).
+     * @return (X - Y) mod M.
+     */
+    public static BigInteger modSubtract(BigInteger M, BigInteger X, BigInteger Y)
+    {
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.compareTo(M) >= 0 || Y.signum() < 0 || Y.compareTo(M) >= 0)
+        {
+            throw new IllegalArgumentException("'X' and 'Y' must be in the range [0, M)");
+        }
+
+        // X - Y lies in (-M, M), so a single conditional addition of M reduces it; the width is
+        // the one modAdd uses, which leaves the borrow room to be seen rather than lost off the top
+        int bits = M.bitLength() + 1;
+        int[] m = Nat.fromBigInteger(bits, M);
+        int len = m.length;
+        int[] x = Nat.fromBigInteger(bits, X);
+        int[] y = Nat.fromBigInteger(bits, Y);
+        int[] z = Nat.create(len);
+        int[] t = Nat.create(len);
+
+        int borrow = Nat.sub(len, x, y, z);     // borrow non-zero exactly when X < Y
+        Nat.add(len, z, m, t);                  // t = z + M, discarding the carry off the top
+        Nat.cmov(len, borrow, t, 0, z, 0);      // take t only where the difference went negative
+
+        return Nat.toBigInteger(len, z);
+    }
+
+    /**
+     * Return (X * Y) mod M for an odd M and X, Y already in the range [0, M), by Montgomery
+     * multiplication over a fixed number of words. Every loop runs a value-independent number of
+     * times and no index depends on the operands.
+     * <p>
+     * Use this rather than {@code X.multiply(Y).mod(M)} when either operand is secret. The product
+     * is up to twice the width of M, so the reduction is a real division rather than the single
+     * conditional subtraction {@link #modAdd(BigInteger, BigInteger, BigInteger)} needs, and how
+     * much work it does depends on the quotient - which is to say on the operands.
+     * </p><p>
+     * The quantities derived from M alone (R squared mod M, where R is 2 raised to the width of M
+     * rounded up to a word boundary, and the reduction multiplier) are computed with BigInteger,
+     * since M is the public modulus, and retained from one call to the next - callers run whole
+     * chains of order arithmetic against one group order. Whether a call reuses them depends only
+     * on the modulus.
+     * </p>
+     *
+     * @param M the modulus, which must be odd and positive.
+     * @param X a value in the range [0, M).
+     * @param Y a value in the range [0, M).
+     * @return (X * Y) mod M.
+     */
+    public static BigInteger modMult(BigInteger M, BigInteger X, BigInteger Y)
+    {
+        if (!M.testBit(0))
+        {
+            throw new IllegalArgumentException("'M' must be odd");
+        }
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.compareTo(M) >= 0 || Y.signum() < 0 || Y.compareTo(M) >= 0)
+        {
+            throw new IllegalArgumentException("'X' and 'Y' must be in the range [0, M)");
+        }
+
+        int bits = M.bitLength();
+        int[] m = Nat.fromBigInteger(bits, M);
+        int len = m.length;
+
+        // R is 2^(32*len), which exceeds M, so R and the odd M are coprime and Montgomery form
+        // exists. R^2 mod M and the reduction multiplier -M^-1 mod 2^32 depend only on the public
+        // modulus, so the cache lookup keys on nothing secret; R^2 is the one BigInteger division
+        // in the method, which is what makes it worth keeping.
+        MontgomeryConstants constants = montgomeryConstants;
+        if (constants == null || !constants.m.equals(M))
+        {
+            constants = new MontgomeryConstants(M, ONE.shiftLeft(len << 6).mod(M), -Mod.inverse32(m[0]));
+            montgomeryConstants = constants;
+        }
+        BigInteger r2 = constants.r2;
+        int mDash = constants.mDash;
+
+        // the first product leaves X*Y*R^-1, the second multiplies by R^2*R^-1 to undo it
+        int[] z = montgomeryMultiply(len, Nat.fromBigInteger(bits, X), Nat.fromBigInteger(bits, Y), m, mDash);
+
+        z = montgomeryMultiply(len, z, Nat.fromBigInteger(bits, r2), m, mDash);
+
+        return Nat.toBigInteger(len, z);
+    }
+
+    /**
+     * The modulus-only quantities of {@link #modMult(BigInteger, BigInteger, BigInteger)}, held
+     * behind a volatile reference as a single-entry cache. The holder is immutable, so a reader
+     * sees either nothing or a complete entry, and a miss just recomputes.
+     */
+    private static final class MontgomeryConstants
+    {
+        final BigInteger m;
+        final BigInteger r2;
+        final int mDash;
+
+        MontgomeryConstants(BigInteger m, BigInteger r2, int mDash)
+        {
+            this.m = m;
+            this.r2 = r2;
+            this.mDash = mDash;
+        }
+    }
+
+    private static volatile MontgomeryConstants montgomeryConstants;
+
+    /**
+     * Coarsely-integrated operand scanning: returns X * Y * R^-1 mod M in [0, M) for X, Y in
+     * [0, M). The accumulator carries two words of headroom above M so that every carry is
+     * absorbed by a fixed sequence of adds rather than by a ripple whose length would depend on
+     * the values.
+     */
+    private static int[] montgomeryMultiply(int len, int[] x, int[] y, int[] m, int mDash)
+    {
+        int[] t = new int[len + 2];
+
+        for (int i = 0; i < len; ++i)
+        {
+            // t += x * y[i]
+            long c = Nat.mulWordAddTo(len, y[i], x, 0, t, 0) & 0xFFFFFFFFL;
+            c += t[len] & 0xFFFFFFFFL;
+            t[len] = (int)c;
+            t[len + 1] = (int)(c >>> 32);
+
+            // t += (t[0] * -M^-1) * M, which clears the bottom word, then t >>= 32
+            c = Nat.mulWordAddTo(len, t[0] * mDash, m, 0, t, 0) & 0xFFFFFFFFL;
+            c += t[len] & 0xFFFFFFFFL;
+            t[len] = (int)c;
+            t[len + 1] += (int)(c >>> 32);
+
+            System.arraycopy(t, 1, t, 0, len + 1);
+            t[len + 1] = 0;
+        }
+
+        // t is below 2M and so occupies len+1 words: subtract M once if it is there to take
+        int[] s = Nat.create(len);
+        int top = t[len];
+        int borrow = Nat.sub(len, t, m, s);
+
+        // take s = t - M when the top word is set, or when the subtraction did not go negative
+        Nat.cmov(len, ((top | -top) >> 31) | ~borrow, s, 0, t, 0);
+
+        // the word the subtraction consumed is still sitting above the result, so clear the
+        // headroom: the returned array is wider than len and must not encode a different value
+        // when read at its full width. Unconditional, so nothing here depends on the operands.
+        t[len] = 0;
+        t[len + 1] = 0;
+
+        return t;
+    }
+
+    public static BigInteger modOddInverse(BigInteger M, BigInteger X)
+    {
+        if (!M.testBit(0))
+        {
+            throw new IllegalArgumentException("'M' must be odd");
+        }
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.bitLength() > M.bitLength())
+        {
+            X = X.mod(M);
+        }
+
+        int bits = M.bitLength();
+        int[] m = Nat.fromBigInteger(bits, M);
+        int[] x = Nat.fromBigInteger(bits, X);
+        int len = m.length;
+        int[] z = Nat.create(len);
+        if (0 == Mod.modOddInverse(m, x, z))
+        {
+            throw new ArithmeticException("BigInteger not invertible.");
+        }
+        return Nat.toBigInteger(len, z);
+    }
+
+    public static BigInteger modOddInverseVar(BigInteger M, BigInteger X)
+    {
+        if (!M.testBit(0))
+        {
+            throw new IllegalArgumentException("'M' must be odd");
+        }
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (M.equals(ONE))
+        {
+            return ZERO;
+        }
+        if (X.signum() < 0 || X.bitLength() > M.bitLength())
+        {
+            X = X.mod(M);
+        }
+        if (X.equals(ONE))
+        {
+            return ONE;
+        }
+
+        int bits = M.bitLength();
+        int[] m = Nat.fromBigInteger(bits, M);
+        int[] x = Nat.fromBigInteger(bits, X);
+        int len = m.length;
+        int[] z = Nat.create(len);
+        if (!Mod.modOddInverseVar(m, x, z))
+        {
+            throw new ArithmeticException("BigInteger not invertible.");
+        }
+        return Nat.toBigInteger(len, z);
+    }
+
+    public static boolean modOddIsCoprime(BigInteger M, BigInteger X)
+    {
+        if (!M.testBit(0))
+        {
+            throw new IllegalArgumentException("'M' must be odd");
+        }
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.bitLength() > M.bitLength())
+        {
+            X = X.mod(M);
+        }
+
+        int bits = M.bitLength();
+        int[] m = Nat.fromBigInteger(bits, M);
+        int[] x = Nat.fromBigInteger(bits, X);
+        return 0 != Mod.modOddIsCoprime(m, x);
+    }
+
+    public static boolean modOddIsCoprimeVar(BigInteger M, BigInteger X)
+    {
+        if (!M.testBit(0))
+        {
+            throw new IllegalArgumentException("'M' must be odd");
+        }
+        if (M.signum() != 1)
+        {
+            throw new ArithmeticException("BigInteger: modulus not positive");
+        }
+        if (X.signum() < 0 || X.bitLength() > M.bitLength())
+        {
+            X = X.mod(M);
+        }
+        if (X.equals(ONE))
+        {
+            return true;
+        }
+
+        int bits = M.bitLength();
+        int[] m = Nat.fromBigInteger(bits, M);
+        int[] x = Nat.fromBigInteger(bits, X);
+        return Mod.modOddIsCoprimeVar(m, x);
+    }
+
+    public static int getUnsignedByteLength(BigInteger n)
+    {
+        if (n.equals(ZERO))
+        {
+            return 1;
+        }
+
+        return (n.bitLength() + 7) / 8;
+    }
+
+    /**
+     * Return a positive BigInteger in the range of 0 to 2**bitLength - 1.
+     *
+     * @param bitLength maximum bit length for the generated BigInteger.
+     * @param random    a source of randomness.
+     * @return a positive BigInteger
+     */
+    public static BigInteger createRandomBigInteger(int bitLength, SecureRandom random)
+    {
+        return new BigInteger(1, createRandom(bitLength, random));
+    }
+
+    /**
+     * Return a private exponent randomised for use in a variable-time modular exponentiation.
+     * <p>
+     * {@link BigInteger#modPow(BigInteger, BigInteger)} carries no constant-time guarantee and its
+     * running time varies with the exponent, so where an exponent carries long-term secret material
+     * and the base is chosen by a peer, the exponent should be randomised before each use. This
+     * returns <code>exponent + c * groupOrder</code> for a small random <code>c</code>, which does
+     * not change the result of the exponentiation because
+     * <code>base<sup>groupOrder</sup> = 1</code>.
+     * <p>
+     * <b>The caller owns that premise, and it is the easy thing to get wrong.</b> The order must be
+     * one the base <em>actually</em> has:
+     * <ul>
+     * <li>Pass the <b>subgroup order q</b> only when the base is known to lie in that subgroup - a
+     * domain generator <code>g</code> chosen with <code>g<sup>q</sup> = 1</code>, or a peer value that
+     * has been verified with <code>v<sup>q</sup> = 1</code>.</li>
+     * <li>Pass <b>p-1</b> for a caller- or peer-supplied base that has only been range-checked. Any
+     * value coprime to a prime p satisfies <code>base<sup>p-1</sup> = 1</code> by Fermat, so this
+     * always holds.</li>
+     * <li>Pass <b>phi(n)</b> for a composite modulus, which only the private-key holder can do.</li>
+     * </ul>
+     * Passing q for a base outside the order-q subgroup silently returns the wrong answer for an odd
+     * multiple - for a safe prime that is roughly half of the range-valid bases - and no known-answer
+     * test will catch it, since the randomisation is otherwise result-preserving.
+     * <p>
+     * <b>What this does and does not buy.</b> The multiple is small - between 128 and 255 times
+     * groupOrder, drawn from seven random bits - so it lengthens the exponent by exactly eight bits
+     * rather than doubling the work, and every call raises a different exponent of the same length.
+     * That is aimed squarely at what {@link BigInteger#modPow(BigInteger, BigInteger)} leaks about
+     * the exponent it is handed: the bit length and the bit pattern, which drive the number of
+     * squarings and multiplications. After blinding, no single operation is performed on the private
+     * exponent itself, so an adversary reading one trace - or a handful - no longer reads its bits.
+     * <p>
+     * It is not, however, a constant-time exponentiation, and it is not a substitute for one. Two
+     * limits are worth being explicit about:
+     * <ul>
+     * <li>Seven bits give only 128 distinct blinded exponents for a given exponent and order. An
+     * adversary who can measure <em>many</em> operations under the same long-term exponent can
+     * average over that space, which is small enough to enumerate. This raises the cost of a
+     * repeated-measurement attack; it does not remove it. Where an exponent is long lived and the
+     * operation can be triggered and timed at will - static-static agreement, or signing on
+     * demand - treat that as the residual risk, and prefer a primitive with a real constant-time
+     * guarantee if one exists for the algorithm.</li>
+     * <li>Only the exponent is randomised. The base and the modulus reach modPow unchanged, so any
+     * leakage that depends on them - the windowing table modPow builds from the base, for one - is
+     * unaffected. That is the right trade for the protocols this is used in, where the base is a
+     * public or peer-supplied value and the exponent is the secret, but it is not a general
+     * side-channel defence for the exponentiation.</li>
+     * </ul>
+     *
+     * @param exponent the private exponent to randomise.
+     * @param groupOrder an order the base is raised to giving 1 - see above.
+     * @param random a source of randomness.
+     * @return exponent plus a random multiple of groupOrder.
+     */
+    public static BigInteger createBlindedExponent(BigInteger exponent, BigInteger groupOrder, SecureRandom random)
+    {
+        int randomBits = 7;
+
+        return exponent.add(createRandomBigInteger(randomBits, random).add(BigInteger.valueOf(128)).multiply(groupOrder));
+    }
+
+    // Hexadecimal value of the product of the 131 smallest odd primes from 3 to 743
+    private static final BigInteger SMALL_PRIMES_PRODUCT = new BigInteger(
+        "8138e8a0fcf3a4e84a771d40fd305d7f4aa59306d7251de54d98af8fe95729a1f"
+            + "73d893fa424cd2edc8636a6c3285e022b0e3866a565ae8108eed8591cd4fe8d2"
+            + "ce86165a978d719ebf647f362d33fca29cd179fb42401cbaf3df0c614056f9c8"
+            + "f3cfd51e474afb6bc6974f78db8aba8e9e517fded658591ab7502bd41849462f",
+        16);
+//    private static final int SMALL_PRIMES_MAX = 743;
+
+    /**
+     * Return a prime number candidate of the specified bit length.
+     *
+     * @param bitLength bit length for the generated BigInteger.
+     * @param random    a source of randomness.
+     * @return a positive BigInteger of numBits length
+     */
+    public static BigInteger createRandomPrime(int bitLength, int certainty, SecureRandom random)
+    {
+        // BigInteger implementations use the SecureRandom in varying ways, making testing difficult 
+//        return new BigInteger(bitLength, certainty, random);
+
+        if (bitLength < 2)
+        {
+            throw new IllegalArgumentException("bitLength < 2");
+        }
+
+        if (bitLength == 2)
+        {
+            return (random.nextInt() < 0) ? TWO : THREE;
+        }
+
+        int nBytes = (bitLength + 7) / 8;
+        int xBits = 8 * nBytes - bitLength;
+        byte[] base = new byte[nBytes];
+
+        for (;;)
+        {
+            random.nextBytes(base);
+
+            // strip off excess bits, set MSB and LSB
+            base[0] = (byte)((base[0] & (0xFF >>> xBits)) | 1 << (7 - xBits));
+            base[base.length - 1] |= 0x01;
+
+            BigInteger rv = new BigInteger(1, base);
+
+            int count = 0;
+            do
+            {
+                if (!hasAnySmallFactors(rv))
+                {
+                    if (rv.isProbablePrime(certainty))
+                    {
+                        return rv;
+                    }
+
+                    break;
+                }
+
+                rv = rv.add(TWO);
+            }
+            while (++count < 256 && rv.bitLength() == bitLength);
+        }
+    }
+
+    public static void writeUnsignedByteArray(OutputStream out, BigInteger n) throws IOException
+    {
+        byte[] b = n.toByteArray();
+
+        int off = b[0] == 0 ? 1 : 0;
+        int len = b.length - off;
+
+        out.write(b, off, len);
+    }
+
+    private static byte[] createRandom(int bitLength, SecureRandom random)
+        throws IllegalArgumentException
+    {
+        if (bitLength < 1)
+        {
+            throw new IllegalArgumentException("bitLength must be at least 1");
+        }
+
+        int nBytes = (bitLength + 7) / 8;
+
+        byte[] rv = new byte[nBytes];
+
+        random.nextBytes(rv);
+
+        // strip off any excess bits in the MSB
+        int xBits = 8 * nBytes - bitLength;
+        rv[0] &= (byte)(255 >>> xBits);
+
+        return rv;
+    }
+
+    public static class Cache
+    {
+        private final Map<BigInteger, Boolean> values = new WeakHashMap<BigInteger, Boolean>();
+        private final BigInteger[] preserve = new BigInteger[8];
+
+        private int preserveCounter = 0;
+
+        public synchronized void add(BigInteger value)
+        {
+            values.put(value, Boolean.TRUE);
+            preserve[preserveCounter] = value;
+            preserveCounter = (preserveCounter + 1) % preserve.length;
+        }
+
+        public synchronized boolean contains(BigInteger value)
+        {
+            return values.containsKey(value);
+        }
+
+        public synchronized int size()
+        {
+            return values.size();
+        }
+
+        public synchronized void clear()
+        {
+            values.clear();
+            for (int i = 0; i != preserve.length; i++)
+            {
+                preserve[i] = null;
+            }
+        }
+    }
+}

@@ -1,0 +1,65 @@
+package org.bouncycastle.jsl.pkcs.jcajce;
+
+import java.security.Provider;
+
+import org.bouncycastle.jsl.asn1.pkcs.PBMAC1Params;
+import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.JcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
+import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
+import org.bouncycastle.jsl.operator.MacCalculator;
+import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.operator.PBEMacCalculatorProvider;
+
+/**
+ * Builder for a {@link PBEMacCalculatorProvider} that vends PBMAC1 (RFC 8018 / RFC 9579)
+ * verifier MAC calculators via the JCA. The returned provider rejects any algorithm identifier
+ * whose OID is not {@code id-PBMAC1}.
+ */
+public class JcePBMac1CalculatorProviderBuilder
+{
+    private JcaJceHelper helper = new DefaultJcaJceHelper();
+
+    /**
+     * Base constructor.
+     */
+    public JcePBMac1CalculatorProviderBuilder()
+    {
+    }
+
+    public JcePBMac1CalculatorProviderBuilder setProvider(Provider provider)
+    {
+        this.helper = new ProviderJcaJceHelper(provider);
+
+        return this;
+    }
+
+    public JcePBMac1CalculatorProviderBuilder setProvider(String providerName)
+    {
+        this.helper = new NamedJcaJceHelper(providerName);
+
+        return this;
+    }
+
+    public PBEMacCalculatorProvider build()
+    {
+        return new PBEMacCalculatorProvider()
+        {
+            public MacCalculator get(AlgorithmIdentifier algorithm, char[] password)
+                throws OperatorCreationException
+            {
+                if (!PKCSObjectIdentifiers.id_PBMAC1.equals(algorithm.getAlgorithm()))
+                {
+                    throw new OperatorCreationException("protection algorithm not PB mac based");
+                }
+
+                JcePBMac1CalculatorBuilder bldr
+                    = new JcePBMac1CalculatorBuilder(PBMAC1Params.getInstance(algorithm.getParameters())).setHelper(helper);
+
+                return bldr.build(password);
+            }
+        };
+    }
+}
