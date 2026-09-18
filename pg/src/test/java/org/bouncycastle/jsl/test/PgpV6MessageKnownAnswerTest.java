@@ -20,7 +20,6 @@ import org.bouncycastle.openpgp.operator.jcajce.JcePublicKeyDataDecryptorFactory
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.io.Streams;
-import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -52,9 +51,9 @@ public class PgpV6MessageKnownAnswerTest
     {
         JslTestProvider.assumeAlgorithm("KeyAgreement.X25519withSHA256HKDF");
         // This message's SEIPDv2 packet is AES-256 with OCB (RFC 9580 AEAD algorithm 2), measured
-        // from the packet. Neither FIPS module serves OCB, so the gate is the cipher, not the
-        // agreement: getInstance succeeds there and init is what fails.
-        assumeAead("AES/OCB/NoPadding");
+        // from the packet, so the cipher gates this cell as well as the agreement. Neither FIPS
+        // module serves OCB.
+        JslTestProvider.assumeCipher("AES/OCB/NoPadding");
 
         implTestDecrypt(X25519_KEY, X25519_MSG, PublicKeyAlgorithmTags.X25519, "Hello World :)");
     }
@@ -65,15 +64,9 @@ public class PgpV6MessageKnownAnswerTest
     {
         JslTestProvider.assumeAlgorithm("KeyAgreement.X448withSHA512HKDF");
         // AES-256 with GCM (AEAD algorithm 3) in this one, so it runs wherever the agreement does.
-        assumeAead("AES/GCM/NoPadding");
+        JslTestProvider.assumeCipher("AES/GCM/NoPadding");
 
         implTestDecrypt(X448_KEY, X448_MSG, PublicKeyAlgorithmTags.X448, "Hello, World!\n");
-    }
-
-    private static void assumeAead(String transformation)
-    {
-        Assume.assumeTrue(JslTestProvider.name() + " cannot use " + transformation,
-            JslTestProvider.canInitCipher(transformation));
     }
 
     private void implTestDecrypt(String armouredKey, String armouredMessage, int algorithm, String plaintext)
