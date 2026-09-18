@@ -292,9 +292,8 @@ proven otherwise.
 
 Probe each DIRECTION separately where they can differ. A 3.5.8 module serves Triple-DES for
 decryption and refuses encryption with a typed `InvalidKeyException`, so "is DESede there" has no
-single answer. The no-argument `canInitCipher` hardcodes a 32-byte AES key and a 12-byte IV, so it
-answers "no" for any algorithm shaped differently - give the probe the key and IV sizes the
-algorithm actually takes.
+single answer. `canEncrypt` takes the key and IV sizes as arguments for that reason - give it the
+sizes the algorithm actually takes, or it answers "no" for an algorithm that works.
 
 **Report registration and usability separately.** `REG/REFUSED` is a real state here - see
 **Raw RSA on JSLFIPS**.
@@ -580,13 +579,18 @@ Use the strongest probe the question needs:
 | question | use |
 |---|---|
 | is the service registered | `has(type, alg)` / `supports(...)` / `assumeAlgorithm(...)` |
-| can this cipher transformation be built | `canGetCipher(...)` |
-| can it be *initialised* | `canInitCipher(...)` |
+| can this cipher transformation be built | `canGetCipher(...)` / `assumeCipher(...)` |
+| can it actually encrypt | `canEncrypt(transformation, keyAlg, keyBytes, ivBytes)` |
 | can this signature actually sign | `canSign(sigAlg, keyAlg, keySize)` |
 
+There is no init-only probe. There was one, `canInitCipher`, because
+`Cipher.getInstance("AES/OCB/NoPadding")` used to succeed on JSLFIPS and only `init` failed; the
+provider now refuses that lookup typed, so `assumeCipher` is enough for the mode question and
+`canEncrypt` answers the harder one. If a mode ever again resolves and then fails in use, probe the
+operation - do not reach for a lookup.
+
 `canSign` exists because registration is not usability: JSLFIPS registers `NoneWithRSA` and refuses
-it at `initSign`, and refuses SHA-1 signing while serving SHA-1 verification. `canInitCipher` exists
-because `Cipher.getInstance("AES/OCB/NoPadding")` succeeds and only `init` fails.
+it at `initSign`, and refuses SHA-1 signing while serving SHA-1 verification.
 
 `isFips()` remains correct for genuinely structural differences — key sizes, choosing a different
 digest — where there is nothing to probe.

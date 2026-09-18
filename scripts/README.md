@@ -20,6 +20,12 @@ Copy the upstream files in at their upstream paths, then run `apply`. It moves e
 `org/bouncycastle` directory under a source root to `org/bouncycastle/jsl`, rewrites the dotted and
 slash forms in every tracked file, and re-runs the post-checks. `pending` afterwards must read 0.
 
+### The file set
+
+Whatever `git ls-files` reports, minus `scripts/` itself — this script spells the old namespace in
+its own pattern strings, and an apply that rewrote them would leave a script matching nothing.
+Build output and the gitignored `reviews/` tree are outside the set by construction.
+
 ### What it will not touch
 
 - **Anything already under `org.bouncycastle.jsl`.** Both substitutions carry a negative lookahead.

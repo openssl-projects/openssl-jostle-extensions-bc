@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-D60: relocate every package from org.bouncycastle to org.bouncycastle.jsl.
+Relocate every package from org.bouncycastle to org.bouncycastle.jsl.
 
   relocate.py count    - report the per-category counts, change nothing
   relocate.py apply    - move the directories and rewrite both forms
@@ -8,8 +8,10 @@ D60: relocate every package from org.bouncycastle to org.bouncycastle.jsl.
   relocate.py jars     - step 7: assert no jar entry sits outside the jsl namespace
   relocate.py pending  - count the substitutions apply() would still make (0 once relocated)
 
-The file set is what git tracks, so build outputs and the gitignored reviews/ tree are
-excluded by construction. Docs (*.md) are skipped: they describe upstream bc-java as well as this
+The file set is what git tracks, so build outputs and the gitignored reviews/ tree are excluded by
+construction. scripts/ is excluded explicitly: this file carries the old namespace in its own
+pattern strings, and an apply that rewrote them would leave a script that no longer matches
+anything. Docs (*.md) are skipped: they describe upstream bc-java as well as this
 fork, so their hits are decided by hand.
 
 RUNBOOK. After applying, run every gate from a CLEAN build - `./gradlew clean` first. Measured
@@ -62,7 +64,9 @@ def repo_root():
 
 def tracked():
     out = subprocess.run(["git", "ls-files", "-z"], capture_output=True, text=True, check=True).stdout
-    return [f for f in out.split("\0") if f]
+    # scripts/ is excluded from the file set: this script's own pattern strings spell the old
+    # namespace, and an apply that rewrote them would leave a script matching nothing.
+    return [f for f in out.split("\0") if f and not f.startswith("scripts/")]
 
 
 def read(path):
