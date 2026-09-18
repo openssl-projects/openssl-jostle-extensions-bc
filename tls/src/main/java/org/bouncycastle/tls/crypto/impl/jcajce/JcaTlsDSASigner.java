@@ -1,6 +1,8 @@
 package org.bouncycastle.tls.crypto.impl.jcajce;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.PrivateKey;
 
 import org.bouncycastle.tls.HashAlgorithm;
@@ -17,6 +19,25 @@ public class JcaTlsDSASigner
     public JcaTlsDSASigner(JcaTlsCrypto crypto, PrivateKey privateKey)
     {
         super(crypto, privateKey, SignatureAlgorithm.dsa, "NoneWithDSA");
+
+        // A FIPS module built with dsa-sign-disabled still imports DSA keys and verifies DSA
+        // signatures, and the Signature service stays registered so verification keeps working -
+        // only signing is refused, at initSign. Probe it here: otherwise the refusal arrives
+        // mid-handshake as an internal_error alert, long after the credential was accepted.
+        try
+        {
+            crypto.getHelper().createSignature(algorithmName).initSign(privateKey, crypto.getSecureRandom());
+        }
+        catch (InvalidKeyException e)
+        {
+            throw new IllegalArgumentException("'privateKey' cannot sign with this provider: "
+                + e.getMessage(), e);
+        }
+        catch (GeneralSecurityException e)
+        {
+            throw new IllegalArgumentException("'privateKey' cannot be used with " + algorithmName
+                + ": " + e.getMessage(), e);
+        }
     }
 
     public TlsStreamSigner getStreamSigner(SignatureAndHashAlgorithm algorithm)

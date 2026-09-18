@@ -1,9 +1,14 @@
 package org.bouncycastle.tls.crypto.test;
 
+import java.io.IOException;
 import java.security.SecureRandom;
 import java.security.Security;
 
 import org.bouncycastle.jsl.test.JslTestProvider;
+import org.bouncycastle.tls.SignatureAlgorithm;
+import org.bouncycastle.tls.SignatureAndHashAlgorithm;
+import org.bouncycastle.tls.TlsCredentialedSigner;
+import org.bouncycastle.tls.crypto.TlsCryptoParameters;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 
 public class JcaTlsCryptoTest
@@ -31,9 +36,9 @@ public class JcaTlsCryptoTest
     public void testSignatures12()
         throws Exception
     {
-        // TLS 1.2 hashes the handshake itself and signs the digest through NoneWithRSA. JSLFIPS
-        // registers that but refuses it at initSign, so a service lookup would wrongly say yes -
-        // probe an actual signature. This lifts by itself if raw RSA signing is ever enabled.
+        // TLS 1.2 signs a caller-supplied digest, so this measures a raw RSA signature rather
+        // than a service lookup: a provider can register NoneWithRSA and still refuse it at
+        // initSign.
         if (!JslTestProvider.canSign("NoneWithRSA", "RSA", 2048))
         {
             System.out.println("[skipped] " + JslTestProvider.name() + " cannot sign a caller-supplied"
@@ -48,6 +53,32 @@ public class JcaTlsCryptoTest
         throws Exception
     {
         super.testSignatures13();
+    }
+
+    /**
+     * A FIPS module can be built with {@code dsa-sign-disabled}: DSA keys import and DSA signatures
+     * verify, but signing is refused. {@link org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsDSASigner}
+     * refuses such a credential when it is loaded, so drop just the DSA case and leave the RSA and
+     * ECDSA cases of the calling loop to run.
+     */
+    protected TlsCredentialedSigner loadCredentialedSigner12(TlsCryptoParameters cryptoParams,
+        SignatureAndHashAlgorithm signatureAndHashAlgorithm) throws IOException
+    {
+        try
+        {
+            return super.loadCredentialedSigner12(cryptoParams, signatureAndHashAlgorithm);
+        }
+        catch (IllegalArgumentException e)
+        {
+            if (SignatureAlgorithm.dsa != signatureAndHashAlgorithm.getSignature())
+            {
+                throw e;
+            }
+
+            System.out.println("[skipped] " + JslTestProvider.name() + " imports DSA keys and"
+                + " verifies DSA signatures but cannot sign with them");
+            return null;
+        }
     }
 
     public void testHKDFExpandLimit()
