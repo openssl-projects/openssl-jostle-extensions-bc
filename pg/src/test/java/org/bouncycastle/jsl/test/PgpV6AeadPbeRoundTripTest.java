@@ -56,10 +56,8 @@ public class PgpV6AeadPbeRoundTripTest
     public void v6AeadOcbPbeRoundTrip()
         throws Exception
     {
-        // Cipher.getInstance("AES/OCB/NoPadding") SUCCEEDS on JSLFIPS - the mode string is accepted
-        // and the failure only appears at init, when OpenSSL cannot fetch the mode. So probe init.
-        org.junit.Assume.assumeTrue(JslTestProvider.name() + " cannot initialise AES/OCB/NoPadding",
-            JslTestProvider.canInitCipher("AES/OCB/NoPadding"));
+        // Neither FIPS module serves OCB, and the lookup now fails typed there.
+        JslTestProvider.assumeCipher("AES/OCB/NoPadding");
         byte[] data = "OpenPGP v6 AEAD over an HKDF-derived key, through OpenSSL".getBytes("UTF-8");
 
         PGPDigestCalculatorProvider digCalcProv =

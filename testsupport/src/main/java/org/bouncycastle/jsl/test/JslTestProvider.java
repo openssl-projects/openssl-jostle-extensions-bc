@@ -221,46 +221,11 @@ public final class JslTestProvider
     }
 
     /**
-     * Whether the provider under test can actually INITIALISE this cipher transformation.
-     * <p>
-     * {@link #canGetCipher} is not enough for a mode: {@code Cipher.getInstance("AES/OCB/NoPadding")}
-     * succeeds against JSLFIPS and only fails at {@code init}, when OpenSSL cannot fetch the mode.
-     */
-    public static boolean canInitCipher(String transformation)
-    {
-        String key = name() + "|init|" + transformation;
-
-        Boolean cached = PROBES.get(key);
-        if (null != cached)
-        {
-            return cached.booleanValue();
-        }
-
-        boolean usable;
-        try
-        {
-            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance(transformation, install());
-            c.init(javax.crypto.Cipher.ENCRYPT_MODE,
-                new javax.crypto.spec.SecretKeySpec(new byte[32], "AES"),
-                new javax.crypto.spec.IvParameterSpec(new byte[12]));
-            usable = true;
-        }
-        catch (Exception e)
-        {
-            usable = false;
-        }
-
-        PROBES.put(key, Boolean.valueOf(usable));
-
-        return usable;
-    }
-
-    /**
      * Whether the provider under test can actually ENCRYPT with this transformation, given a key
      * and IV of the sizes the algorithm requires.
      * <p>
-     * The no-argument {@link #canInitCipher} hardcodes a 32-byte AES key and a 12-byte IV, so it
-     * answers "no" for any algorithm shaped differently even where that algorithm works.
+     * {@link #assumeCipher} tests the LOOKUP only, so it answers "yes" for a transformation the
+     * provider lists and cannot perform; this one supplies a key and IV of the right shape.
      * <p>
      * DIRECTION matters, which is why this probes encryption specifically. A 3.5.8 FIPS module
      * serves Triple-DES for DECRYPTION and refuses encryption with a typed InvalidKeyException,
