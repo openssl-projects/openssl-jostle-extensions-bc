@@ -157,7 +157,7 @@ ask three questions in order:
    the fork is behind; it can mean the fork deliberately holds that form.
    Worked example: `core/.../crypto/util/ScryptConfig.java` and
    `core/.../jcajce/spec/XDHParameterSpec.java` each differ from `r1rv86` by one import —
-   `org.bouncycastle.asn1.{misc,edec}` here, `org.bouncycastle.internal.asn1.{misc,edec}` upstream.
+   `org.bouncycastle.jsl.asn1.{misc,edec}` here, `org.bouncycastle.internal.asn1.{misc,edec}` upstream.
    Blob history calls both "behind" because the fork's line matches upstream's text from before
    `fa9f381d5d` (2024-03-08, "move of ASN.1 edec, misc, nsri and rosstandart to util package"), the
    commit that created the internal copies. This fork has no `org.bouncycastle.internal` package

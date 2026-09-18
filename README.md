@@ -4,7 +4,7 @@ BouncyCastle extension libraries (CMS/PKIX, S/MIME mail, OpenPGP, TLS), rebuilt
 from [bc-java](https://github.com/bcgit/bc-java) to run against the **OpenSSL
 Jostle ("JSL") JCA provider** instead of BouncyCastle's own software crypto.
 
-The libraries keep BC's familiar high-level APIs (`org.bouncycastle.asn1`,
+The libraries keep BC's familiar high-level APIs (`org.bouncycastle.jsl.asn1`,
 `operator`, `cert`, `cms`, `mail`, `openpgp`, `tls`, …) but delegate all
 primitive cryptography — ciphers, signatures, KEMs, digests, RNG — to OpenSSL
 through the JSL provider via standard JCA/JCE.
@@ -83,7 +83,7 @@ Each module produces `bcXxx-jsl-<version>.jar` plus `-sources` and `-javadoc`
 jars. The main jar is an OSGi bundle (built with the bnd plugin): per-module
 `Export-Package` headers mirror the matching bc-java module, and
 `Import-Package` carries a versioned range `[bundle_version, maxVersion)` on
-`org.bouncycastle.*`.
+`org.bouncycastle.jsl.*`.
 
 ## Tests
 

@@ -59,7 +59,7 @@ and under-counts.
 
 A reference counts if it is:
 
-- `import org.bouncycastle.<pkg>.<Class>;`, or
+- `import org.bouncycastle.jsl.<pkg>.<Class>;`, or
 - an inline fully-qualified name, or
 - a same-package sibling using the bare name.
 

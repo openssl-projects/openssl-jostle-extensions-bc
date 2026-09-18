@@ -355,7 +355,7 @@ places, orphans the keys it made earlier.
 Most library code lets the JCA resolve an algorithm. A few classes cannot: a `CertificateFactory`,
 a CRL or certificate `verify`, a `CertStore`, a `CertPathBuilder`, and the content encryptor a CMP
 challenge is built with all take a provider name. Those sites read
-`org.bouncycastle.jcajce.util.DefaultProviderName`, whose default is `"JSL"`. bc-java hardcoded its
+`org.bouncycastle.jsl.jcajce.util.DefaultProviderName`, whose default is `"JSL"`. bc-java hardcoded its
 own provider name at each of them, which cannot work here - there is no `BouncyCastleProvider` in
 this fork.
 
@@ -701,10 +701,10 @@ the class path), a changed `Automatic-Module-Name` (the names are the API a modu
 and they are kept when real descriptors land), and whether the provider still answers across the
 module boundary once resolution has succeeded.
 
-**Falsify the split-package assertion like this.** Add `org.bouncycastle.asn1.edec.*` to util as an
+**Falsify the split-package assertion like this.** Add `org.bouncycastle.jsl.asn1.edec.*` to util as an
 `Export-Package` header in the root `build.gradle` manifest block, so bnd pulls core's copy in, then
 run `:core:moduleLeg25`. Expect `java.lang.module.ResolutionException: Modules
-org.bouncycastle.jsl.core and org.bouncycastle.jsl.util export package org.bouncycastle.asn1.edec`.
+org.bouncycastle.jsl.core and org.bouncycastle.jsl.util export package org.bouncycastle.jsl.asn1.edec`.
 Do not falsify by editing the built jar: the leg depends on the `jar` tasks, so Gradle rebuilds it
 and wipes the plant before the leg runs. Measured 2026-09-14: RED on both JDK 11 and 25, and the
 class-path control stays GREEN, which is the whole point.

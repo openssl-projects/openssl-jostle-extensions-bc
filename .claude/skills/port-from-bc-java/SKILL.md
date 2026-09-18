@@ -85,6 +85,11 @@ These are real divergences already in the tree; reverting them compiles fine and
 
 ## 2. Triage the dependencies before copying
 
+**Every package in this fork is `org.bouncycastle.jsl.*`, upstream's are `org.bouncycastle.*`.** So
+a ported file's own `package` line and all its imports of fork code have to be rewritten, and the
+upstream package names below stay as they are - they name what you are porting FROM. The relocation
+script under `scripts/` does the substitution if you are taking a whole upstream patch.
+
 Walk the upstream file's imports. Anything in these groups is **absent here**:
 
 - `org.bouncycastle.*.bc.*` — the `BcXXX` software operator/cert builders. Drop the code path or
