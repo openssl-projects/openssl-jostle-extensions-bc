@@ -22,7 +22,7 @@ public class DefaultTlsDHGroupVerifier
     {
         /*
          * These 10 standard groups are those specified in NIST SP 800-56A Rev. 3 Appendix D. Make
-         * sure to consider the impact on BCJSSE's FIPS mode and/or usage with the BCFIPS provider
+         * sure to consider the impact on JSLJSSE's FIPS mode and/or usage with the BCFIPS provider
          * before modifying this list.
          */
 

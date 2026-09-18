@@ -39,7 +39,7 @@ import org.bouncycastle.jsl.util.io.pem.PemReader;
 
 /**
  * A simple test designed to conduct a TLS handshake with an external TLS server,
- * using the BC and BCJSSE providers.
+ * using the BC and JSLJSSE providers.
  */
 public class BCJSSEClientTest
 {

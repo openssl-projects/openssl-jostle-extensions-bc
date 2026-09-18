@@ -1,5 +1,5 @@
 /**
  * JCA-shaped extensions to {@code java.security} types — algorithm constraints and
- * crypto-policy hooks — used by the BCJSSE provider in {@link org.bouncycastle.jsl.jsse}.
+ * crypto-policy hooks — used by the JSLJSSE provider in {@link org.bouncycastle.jsl.jsse}.
  */
 package org.bouncycastle.jsl.jsse.java.security;

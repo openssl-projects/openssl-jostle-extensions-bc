@@ -1,7 +1,7 @@
 package org.bouncycastle.jsl.jsse;
 
 /**
- * A BCJSSE-specific interface providing access to extended connection-specific functionality.
+ * A JSLJSSE-specific interface providing access to extended connection-specific functionality.
  */
 public interface BCSSLConnection
 {

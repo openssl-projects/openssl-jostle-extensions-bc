@@ -1489,9 +1489,9 @@ public class JcaTlsCrypto
      * resulting {@link AEADNonceGenerator} implementation(s) are FIPS compliant; implementations that violate
      * this assumption risk FIPS compliance failures.
      * <p/>
-     * In particular, when BCJSSE is configured in FIPS mode, GCM cipher suites are enabled for TLS 1.2 if
+     * In particular, when JSLJSSE is configured in FIPS mode, GCM cipher suites are enabled for TLS 1.2 if
      * (and only if) a call to this method returns a non-null value. This can be achieved by configuring
-     * BCJSSE with a user-defined {@link JcaTlsCryptoProvider} subclass, which in turn creates instances of a
+     * JSLJSSE with a user-defined {@link JcaTlsCryptoProvider} subclass, which in turn creates instances of a
      * {@link JcaTlsCrypto} subclass, with this method overridden to return a suitable
      * {@link AEADNonceGeneratorFactory}.
      */

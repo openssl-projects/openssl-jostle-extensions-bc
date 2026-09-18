@@ -100,7 +100,7 @@ abstract class SSLSocketUtil
 
     static void handshakeCompleted(Runnable notifyRunnable)
     {
-        String name = "BCJSSE-HandshakeCompleted-" + (threadNumber.getAndIncrement() & 0x7FFFFFFF);
+        String name = "JSLJSSE-HandshakeCompleted-" + (threadNumber.getAndIncrement() & 0x7FFFFFFF);
 
         // Can't be a daemon thread
         new Thread(notifyRunnable, name).start();

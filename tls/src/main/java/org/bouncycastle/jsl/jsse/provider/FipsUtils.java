@@ -22,9 +22,9 @@ abstract class FipsUtils
         /*
          * Cipher suite list current as of NIST SP 800-52 Revision 2.
          * 
-         * Static (EC)DH cipher suites commented out since not supported by BCJSSE.
+         * Static (EC)DH cipher suites commented out since not supported by JSLJSSE.
          * 
-         * PSK cipher suites from Appendix C left out completely since the BCJSSE provider does not
+         * PSK cipher suites from Appendix C left out completely since the JSLJSSE provider does not
          * currently support _any_ PSK key exchange methods.
          */
         final Set<String> cs = new HashSet<String>();

@@ -178,7 +178,7 @@ class ECUtil
          * Try a more round about way (the IBM JCE is an example of this).
          * 
          * NOTE: For these providers, we will not be able to provide an AlgorithmParameters object
-         * to BCJSSE for use with AlgorithmConstraints checks, so curve constraints will not work.
+         * to JSLJSSE for use with AlgorithmConstraints checks, so curve constraints will not work.
          */
         try
         {

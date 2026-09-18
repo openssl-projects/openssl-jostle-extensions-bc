@@ -11,7 +11,7 @@ import org.bouncycastle.jsl.jsse.java.security.BCAlgorithmConstraints;
 import org.bouncycastle.jsl.tls.TlsUtils;
 
 /**
- * A BCJSSE-specific interface providing access to extended SSL parameters in earlier JDKs.
+ * A JSLJSSE-specific interface providing access to extended SSL parameters in earlier JDKs.
  */
 public final class BCSSLParameters
 {

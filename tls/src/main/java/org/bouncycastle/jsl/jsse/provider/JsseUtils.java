@@ -518,7 +518,7 @@ abstract class JsseUtils
         switch (clientCertificateType)
         {
         /*
-         * BCJSSE doesn't support any static key exchange cipher suites; any of these values would
+         * JSLJSSE doesn't support any static key exchange cipher suites; any of these values would
          * be filtered out (as invalid) by the low-level TLS code.
          */
 //        case ClientCertificateType.dss_fixed_dh:

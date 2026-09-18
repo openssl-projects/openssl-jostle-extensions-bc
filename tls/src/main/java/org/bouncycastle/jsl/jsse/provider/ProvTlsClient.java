@@ -159,7 +159,7 @@ class ProvTlsClient
     @Override
     protected Vector<Integer> getSupportedGroups(@SuppressWarnings("rawtypes") Vector namedGroupRolesRaw)
     {
-        // NOTE: Ignore roles; BCJSSE determines supported groups BEFORE signature schemes and cipher suites  
+        // NOTE: Ignore roles; JSLJSSE determines supported groups BEFORE signature schemes and cipher suites  
 //        @SuppressWarnings("unchecked")
 //        Vector<Integer> namedGroupRoles = namedGroupRolesRaw;
 
