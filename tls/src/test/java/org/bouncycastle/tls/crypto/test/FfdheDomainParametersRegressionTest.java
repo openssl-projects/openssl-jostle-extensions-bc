@@ -132,6 +132,43 @@ public class FfdheDomainParametersRegressionTest
         refuseAtImport(kf, group.getP().subtract(BigInteger.ONE), domain, "y = p-1");
     }
 
+    /**
+     * A public value outside the q-order subgroup is refused at import, and only when the domain
+     * carries Q: handed a plain {@code DHParameterSpec} the provider has no subgroup order to test
+     * against, so it accepts. That is the second reason the TLS code has to build Jostle's
+     * {@code DHDomainParameterSpec} rather than any {@code DHParameterSpec}.
+     */
+    @Test
+    public void aValueOutsideTheSubgroupIsRefusedWhenTheDomainCarriesQ()
+        throws Exception
+    {
+        JslTestProvider.assumeAlgorithm("KeyFactory.DiffieHellman");
+
+        DHGroup group = TlsDHUtils.getNamedDHGroup(NamedGroup.ffdhe2048);
+        BigInteger p = group.getP(), q = group.getQ();
+        DHDomainParameterSpec domain = new DHDomainParameterSpec(p, q, group.getG(), group.getL());
+        KeyFactory kf = KeyFactory.getInstance("DiffieHellman", JslTestProvider.name());
+
+        // Derived, not hard-coded: the generator itself is in the subgroup, so a literal would have
+        // to be re-checked whenever the group changes.
+        BigInteger outside = null;
+        for (BigInteger c = BigInteger.valueOf(3); c.intValue() < 1000; c = c.add(BigInteger.ONE))
+        {
+            if (!c.modPow(q, p).equals(BigInteger.ONE))
+            {
+                outside = c;
+                break;
+            }
+        }
+        assertNotNull("no value outside the subgroup was found to test with", outside);
+
+        refuseAtImport(kf, outside, domain, "y outside the subgroup (" + outside + ")");
+
+        // the same value, with no Q to check it against
+        kf.generatePublic(new DHExtendedPublicKeySpec(outside,
+            new DHParameterSpec(p, group.getG(), group.getL())));
+    }
+
     private void refuseAtImport(KeyFactory kf, BigInteger y, DHDomainParameterSpec domain, String what)
     {
         try
