@@ -18,14 +18,16 @@ import org.bouncycastle.asn1.x9.ECNamedCurveTable;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.bcpg.PublicKeyPacket;
 import org.bouncycastle.crypto.ec.CustomNamedCurves;
-import org.bouncycastle.jcajce.spec.HybridValueParameterSpec;
-import org.bouncycastle.jcajce.spec.UserKeyingMaterialSpec;
 import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.BigIntegers;
 import org.bouncycastle.util.Strings;
+// JSL accepts no foreign spec type. Its RFC 9580 agreements also require T to be prepended and the
+// base spec to carry a non-empty info string, which is what this builds.
+import org.openssl.jostle.jcajce.spec.HybridValueParameterSpec;
+import org.openssl.jostle.jcajce.spec.UserKeyingMaterialSpec;
 
 /**
  * Basic utility class

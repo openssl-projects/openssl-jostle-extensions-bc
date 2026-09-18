@@ -27,14 +27,15 @@ import org.bouncycastle.bcpg.MPInteger;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.PublicKeyPacket;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
-import org.bouncycastle.jcajce.spec.HybridValueParameterSpec;
-import org.bouncycastle.jcajce.spec.UserKeyingMaterialSpec;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPUtil;
 import org.bouncycastle.openpgp.operator.PGPPad;
 import org.bouncycastle.openpgp.operator.PublicKeyKeyEncryptionMethodGenerator;
 import org.bouncycastle.openpgp.operator.RFC6637Utils;
+// JSL accepts no foreign spec type; its CKDF agreements refuse a missing or empty Param typed.
+import org.openssl.jostle.jcajce.spec.HybridValueParameterSpec;
+import org.openssl.jostle.jcajce.spec.UserKeyingMaterialSpec;
 import org.bouncycastle.util.Arrays;
 
 public class JcePublicKeyKeyEncryptionMethodGenerator
