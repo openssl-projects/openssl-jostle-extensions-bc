@@ -13,6 +13,7 @@ import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.test.SimpleTest;
+import org.bouncycastle.jsl.test.JslTestProvider;
 
 public class ArmoredOutputStreamTest
     extends SimpleTest
@@ -54,6 +55,11 @@ public class ArmoredOutputStreamTest
 
     @org.junit.Test
     public void test() throws Exception {
+        // Gradle calls this bridge, not main(), and the key-ring parse resolves SHA-1 through
+        // DefaultProviderName - so without this the class passes only when some other class in the
+        // same JVM happened to install the provider first.
+        JslTestProvider.install();
+
         org.bouncycastle.util.test.TestResult result = perform();
         if (!result.isSuccessful()) { throw new junit.framework.AssertionFailedError(result.toString()); }
     }
