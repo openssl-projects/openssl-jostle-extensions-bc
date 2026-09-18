@@ -279,7 +279,7 @@ public class JcaPGPKeyConverter
                 // Brainpool, NIST etc.
                 else
                 {
-                    return implGetPrivateKeyEC("ECDH", ecdhPub, ecdhK);
+                    return implGetPrivateKeyEC("EC", ecdhPub, ecdhK);
                 }
             }
             // Modern X25519 (1.3.6.1.4.1.3029.1.5.1 & 1.3.101.110)
@@ -442,7 +442,7 @@ public class JcaPGPKeyConverter
                 // Brainpool, NIST etc.
                 else
                 {
-                    return implGetPublicKeyEC("ECDH", ecdhK);
+                    return implGetPublicKeyEC("EC", ecdhK);
                 }
             }
             // Modern X25519 (1.3.6.1.4.1.3029.1.5.1 & 1.3.101.110)

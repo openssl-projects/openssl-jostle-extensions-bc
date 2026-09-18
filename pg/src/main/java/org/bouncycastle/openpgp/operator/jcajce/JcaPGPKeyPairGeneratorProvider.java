@@ -21,6 +21,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.util.Date;
 
@@ -216,16 +217,34 @@ public class JcaPGPKeyPairGeneratorProvider
         public PGPKeyPair generateECDHKeyPair(ASN1ObjectIdentifier curveOID)
             throws PGPException
         {
-            // Classic EC is out of scope for the JSL provider (no named-curve support).
-            throw new PGPException("EC (ECDH) key generation is not supported by the JSL provider");
+            return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.ECDH,
+                generateEC(curveOID, "ECDH"), creationTime);
         }
 
         @Override
         public PGPKeyPair generateECDSAKeyPair(ASN1ObjectIdentifier curveOID)
             throws PGPException
         {
-            // Classic EC is out of scope for the JSL provider (no named-curve support).
-            throw new PGPException("EC (ECDSA) key generation is not supported by the JSL provider");
+            return new JcaPGPKeyPair(version, PublicKeyAlgorithmTags.ECDSA,
+                generateEC(curveOID, "ECDSA"), creationTime);
+        }
+
+        // JSL serves one EC generator, named "EC", and takes the curve as an OID through the
+        // JCA-standard ECGenParameterSpec. There is no "ECDH" or "ECDSA" generator to ask for.
+        private KeyPair generateEC(ASN1ObjectIdentifier curveOID, String use)
+            throws PGPException
+        {
+            try
+            {
+                KeyPairGenerator gen = helper.createKeyPairGenerator("EC");
+                gen.initialize(new ECGenParameterSpec(curveOID.getId()));
+                return gen.generateKeyPair();
+            }
+            catch (GeneralSecurityException e)
+            {
+                throw new PGPException("Cannot generate EC (" + use + ") key pair for curve "
+                    + curveOID.getId() + ".", e);
+            }
         }
     }
 }
