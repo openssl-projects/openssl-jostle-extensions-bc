@@ -111,7 +111,8 @@ a probe of the provider rather than on a compliance judgement. See `.claude/guid
 ## Versioning
 
 - Library version: `version` in `gradle.properties` (tracks the bc-java
-  release line it was rebuilt from, e.g. `1.86.0-SNAPSHOT`).
+  release line it was rebuilt from, e.g. `1.86-SNAPSHOT`). A release build takes its
+  version from a git tag: `-PreleaseTag=v1.86.1` or bc-java's `r1rv86`.
 - Provider version: `jostleVersion` in `gradle.properties` (tracks the
   `openssl-jostle` release on Maven Central).
 

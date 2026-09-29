@@ -69,7 +69,78 @@ static String deriveOSGIVersion(String prjVersion) {
     return prjVersion
 }
 
+// A release build takes its version from a git tag, -PreleaseTag=<tag>, in either this repo's
+// spelling v<major>.<minor>[.<patch>] or bc-java's r<major>rv<minor>[v<patch>]; anything else
+// fails. -Pversion on the command line still wins, and with neither gradle.properties decides.
+static String releaseVersion(String tag) {
+    for (pattern in [/^v?(\d+)\.(\d+)(?:\.(\d+))?$/, /^r(\d+)rv(\d+)(?:v(\d+))?$/])
+    {
+        def m = tag =~ pattern
+        if (m.matches())
+        {
+            return [m.group(1), m.group(2), m.group(3)].findAll { it != null }.join('.')
+        }
+    }
+    throw new GradleException("-PreleaseTag '${tag}' is neither v<major>.<minor>[.<patch>]"
+        + " nor r<major>rv<minor>[v<patch>]")
+}
+
+def releaseTag = findProperty('releaseTag')
+if (releaseTag != null && !gradle.startParameter.projectProperties.containsKey('version'))
+{
+    def released = releaseVersion(releaseTag.toString())
+    allprojects { version = released }
+}
+
 ext.bundle_version = deriveOSGIVersion(version.toString())
+
+// The tag grammar, held to a table: each accepted tag's version, and each reject refused.
+tasks.register('checkReleaseTags') {
+    description = 'Asserts the -PreleaseTag grammar against a table of accepted and rejected tags.'
+    group = 'verification'
+
+    doLast {
+        def accepted = ['r1rv86': '1.86', 'r1rv85v2': '1.85.2', 'v1.86.123': '1.86.123',
+                        '1.86.123': '1.86.123', 'v1.86': '1.86']
+        def rejected = ['', 'main', '1.86-SNAPSHOT', 'v1', 'r1rv', 'rv86', '1.86.x', 'r1rv86v']
+        def problems = []
+
+        accepted.each { tag, want ->
+            try
+            {
+                def got = releaseVersion(tag)
+                if (got != want)
+                {
+                    problems << "'${tag}' gave ${got}, not ${want}"
+                }
+            }
+            catch (GradleException e)
+            {
+                problems << "'${tag}' was rejected, but must give ${want}"
+            }
+        }
+        rejected.each { tag ->
+            try
+            {
+                problems << "'${tag}' gave ${releaseVersion(tag)}, but must be rejected"
+            }
+            catch (GradleException ignored)
+            {
+            }
+        }
+
+        if (!problems.isEmpty())
+        {
+            throw new GradleException("release tag check failed:\n  " + problems.join("\n  "))
+        }
+        logger.lifecycle("release tag check: ${accepted.size()} accepted, ${rejected.size()} rejected")
+    }
+}
+subprojects { sp ->
+    sp.plugins.withId('java') {
+        sp.tasks.named('check').configure { dependsOn rootProject.tasks.named('checkReleaseTags') }
+    }
+}
 
 // `Export-Package` is a bnd PULL instruction: it copies every matching package off the
 // build classpath into the bundle, which is how bcutil-jsl re-shipped seven of core's

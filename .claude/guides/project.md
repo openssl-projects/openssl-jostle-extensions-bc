@@ -9,7 +9,8 @@ BouncyCastle satellite libraries rebuilt from bc-java. They keep BC's high-level
 delegate every cryptographic primitive to the **OpenSSL Jostle ("JSL") JCA provider** instead of
 BC's own software crypto.
 
-Version `1.86.0-SNAPSHOT`, tracking bc-java 1.86.
+Version `1.86-SNAPSHOT`, tracking bc-java 1.86. A release build takes its version from a git tag:
+`-PreleaseTag=v1.86.1` or bc-java's `r1rv86` (see `checkReleaseTags` for the grammar).
 
 | module | artifact | main | test | contents |
 |---|---|---|---|---|
