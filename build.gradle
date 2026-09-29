@@ -142,6 +142,12 @@ subprojects { sp ->
     }
 }
 
+// The root applies no plugin, so it has no clean of its own; without this `./gradlew clean`
+// leaves the staged Maven layout under build/staging-deploy in place.
+tasks.register('clean', Delete) {
+    delete layout.buildDirectory
+}
+
 // `Export-Package` is a bnd PULL instruction: it copies every matching package off the
 // build classpath into the bundle, which is how bcutil-jsl re-shipped seven of core's
 // asn1 packages. `-exportcontents` only describes what the jar already holds, so one
