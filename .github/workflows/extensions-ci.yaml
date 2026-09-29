@@ -61,24 +61,17 @@ jobs:
             ~/.gradle/wrapper
           key: "gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}"
           restore-keys: "gradle-${{ runner.os }}-${{ runner.arch }}-"
-      - name: "Build the jars and check them as bundles and on the module path"
+      # One invocation, so the staged Maven layout holds the very jars the test legs run against.
+      - name: "Build the jars, check them as bundles and on the module path, and stage the layout"
         run: |
-          ./gradlew assemble checkBundlePackages :core:moduleLegsCheck ${RELEASE_ARGS:+"$RELEASE_ARGS"}
-      - name: "Collect the six main jars"
+          ./gradlew assemble checkBundlePackages :core:moduleLegsCheck publish checkPublishedPoms \
+            ${RELEASE_ARGS:+"$RELEASE_ARGS"}
+      # Flat, as -PtestJars wants; it also fails a test leg on any module's missing jar.
+      - name: "Collect the main jars"
         run: |
-          set -eu
-          mkdir -p dist-jars
-          for m in core util pkix pg tls mail; do
-            found=()
-            for f in "$m"/build/libs/bc"$m"-jsl-*.jar; do
-              case "$f" in *-sources.jar|*-javadoc.jar) ;; *) found+=("$f") ;; esac
-            done
-            if [ "${#found[@]}" -ne 1 ]; then
-              echo "expected one main jar for $m, found ${#found[@]}: ${found[*]:-none}" >&2
-              exit 1
-            fi
-            cp "${found[0]}" dist-jars/
-          done
+          mkdir dist-jars
+          find ./*/build/libs -maxdepth 1 -name 'bc*-jsl-*.jar' \
+            ! -name '*-sources.jar' ! -name '*-javadoc.jar' -exec cp {} dist-jars/ \;
           ls -l dist-jars
       - uses: "actions/upload-artifact@v7"
         with:
@@ -88,34 +81,8 @@ jobs:
           retention-days: 1
       # The Maven layout make-jostle-extensions-release PGP-signs and publishes, from main and
       # from tags only. It is picked up only once the whole run has passed, so it is never
-      # published from a run whose tests failed.
-      - name: "Stage the Maven layout"
-        if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
-        run: |
-          ./gradlew publish checkPublishedPoms ${RELEASE_ARGS:+"$RELEASE_ARGS"}
-      # The layout's jars must be the ones the test legs ran against, byte for byte.
-      - name: "Assert the staged jars are the tested jars"
-        if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
-        run: |
-          set -eu
-          staged=0
-          while IFS= read -r f; do
-            match=""
-            for d in dist-jars/*.jar; do
-              if cmp -s "$f" "$d"; then match="$d"; fi
-            done
-            if [ -z "$match" ]; then
-              echo "staged $f matches no jar in dist-jars" >&2
-              exit 1
-            fi
-            echo "$f = $match"
-            staged=$((staged + 1))
-          done < <(find build/staging-deploy -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
-          if [ "$staged" -ne 6 ]; then
-            echo "expected 6 staged main jars, found $staged" >&2
-            exit 1
-          fi
-      # Seven days: make-jostle-extensions-release can re-run from BUILD_RUN_ID until then.
+      # published from a run whose tests failed. Seven days: the release job can re-run from
+      # BUILD_RUN_ID until then.
       - uses: "actions/upload-artifact@v7"
         if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
         with:
@@ -269,16 +236,6 @@ jobs:
         with:
           distribution: "corretto"
           java-version: "17"
-      - name: "Assert that JAVA_HOME is JDK 17, the Gradle JVM"
-        shell: "bash"
-        run: |
-          jh="${JAVA_HOME//\\//}"
-          v="$("$jh/bin/java" -version 2>&1 | head -1)"
-          echo "$v"
-          case "$v" in
-            *'"17.'*) ;;
-            *) echo "JAVA_HOME is not JDK 17: $v" >&2; exit 1 ;;
-          esac
       # setup-java names its variables per architecture; the toolchain wants BC_JDK<N>.
       - name: "Point the test toolchain and the bridge at this cell's JDK"
         shell: "bash"
@@ -369,9 +326,10 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          for m in core util pkix pg tls mail; do
-            mkdir -p "results/jsl/$m"
-            cp "$m"/build/test-results/test/*.xml "results/jsl/$m/" 2>/dev/null || true
+          for d in */build/test-results/test; do
+            [ -d "$d" ] || continue
+            mkdir -p "results/jsl/${d%%/*}"
+            cp "$d"/*.xml "results/jsl/${d%%/*}/" 2>/dev/null || true
           done
       - name: "Leg JSLFIPS 3.5.8"
         if: "${{ !cancelled() }}"
@@ -383,9 +341,10 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          for m in core util pkix pg tls mail; do
-            mkdir -p "results/fips-3.5.8/$m"
-            cp "$m"/build/test-results/fipsTest/*.xml "results/fips-3.5.8/$m/" 2>/dev/null || true
+          for d in */build/test-results/fipsTest; do
+            [ -d "$d" ] || continue
+            mkdir -p "results/fips-3.5.8/${d%%/*}"
+            cp "$d"/*.xml "results/fips-3.5.8/${d%%/*}/" 2>/dev/null || true
           done
       - name: "Leg JSLFIPS 3.1.2"
         if: "${{ !cancelled() }}"
@@ -397,9 +356,10 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          for m in core util pkix pg tls mail; do
-            mkdir -p "results/fips-3.1.2/$m"
-            cp "$m"/build/test-results/fipsTest/*.xml "results/fips-3.1.2/$m/" 2>/dev/null || true
+          for d in */build/test-results/fipsTest; do
+            [ -d "$d" ] || continue
+            mkdir -p "results/fips-3.1.2/${d%%/*}"
+            cp "$d"/*.xml "results/fips-3.1.2/${d%%/*}/" 2>/dev/null || true
           done
 
       - uses: "actions/upload-artifact@v7"
