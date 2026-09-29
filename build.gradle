@@ -263,6 +263,69 @@ subprojects {
         inputs.property('fipsLib', System.getenv('TEST_FIPS_LIB') ?: '')
     }
 
+    // -PtestJdk=<N> runs the test legs on the JDK N toolchain (BC_JDK<N>) instead of the Gradle JVM,
+    // and -PtestBridge=jni|ffm picks jostle's native bridge; left unset, jostle chooses.
+    def testJdk = rootProject.findProperty('testJdk')
+    def testBridge = rootProject.findProperty('testBridge')
+    if (testBridge && !(testBridge in ['jni', 'ffm']))
+    {
+        throw new GradleException("-PtestBridge must be jni or ffm, not '${testBridge}'")
+    }
+    [tasks.named('test'), tasks.named('fipsTest')].each { leg ->
+        leg.configure { t ->
+            if (testJdk)
+            {
+                t.javaLauncher = javaToolchains.launcherFor {
+                    languageVersion = JavaLanguageVersion.of(testJdk as int)
+                }
+                // As in core's module legs: JDK 11 rejects the flag, 17 and later accept it.
+                if ((testJdk as int) >= 17)
+                {
+                    t.jvmArgs('--enable-native-access=ALL-UNNAMED')
+                }
+            }
+            if (testBridge)
+            {
+                t.systemProperty('org.openssl.jostle.loader.interface', testBridge)
+            }
+        }
+    }
+
+    // -PtestJars=<dir> runs the test legs against built jars: every subproject's main output and
+    // build/libs jar leaves the classpath, and the six jars in <dir> take their place. Only the
+    // code under test changes; the test classes still compile from source.
+    def testJarsDir = rootProject.findProperty('testJars')
+    if (testJarsDir)
+    {
+        def dir = rootProject.file(testJarsDir)
+        def jars = rootProject.subprojects.collect { new File(dir, "bc${it.name}-jsl-${version}.jar") }
+        def missing = jars.findAll { !it.isFile() }
+        if (!missing.isEmpty())
+        {
+            throw new GradleException("-PtestJars: no ${missing*.name.join(', ')} in ${dir}")
+        }
+
+        def local = rootProject.subprojects.collectMany { sp ->
+            def b = sp.layout.buildDirectory.get().asFile
+            [new File(b, 'classes/java/main'), new File(b, 'resources/main'), new File(b, 'libs')]
+        }
+        def isLocal = { File f -> local.any { f == it || f.path.startsWith(it.path + File.separator) } }
+
+        [tasks.named('test'), tasks.named('fipsTest')].each { leg ->
+            leg.configure { t ->
+                t.classpath = t.classpath.filter { !isLocal(it) } + files(jars)
+                // The classpath resolves only at execution, so the guard runs before the first test.
+                doFirst {
+                    def stray = t.classpath.files.findAll { isLocal(it) }
+                    if (!stray.isEmpty())
+                    {
+                        throw new GradleException("-PtestJars: ${t.path} still has ${stray.join(', ')}")
+                    }
+                }
+            }
+        }
+    }
+
     // core carries no tests of its own, but it still compiles the shared test support above, so
     // "sources present, nothing discovered" is expected rather than a misconfiguration.
     tasks.withType(Test).configureEach {

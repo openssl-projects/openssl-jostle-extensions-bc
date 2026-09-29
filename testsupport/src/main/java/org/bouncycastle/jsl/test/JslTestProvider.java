@@ -6,6 +6,7 @@ import java.security.Security;
 
 import org.bouncycastle.jsl.jcajce.util.DefaultProviderName;
 import org.junit.Assume;
+import org.openssl.jostle.Loader;
 import org.openssl.jostle.jcajce.provider.JostleProvider;
 import org.openssl.jostle.jcajce.provider.fips.JostleFIPSProvider;
 
@@ -111,6 +112,9 @@ public final class JslTestProvider
             {
                 instance = new JostleProvider();
             }
+            // Once per JVM: the record of which JDK and which native bridge this leg really ran on.
+            System.out.println("[jsl] " + want + " on java " + System.getProperty("java.version")
+                + ", bridge " + Loader.getInterfaceTypeName());
         }
 
         if (instance != Security.getProvider(want))

@@ -1,0 +1,366 @@
+name: "extensions-ci"
+
+# Builds the six extension jars once, then runs the test legs against those jars on every
+# supported platform and every JDK jostle supports (8, 11, 17, 21, and 25 over both the JNI and
+# the FFM bridge): JSL, then JSLFIPS with the 3.5.8 and the 3.1.2 FIPS module. The provider jar
+# resolves from Maven Central by os.arch, so each runner gets its own architecture's bundle.
+# Only GitHub's own actions are used.
+
+on:
+  - "push"
+  - "pull_request"
+  - "workflow_dispatch"
+
+permissions:
+  contents: "read"
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# On a tag run the build takes its version from the tag (see -PreleaseTag in build.gradle), and
+# every Gradle call passes the same tag so the jar names agree between jobs.
+env:
+  RELEASE_ARGS: "${{ github.ref_type == 'tag' && format('-PreleaseTag={0}', github.ref_name) || '' }}"
+
+jobs:
+  build-jars:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v7"
+        with:
+          persist-credentials: false
+      # One step per JDK, as jostle does; the last one sets JAVA_HOME. 17 runs Gradle, 11 and 25
+      # run the module-path legs.
+      - uses: "actions/setup-java@v5"
+        with:
+          distribution: "corretto"
+          java-version: "11"
+      - uses: "actions/setup-java@v5"
+        with:
+          distribution: "corretto"
+          java-version: "25"
+      - uses: "actions/setup-java@v5"
+        with:
+          distribution: "corretto"
+          java-version: "17"
+      - name: "Assert that JAVA_HOME is JDK 17, the Gradle and test JVM"
+        shell: "bash"
+        run: |
+          jh="${JAVA_HOME//\\//}"
+          v="$("$jh/bin/java" -version 2>&1 | head -1)"
+          echo "$v"
+          case "$v" in
+            *'"17.'*) ;;
+            *) echo "JAVA_HOME is not JDK 17: $v" >&2; exit 1 ;;
+          esac
+      - name: "Point the BC_JDK toolchains at the installed JDKs"
+        shell: "bash"
+        run: |
+          echo "BC_JDK11=$JAVA_HOME_11_X64" >> "$GITHUB_ENV"
+          echo "BC_JDK17=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "BC_JDK25=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+      - uses: "actions/cache@v6"
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: "gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}"
+          restore-keys: "gradle-${{ runner.os }}-${{ runner.arch }}-"
+      - name: "Build the jars and check them as bundles and on the module path"
+        shell: "bash"
+        run: |
+          # shellcheck disable=SC2086
+          ./gradlew assemble checkBundlePackages :core:moduleLegsCheck $RELEASE_ARGS
+      - name: "Collect the six main jars"
+        shell: "bash"
+        run: |
+          set -eu
+          mkdir -p dist-jars
+          for m in core util pkix pg tls mail; do
+            found=()
+            for f in "$m"/build/libs/bc"$m"-jsl-*.jar; do
+              case "$f" in *-sources.jar|*-javadoc.jar) ;; *) found+=("$f") ;; esac
+            done
+            if [ "${#found[@]}" -ne 1 ]; then
+              echo "expected one main jar for $m, found ${#found[@]}: ${found[*]:-none}" >&2
+              exit 1
+            fi
+            cp "${found[0]}" dist-jars/
+          done
+          ls -l dist-jars
+      - uses: "actions/upload-artifact@v7"
+        with:
+          name: "extensions-jars"
+          path: "dist-jars/*.jar"
+          if-no-files-found: "error"
+          retention-days: 1
+
+  fips-modules:
+    runs-on: "${{ matrix.runner }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - "ubuntu-latest"
+          - "ubuntu-24.04-arm"
+          - "macos-15"
+          - "macos-15-intel"
+          - "windows-2025"
+    env:
+      VCVARS: 'C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat'
+    steps:
+      - uses: "actions/checkout@v7"
+        with:
+          persist-credentials: false
+      # v1 is a LAYOUT version: bump it whenever the staged tree under fips-out changes shape,
+      # or a cache hit restores the old tree and skips the build that would make the new one.
+      - name: "Cache the FIPS modules"
+        id: "cache-fips"
+        uses: "actions/cache@v6"
+        with:
+          path: "fips-out"
+          key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
+      - name: "Build both FIPS modules (POSIX)"
+        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os != 'Windows'"
+        shell: "bash"
+        run: |
+          set -eu
+          out="$GITHUB_WORKSPACE/fips-out"
+          # Bounded -j: a bare "make -j" exhausts the process table on the macOS arm64 runner.
+          jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+          for ver in 3.5.8 3.1.2; do
+            src="$GITHUB_WORKSPACE/openssl-fips-$ver"
+            rm -rf "$src"
+            git clone --depth 1 --branch "openssl-$ver" \
+              https://github.com/openssl/openssl.git "$src"
+            cd "$src"
+            ./config enable-fips no-tests --prefix="$src/dist"
+            make -j"$jobs"
+            make install_sw install_fips
+            modfile="$(find "$src/dist" \( -name fips.so -o -name fips.dylib \) | head -1)"
+            if [ -z "$modfile" ]; then
+              echo "FIPS module not found under $src/dist" >&2
+              exit 1
+            fi
+            mkdir -p "$out/$ver"
+            cp "$modfile" "$out/$ver/"
+            export LD_LIBRARY_PATH="$src/dist/lib64:$src/dist/lib:${LD_LIBRARY_PATH:-}"
+            export DYLD_LIBRARY_PATH="$src/dist/lib64:$src/dist/lib:${DYLD_LIBRARY_PATH:-}"
+            # The config sits beside the module; -pedantic on 3.5.x, defaults on 3.1.2.
+            pedantic=""
+            case "$ver" in 3.5.*) pedantic="-pedantic" ;; esac
+            # shellcheck disable=SC2086
+            "$src/dist/bin/openssl" fipsinstall $pedantic \
+              -module "$out/$ver/$(basename "$modfile")" \
+              -out "$out/$ver/fipsmodule.cnf"
+            cat "$out/$ver/fipsmodule.cnf"
+            ls -l "$out/$ver"
+            cd "$GITHUB_WORKSPACE"
+            rm -rf "$src"
+          done
+      # Short source directories: the OpenSSL build overruns MAX_PATH under longer ones.
+      - name: "Build both FIPS modules (Windows)"
+        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os == 'Windows'"
+        shell: "cmd"
+        run: |
+          call "%VCVARS%" || exit /b 1
+          rmdir /s /q "${{ github.workspace }}\fips-358" 2>nul
+          git clone --depth 1 --branch openssl-3.5.8 https://github.com/openssl/openssl.git "${{ github.workspace }}\fips-358" || exit /b 1
+          pushd "${{ github.workspace }}\fips-358" || exit /b 1
+          perl Configure VC-WIN64A enable-fips no-tests --prefix=${{ github.workspace }}\fips-358\dist || exit /b 1
+          nmake || exit /b 1
+          nmake install_sw install_fips || exit /b 1
+          popd
+          rmdir /s /q "${{ github.workspace }}\fips-312" 2>nul
+          git clone --depth 1 --branch openssl-3.1.2 https://github.com/openssl/openssl.git "${{ github.workspace }}\fips-312" || exit /b 1
+          pushd "${{ github.workspace }}\fips-312" || exit /b 1
+          perl Configure VC-WIN64A enable-fips no-tests --prefix=${{ github.workspace }}\fips-312\dist || exit /b 1
+          nmake || exit /b 1
+          nmake install_sw install_fips || exit /b 1
+          popd
+      - name: "Stage both FIPS modules with their fipsmodule.cnf (Windows)"
+        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os == 'Windows'"
+        shell: "pwsh"
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($pair in @(@("358", "3.5.8"), @("312", "3.1.2"))) {
+            $dir, $ver = $pair
+            $prefix = "${{ github.workspace }}\fips-$dir\dist"
+            $mod = Get-ChildItem -Path $prefix -Recurse -Filter "fips.dll" | Select-Object -First 1
+            if ($null -eq $mod) { throw "FIPS module fips.dll not found under $prefix" }
+            $out = "${{ github.workspace }}\fips-out\$ver"
+            New-Item -ItemType Directory -Force -Path $out | Out-Null
+            Copy-Item $mod.FullName (Join-Path $out "fips.dll") -Force
+            $cnf = Join-Path $out "fipsmodule.cnf"
+            $dll = Join-Path $out "fips.dll"
+            if ($ver -like "3.5.*") {
+              & "$prefix\bin\openssl.exe" fipsinstall -pedantic -module $dll -out $cnf
+            } else {
+              & "$prefix\bin\openssl.exe" fipsinstall -module $dll -out $cnf
+            }
+            if ($LASTEXITCODE -ne 0) { throw "fipsinstall failed for $ver ($LASTEXITCODE)" }
+            Get-Content $cnf
+            Remove-Item -Recurse -Force "${{ github.workspace }}\fips-$dir"
+          }
+
+      - uses: "actions/upload-artifact@v7"
+        with:
+          name: "fips-modules-${{ matrix.runner }}"
+          path: "fips-out"
+          if-no-files-found: "error"
+          retention-days: 1
+
+  test:
+    needs: ["build-jars", "fips-modules"]
+    runs-on: "${{ matrix.runner }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - "ubuntu-latest"
+          - "ubuntu-24.04-arm"
+          - "macos-15"
+          - "macos-15-intel"
+          - "windows-2025"
+        jvm:
+          - { name: "jdk8",      jdk: "8",  bridge: "" }
+          - { name: "jdk11",     jdk: "11", bridge: "" }
+          - { name: "jdk17",     jdk: "17", bridge: "" }
+          - { name: "jdk21",     jdk: "21", bridge: "" }
+          - { name: "jdk25-jni", jdk: "25", bridge: "jni" }
+          - { name: "jdk25-ffm", jdk: "25", bridge: "ffm" }
+    steps:
+      - uses: "actions/checkout@v7"
+        with:
+          persist-credentials: false
+      # The JDK under test first, then 17 last: the last step sets JAVA_HOME, which runs Gradle.
+      - uses: "actions/setup-java@v5"
+        with:
+          distribution: "corretto"
+          java-version: "${{ matrix.jvm.jdk }}"
+      - uses: "actions/setup-java@v5"
+        with:
+          distribution: "corretto"
+          java-version: "17"
+      - name: "Assert that JAVA_HOME is JDK 17, the Gradle JVM"
+        shell: "bash"
+        run: |
+          jh="${JAVA_HOME//\\//}"
+          v="$("$jh/bin/java" -version 2>&1 | head -1)"
+          echo "$v"
+          case "$v" in
+            *'"17.'*) ;;
+            *) echo "JAVA_HOME is not JDK 17: $v" >&2; exit 1 ;;
+          esac
+      # setup-java names its variables per architecture; the toolchain wants BC_JDK<N>.
+      - name: "Point the test toolchain and the bridge at this cell's JDK"
+        shell: "bash"
+        env:
+          JDK: "${{ matrix.jvm.jdk }}"
+          BRIDGE: "${{ matrix.jvm.bridge }}"
+        run: |
+          set -eu
+          x64="JAVA_HOME_${JDK}_X64"
+          arm="JAVA_HOME_${JDK}_ARM64"
+          home="${!x64:-${!arm:-}}"
+          if [ -z "$home" ]; then
+            echo "setup-java exported neither $x64 nor $arm" >&2
+            exit 1
+          fi
+          echo "BC_JDK${JDK}=$home" >> "$GITHUB_ENV"
+          args="-PtestJdk=$JDK"
+          if [ -n "$BRIDGE" ]; then
+            args="$args -PtestBridge=$BRIDGE"
+          fi
+          echo "JVM_ARGS=$args" >> "$GITHUB_ENV"
+      - uses: "actions/cache@v6"
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: "gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}"
+          restore-keys: "gradle-${{ runner.os }}-${{ runner.arch }}-"
+      - uses: "actions/download-artifact@v8"
+        with:
+          name: "extensions-jars"
+          path: "dist-jars"
+      - uses: "actions/download-artifact@v8"
+        with:
+          name: "fips-modules-${{ matrix.runner }}"
+          path: "fips-out"
+      # One wrapper and one module path per platform. Forward slashes keep the Windows path
+      # intact through bash and Java alike.
+      - name: "Select the Gradle wrapper and the FIPS module paths"
+        shell: "bash"
+        run: |
+          set -eu
+          case "${{ runner.os }}" in
+            Linux)   ext=so;    wrapper=./gradlew ;;
+            macOS)   ext=dylib; wrapper=./gradlew ;;
+            Windows) ext=dll;   wrapper=./gradlew.bat ;;
+            *) echo "unexpected runner.os ${{ runner.os }}" >&2; exit 1 ;;
+          esac
+          ws="${GITHUB_WORKSPACE//\\//}"
+          for ver in 3.5.8 3.1.2; do
+            lib="$ws/fips-out/$ver/fips.$ext"
+            if [ ! -f "$lib" ] || [ ! -f "$ws/fips-out/$ver/fipsmodule.cnf" ]; then
+              echo "FIPS module $ver not staged at $lib" >&2
+              ls -R "$ws/fips-out" >&2 || true
+              exit 1
+            fi
+          done
+          echo "GRADLEW=$wrapper" >> "$GITHUB_ENV"
+          echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext" >> "$GITHUB_ENV"
+          echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext" >> "$GITHUB_ENV"
+
+      - name: "Leg JSL"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          # shellcheck disable=SC2086
+          "$GRADLEW" --rerun-tasks --continue test -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+      - name: "Keep the JSL results"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          for m in core util pkix pg tls mail; do
+            mkdir -p "results/jsl/$m"
+            cp "$m"/build/test-results/test/*.xml "results/jsl/$m/" 2>/dev/null || true
+          done
+      - name: "Leg JSLFIPS 3.5.8"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          # shellcheck disable=SC2086
+          TEST_FIPS_LIB="$FIPS_358" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+      - name: "Keep the JSLFIPS 3.5.8 results"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          for m in core util pkix pg tls mail; do
+            mkdir -p "results/fips-3.5.8/$m"
+            cp "$m"/build/test-results/fipsTest/*.xml "results/fips-3.5.8/$m/" 2>/dev/null || true
+          done
+      - name: "Leg JSLFIPS 3.1.2"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          # shellcheck disable=SC2086
+          TEST_FIPS_LIB="$FIPS_312" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+      - name: "Keep the JSLFIPS 3.1.2 results"
+        if: "${{ !cancelled() }}"
+        shell: "bash"
+        run: |
+          for m in core util pkix pg tls mail; do
+            mkdir -p "results/fips-3.1.2/$m"
+            cp "$m"/build/test-results/fipsTest/*.xml "results/fips-3.1.2/$m/" 2>/dev/null || true
+          done
+
+      - uses: "actions/upload-artifact@v7"
+        if: "${{ !cancelled() }}"
+        with:
+          name: "test-results-${{ matrix.runner }}-${{ matrix.jvm.name }}"
+          path: "results"
+          if-no-files-found: "error"
+          retention-days: 7
