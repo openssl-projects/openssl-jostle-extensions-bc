@@ -301,17 +301,14 @@ jobs:
             pkix
             tls/credentials
             tsp/20170316_Testdaten
-      # One wrapper and one module path per platform. Forward slashes keep the Windows path
-      # intact through bash and Java alike.
-      - name: "Select the Gradle wrapper and the FIPS module paths"
+      # One module path per platform. Forward slashes keep the Windows path intact through bash
+      # and Java alike. ./gradlew needs no Windows twin: it runs under Git Bash (MINGW) itself.
+      - name: "Select the FIPS module paths"
         shell: "bash"
         run: |
           set -eu
           case "${{ runner.os }}" in
-            Linux)   ext=so;    wrapper=./gradlew ;;
-            macOS)   ext=dylib; wrapper=./gradlew ;;
-            Windows) ext=dll;   wrapper=./gradlew.bat ;;
-            *) echo "unexpected runner.os ${{ runner.os }}" >&2; exit 1 ;;
+            Linux) ext=so ;; macOS) ext=dylib ;; Windows) ext=dll ;;
           esac
           ws="${GITHUB_WORKSPACE//\\//}"
           for ver in 3.5.8 3.1.2; do
@@ -323,7 +320,6 @@ jobs:
             fi
           done
           {
-            echo "GRADLEW=$wrapper"
             echo "BC_TEST_DATA_HOME=$ws/test-data"
             echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext"
             echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext"
@@ -333,7 +329,7 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          "$GRADLEW" --rerun-tasks --continue test -PtestJars=dist-jars "$TEST_JDK_ARG" \
+          ./gradlew --rerun-tasks --continue test -PtestJars=dist-jars "$TEST_JDK_ARG" \
             ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSL results"
         if: "${{ !cancelled() }}"
@@ -348,7 +344,7 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          TEST_FIPS_LIB="$FIPS_358" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
+          TEST_FIPS_LIB="$FIPS_358" ./gradlew --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
             ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSLFIPS 3.5.8 results"
         if: "${{ !cancelled() }}"
@@ -363,7 +359,7 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          TEST_FIPS_LIB="$FIPS_312" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
+          TEST_FIPS_LIB="$FIPS_312" ./gradlew --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
             ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSLFIPS 3.1.2 results"
         if: "${{ !cancelled() }}"
