@@ -26,7 +26,7 @@ public class QuotedPrintableTest
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         Streams.pipeAll(qpd, bos);
 
-        TestCase.assertEquals("J'interdis aux marchands de vanter trop leur marchandises. Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen, et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent, car si leur musique est vulgaire ils te fabriquent pour te la vendre une âme vulgaire.", bos.toString());
+        TestCase.assertEquals("J'interdis aux marchands de vanter trop leur marchandises. Car ils se font vite pédagogues et t'enseignent comme but ce qui n'est par essence qu'un moyen, et te trompant ainsi sur la route à suivre les voilà bientôt qui te dégradent, car si leur musique est vulgaire ils te fabriquent pour te la vendre une âme vulgaire.", bos.toString("UTF-8"));
     }
 
     public void testCRLFHandling()
