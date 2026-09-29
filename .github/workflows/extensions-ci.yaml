@@ -6,10 +6,23 @@ name: "extensions-ci"
 # resolves from Maven Central by os.arch, so each runner gets its own architecture's bundle.
 # Only GitHub's own actions are used.
 
+# A change that touches only these paths cannot alter a jar or a test result, so it runs nothing:
+# root-level prose (no *.md sits under a src tree), the model guides, and the relocation helper
+# the build never calls. Tag pushes ignore path filters, so a release tag always builds.
 on:
-  - "push"
-  - "pull_request"
-  - "workflow_dispatch"
+  push:
+    paths-ignore:
+      - "*.md"
+      - ".claude/**"
+      - "scripts/**"
+      - ".gitignore"
+  pull_request:
+    paths-ignore:
+      - "*.md"
+      - ".claude/**"
+      - "scripts/**"
+      - ".gitignore"
+  workflow_dispatch:
 
 permissions:
   contents: "read"
