@@ -2,7 +2,7 @@
 //
 // Each subproject is rebuilt from bc-java sources but compiled against the
 // minimal `core` module (asn.1 + util + supporting classes) and the jostle
-// provider jar in libs/, instead of bcprov. Crypto is delegated to OpenSSL via
+// provider jar from Maven Central, instead of bcprov. Crypto is delegated to OpenSSL via
 // the JSL provider through JCA/JCE.
 
 plugins {
@@ -10,7 +10,51 @@ plugins {
     id 'biz.aQute.bnd.builder' version '7.0.0' apply false
 }
 
-def jostleJar = { -> rootProject.file("libs/openssl-jostle-${jostleVersion}.jar") }
+// Jostle publishes a pom-only umbrella plus one jar per architecture, so the build names the
+// classifier for the JVM it runs on. -PjostleClassifier overrides the detection, and
+// -PjostleJar=<path> uses a local provider build instead of the published one.
+def jostleClassifier = { ->
+    def set = findProperty('jostleClassifier')
+    if (set)
+    {
+        return set
+    }
+    def arch = System.getProperty('os.arch')
+    if (arch in ['aarch64', 'arm64'])
+    {
+        return 'aarch64'
+    }
+    if (arch in ['amd64', 'x86_64'])
+    {
+        return 'x86_64'
+    }
+    throw new GradleException("no openssl-jostle jar for os.arch '${arch}'; set -PjostleClassifier")
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    jostleProvider {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+
+dependencies {
+    jostleProvider "org.openssl.jostle:openssl-jostle:${jostleVersion}:${jostleClassifier()}"
+}
+
+// Resolved here, in the root project's context: Gradle refuses a resolution started from a
+// subproject, and every subproject reaches the jar through jostleProviderJar().
+def localJostleJar = findProperty('jostleJar')
+if (localJostleJar && !file(localJostleJar).isFile())
+{
+    throw new GradleException("-PjostleJar names no file: ${file(localJostleJar)}")
+}
+def jostleJarFile = localJostleJar ? file(localJostleJar) : configurations.jostleProvider.singleFile
+def jostleJar = { -> jostleJarFile }
 
 // Derive an OSGi-legal bundle version from the project version (mirrors bc-java):
 // snapshots extend to a fourth, time-based qualifier (days since epoch).
@@ -358,7 +402,8 @@ subprojects {
                         // core 13, pkix 84, pg 23, tls 32, mail 2, util 0 - util is asn.1 only and
                         // resolves nothing, so it alone does not declare the provider. Consumers add
                         // the arch bundle for their platform as jostle's README documents; this names
-                        // the umbrella POM, with no classifier.
+                        // the umbrella POM, with no classifier. The umbrella ships no jar, so the
+                        // dependency is type pom: the default type jar would not resolve.
                         if (project.ext.usesProvider)
                         {
                             withXml {
@@ -369,6 +414,7 @@ subprojects {
                                 node.appendNode('groupId', 'org.openssl.jostle')
                                 node.appendNode('artifactId', 'openssl-jostle')
                                 node.appendNode('version', rootProject.jostleVersion)
+                                node.appendNode('type', 'pom')
                                 node.appendNode('scope', project.ext.providerScope)
                             }
                         }
@@ -621,11 +667,19 @@ tasks.register('checkPublishedPoms') {
 
             def declared = [] as Set
             def scopes = [:]
+            def types = [:]
             def pom = new groovy.xml.XmlSlurper().parse(m.pom.get().asFile)
             pom.dependencies.dependency.each { d ->
                 def coordinate = "${d.groupId.text()}:${d.artifactId.text()}".toString()
                 declared << coordinate
                 scopes[coordinate] = d.scope.text()
+                types[coordinate] = d.type.text()
+            }
+
+            // Jostle's umbrella ships no jar, so the default type jar would not resolve.
+            if (declared.contains(providerCoord) && types[providerCoord] != 'pom')
+            {
+                problems << "${name}: provider dependency is type '${types[providerCoord] ?: 'jar'}', but must be 'pom'"
             }
 
             // The provider's scope is the difference between a consumer that compiles against this

@@ -1,7 +1,7 @@
 # JSL provider gaps
 
 Status of capability gaps in the Jostle providers, as consumed from
-`libs/openssl-jostle-${jostleVersion}.jar`.
+`org.openssl.jostle:openssl-jostle:${jostleVersion}` from Maven Central.
 
 Mostly **JSL** (non-FIPS). JSLFIPS's *policy* restrictions - what the loaded module will and will
 not serve, and what the provider declines on purpose - belong in `testing.md` instead. A JSLFIPS

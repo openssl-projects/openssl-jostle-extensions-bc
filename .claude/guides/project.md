@@ -28,16 +28,18 @@ Dependency graph: `core ← util ← pkix ← {mail, tls}`, and `pg ← util`.
 |---|---|
 | upstream bc-java | `/Users/meganwoods/cw/bc/bc-java` (branch `main`) |
 | the JSL provider source | `../openssl-jostle` — a **separate repo** |
-| the provider, as consumed here | `libs/openssl-jostle-${jostleVersion}.jar`, prebuilt |
+| the provider, as consumed here | `org.openssl.jostle:openssl-jostle:${jostleVersion}:<arch>` from Maven Central |
 | AI-facing docs | `.claude/guides/`, `.claude/skills/` |
 
 **Rule: never fix a provider bug from this repo.** Report it to `../openssl-jostle`. Do not edit
-that repo or hand-patch `libs/*.jar`.
+that repo or hand-patch the provider jar.
 
-**Rule: `jostleVersion` in `gradle.properties` must match the jar filename in `libs/`.** A mismatch
-makes `jostleProviderJar()` resolve to a missing file. The provider then drops off the classpath
-silently and test compiles fail with `package org.openssl.jostle... does not exist`. A `clean` may
-be needed before the failure appears.
+**Rule: the provider jar is resolved from Maven Central by architecture.** Jostle publishes a
+pom-only umbrella plus one jar per architecture (`aarch64`, `x86_64`). The root build picks the
+classifier from `os.arch` and resolves it in the root project's context, because Gradle refuses a
+resolution started from a subproject. `-PjostleClassifier=<arch>` overrides the detection.
+`-PjostleJar=<path>` uses a local provider build instead. `jostleVersion` alone is the POM
+dependency version.
 
 ## Build
 

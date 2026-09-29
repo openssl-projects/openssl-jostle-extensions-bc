@@ -43,20 +43,20 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `f74cadcf` on 2026-09-09 (sha256 `f74cadcf00ee53a173cac9b18428980ee59974b251410e275179b243e8f7b413`, from openssl-jostle `8d8cf1e`):
+Current state, against jar `6376ab68` on 2026-09-29 (sha256 `6376ab68bf852a7320c99d02eaa89c0dc97e16d7b0a6fbaf606ebd93e1714f48`, the first release build of openssl-jostle 0.1.0):
 
 | leg | tests | failures | reported skips | silent skips | doing real work |
 |---|---|---|---|---|---|
-| JSL | 525 | 0 | 0 | 4 | 521 |
-| JSLFIPS 3.5.8 | 525 | 0 | 5 | 74 | 446 |
-| JSLFIPS 3.1.2 | 525 | 0 | 16 | 115 | 394 |
+| JSL | 601 | 0 | 0 | 6 | 595 |
+| JSLFIPS 3.5.8 | 601 | 0 | 12 | 94 | 495 |
+| JSLFIPS 3.1.2 | 601 | 0 | 20 | 136 | 445 |
 
 Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git hash-object` on the
 same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
-one. Check with `shasum -a 256 libs/openssl-jostle-0.1-SNAPSHOT.jar`.
+one. Check with `shasum -a 256 ~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.1.0/*/openssl-jostle-0.1.0-aarch64.jar`, or against the `.sha256` Maven Central
+publishes beside the jar.
 
-Measured by a full three-leg run on 2026-09-09 after the thirteen CMS rows of trees (b) and (c)
-landed, not inferred. The three silent-skip figures differ from each other, which is also how you
+Measured by a full three-leg run from `./gradlew clean` on 2026-09-29, not inferred. The three silent-skip figures differ from each other, which is also how you
 tell these apart from a replayed cached result.
 
 "Doing real work" is tests minus both skip columns, which is only knowable because the leg summary

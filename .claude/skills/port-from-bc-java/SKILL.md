@@ -19,8 +19,8 @@ minimized. **A verbatim copy is almost always wrong.** Work through the steps be
 | `bc-java/pkix`, `pg`, `mail`, `tls` | same names | |
 | `bc-java/util` (asn1 satellites) | `util/` | |
 
-The provider itself is a **separate repo** (`../openssl-jostle`), consumed as the prebuilt jar
-`libs/openssl-jostle-0.1-SNAPSHOT.jar`. Do not try to fix provider bugs from this repo.
+The provider itself is a **separate repo** (`../openssl-jostle`), consumed from Maven Central as
+`org.openssl.jostle:openssl-jostle:0.1.0:<arch>`. Do not try to fix provider bugs from this repo.
 
 ## 0. Classify mechanically first — do not read 400 diffs
 
@@ -126,7 +126,7 @@ imports `Argon2Parameters`).
    `.claude/guides/testing.md` **Current state**; a suite that shrinks silently is a regression.
 5. **Probe changed runtime paths.** A green suite proves little when no test covers the path you
    touched. Write a throwaway `main()` in the scratchpad, compile it against
-   `*/build/libs/*.jar` + `libs/openssl-jostle-0.1-SNAPSHOT.jar`, and confirm the behaviour — in
+   `*/build/libs/*.jar` + the provider jar in the Gradle cache, and confirm the behaviour — in
    particular that an unsupported path fails with a clean, explanatory exception rather than an NPE.
 
 **Read the build status before the test results.** A failed compile leaves the previous run's
@@ -134,9 +134,9 @@ report sitting on disk, and `build/test-results/` holds only the LAST run of eac
 `fipsTest` directory after two modules shows the second one's numbers, not both. Check `BUILD
 SUCCESSFUL` first, then read counts, and copy the XML aside per leg if you need to compare legs.
 
-**Gotcha:** `jostleVersion` in `gradle.properties` must match the `libs/openssl-jostle-*.jar`
-filename. A mismatch makes the provider silently drop off the classpath; failures look like
-"package org.openssl.jostle... does not exist" and may not surface until a `clean`.
+**Gotcha:** the provider jar is not in the repo. Gradle fetches it from Maven Central into
+`~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.1.0/*/openssl-jostle-0.1.0-aarch64.jar`
+(`x86_64` on an Intel machine). Use that path wherever a classpath below names the provider.
 
 ## 4. Porting tests specifically
 
@@ -148,7 +148,7 @@ test compilation. Classpath:
 
 ```
 core/build/classes/java/main:util/build/classes/java/main:pkix/build/classes/java/main:
-pkix/build/resources/main:libs/openssl-jostle-<version>.jar:<junit-4.13.2>:<hamcrest-core-1.3>:
+pkix/build/resources/main:<provider jar>:<junit-4.13.2>:<hamcrest-core-1.3>:
 pkix/src/test/java
 ```
 

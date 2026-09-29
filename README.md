@@ -38,16 +38,17 @@ KEMRecipientInfo path of RFC 9629), SHA-2/SHA-3, HMAC, and secure random.
 
 The provider itself lives in a separate repository, `openssl-jostle`
 (`org.openssl.jostle.*`, provider name `"JSL"`, provider class
-`org.openssl.jostle.jcajce.provider.JostleProvider`). It is consumed here as a
-prebuilt jar:
+`org.openssl.jostle.jcajce.provider.JostleProvider`). It is consumed here from
+Maven Central:
 
 ```
-libs/openssl-jostle-<jostleVersion>.jar
+org.openssl.jostle:openssl-jostle:<jostleVersion>:<arch>
 ```
 
-with `jostleVersion` pinned in `gradle.properties`. The version in
-`gradle.properties` **must** match the jar filename in `libs/`, otherwise the
-provider silently drops off the compile/test classpath.
+with `jostleVersion` pinned in `gradle.properties`. Jostle publishes one jar
+per architecture, so the build picks `<arch>` (`aarch64` or `x86_64`) from the
+JVM it runs on. `-PjostleClassifier=<arch>` overrides that, and
+`-PjostleJar=<path>` builds against a local provider jar instead.
 
 Typical usage:
 
@@ -112,7 +113,7 @@ a probe of the provider rather than on a compliance judgement. See `.claude/guid
 - Library version: `version` in `gradle.properties` (tracks the bc-java
   release line it was rebuilt from, e.g. `1.86.0-SNAPSHOT`).
 - Provider version: `jostleVersion` in `gradle.properties` (tracks the
-  `openssl-jostle` artifact in `libs/`).
+  `openssl-jostle` release on Maven Central).
 
 The two are independent — the libraries version with bc-java, the provider
 versions with openssl-jostle.
