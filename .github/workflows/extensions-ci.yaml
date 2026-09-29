@@ -95,6 +95,46 @@ jobs:
           path: "dist-jars/*.jar"
           if-no-files-found: "error"
           retention-days: 1
+      # The Maven layout make-jostle-extensions-release PGP-signs and publishes, from main and
+      # from tags only. It is picked up only once the whole run has passed, so it is never
+      # published from a run whose tests failed.
+      - name: "Stage the Maven layout"
+        if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
+        shell: "bash"
+        run: |
+          # shellcheck disable=SC2086
+          ./gradlew publish checkPublishedPoms $RELEASE_ARGS
+      # The layout's jars must be the ones the test legs ran against, byte for byte.
+      - name: "Assert the staged jars are the tested jars"
+        if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
+        shell: "bash"
+        run: |
+          set -eu
+          staged=0
+          while IFS= read -r f; do
+            match=""
+            for d in dist-jars/*.jar; do
+              if cmp -s "$f" "$d"; then match="$d"; fi
+            done
+            if [ -z "$match" ]; then
+              echo "staged $f matches no jar in dist-jars" >&2
+              exit 1
+            fi
+            echo "$f = $match"
+            staged=$((staged + 1))
+          done < <(find build/staging-deploy -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          if [ "$staged" -ne 6 ]; then
+            echo "expected 6 staged main jars, found $staged" >&2
+            exit 1
+          fi
+      # Seven days: make-jostle-extensions-release can re-run from BUILD_RUN_ID until then.
+      - uses: "actions/upload-artifact@v7"
+        if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
+        with:
+          name: "maven-staging"
+          path: "build/staging-deploy"
+          if-no-files-found: "error"
+          retention-days: 7
 
   fips-modules:
     runs-on: "${{ matrix.runner }}"
