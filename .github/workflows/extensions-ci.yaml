@@ -91,7 +91,7 @@ jobs:
           if-no-files-found: "error"
           retention-days: 7
 
-  fips-modules:
+  fips-modules-posix:
     runs-on: "${{ matrix.runner }}"
     strategy:
       fail-fast: false
@@ -101,23 +101,18 @@ jobs:
           - "ubuntu-24.04-arm"
           - "macos-15"
           - "macos-15-intel"
-          - "windows-2025"
-    env:
-      VCVARS: 'C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat'
     steps:
-      - uses: "actions/checkout@v7"
-        with:
-          persist-credentials: false
       # v1 is a LAYOUT version: bump it whenever the staged tree under fips-out changes shape,
       # or a cache hit restores the old tree and skips the build that would make the new one.
+      # Bump it in fips-modules-windows too.
       - name: "Cache the FIPS modules"
         id: "cache-fips"
         uses: "actions/cache@v6"
         with:
           path: "fips-out"
           key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
-      - name: "Build both FIPS modules (POSIX)"
-        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os != 'Windows'"
+      - name: "Build both FIPS modules"
+        if: "steps.cache-fips.outputs.cache-hit != 'true'"
         run: |
           set -eu
           out="$GITHUB_WORKSPACE/fips-out"
@@ -152,9 +147,31 @@ jobs:
             cd "$GITHUB_WORKSPACE"
             rm -rf "$src"
           done
+      - uses: "actions/upload-artifact@v7"
+        with:
+          name: "fips-modules-${{ matrix.runner }}"
+          path: "fips-out"
+          if-no-files-found: "error"
+          retention-days: 1
+
+  fips-modules-windows:
+    runs-on: "${{ matrix.runner }}"
+    strategy:
+      matrix:
+        runner: ["windows-2025"]
+    env:
+      VCVARS: 'C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat'
+    steps:
+      # The layout version is shared with fips-modules-posix; bump both together.
+      - name: "Cache the FIPS modules"
+        id: "cache-fips"
+        uses: "actions/cache@v6"
+        with:
+          path: "fips-out"
+          key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
       # Short source directories: the OpenSSL build overruns MAX_PATH under longer ones.
-      - name: "Build both FIPS modules (Windows)"
-        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os == 'Windows'"
+      - name: "Build both FIPS modules"
+        if: "steps.cache-fips.outputs.cache-hit != 'true'"
         shell: "cmd"
         run: |
           call "%VCVARS%" || exit /b 1
@@ -172,8 +189,8 @@ jobs:
           nmake || exit /b 1
           nmake install_sw install_fips || exit /b 1
           popd
-      - name: "Stage both FIPS modules with their fipsmodule.cnf (Windows)"
-        if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os == 'Windows'"
+      - name: "Stage both FIPS modules with their fipsmodule.cnf"
+        if: "steps.cache-fips.outputs.cache-hit != 'true'"
         shell: "pwsh"
         run: |
           $ErrorActionPreference = "Stop"
@@ -205,7 +222,7 @@ jobs:
           retention-days: 1
 
   test:
-    needs: ["build-jars", "fips-modules"]
+    needs: ["build-jars", "fips-modules-posix", "fips-modules-windows"]
     runs-on: "${{ matrix.runner }}"
     strategy:
       fail-fast: false
