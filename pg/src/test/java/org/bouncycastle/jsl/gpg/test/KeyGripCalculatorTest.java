@@ -113,7 +113,7 @@ public class KeyGripCalculatorTest
 
     private static PGPDigestCalculator sha256()
     {
-        return new SimpleDigestCalculator(HashAlgorithmTags.SHA256, "SHA256");
+        return new SimpleDigestCalculator(HashAlgorithmTags.SHA256, "SHA-256");
     }
 
     private static class SimpleDigestCalculator
