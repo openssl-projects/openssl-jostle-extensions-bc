@@ -567,10 +567,11 @@ subprojects {
                 maven {
                     // Staging only: render the repository tree, upload nothing. The publish job
                     // PGP-signs it on the HSM and uploads. Snapshots stage too, so they cannot skip
-                    // signing.
+                    // signing. All six modules render into the one root tree, which CI uploads
+                    // as a single artifact.
                     name = 'staging'
                     def remote = rootProject.findProperty('centralReleaseUrl')
-                    url = remote ?: layout.buildDirectory.dir('staging-deploy').get().asFile.toURI().toString()
+                    url = remote ?: rootProject.layout.buildDirectory.dir('staging-deploy').get().asFile.toURI().toString()
 
                     // Gradle refuses to attach an authentication scheme to a file:// repository and
                     // validates the credentials even when it would never use them.
