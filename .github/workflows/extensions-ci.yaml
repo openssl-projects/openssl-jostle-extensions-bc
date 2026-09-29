@@ -263,11 +263,7 @@ jobs:
           set -eu
           x64="JAVA_HOME_${JDK}_X64"
           arm="JAVA_HOME_${JDK}_ARM64"
-          home="${!x64:-${!arm:-}}"
-          if [ -z "$home" ]; then
-            echo "setup-java exported neither $x64 nor $arm" >&2
-            exit 1
-          fi
+          home="${!x64:-${!arm}}"
           {
             echo "BC_JDK${JDK}=$home"
             echo "TEST_JDK_ARG=-PtestJdk=$JDK"
