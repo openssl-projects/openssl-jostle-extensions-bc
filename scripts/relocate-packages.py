@@ -20,13 +20,13 @@ org.bouncycastle.jsl.test does not exist", purely from stale incremental state d
 pre-move layout, while the same task passed alone with --rerun-tasks. A rename of this size makes
 both a green and a red result meaningless until the build state is discarded.
 
-Two substitutions, both with a negative lookahead so the script is idempotent and so the four
+Two substitutions, both with a negative lookahead so the script is idempotent and so the three
 places already on the target prefix are left alone:
 
     org\\.bouncycastle\\.(?!jsl\\b)  ->  org.bouncycastle.jsl.
     org/bouncycastle/(?!jsl/)       ->  org/bouncycastle/jsl/
 
-Without the lookahead, the six module names, jslGroupId, core/build.gradle's module list and
+Without the lookahead, the six module names, core/build.gradle's module list and
 build.gradle's startsWith('org.bouncycastle.jsl.') all become org.bouncycastle.jsl.jsl, and the
 module-path legs then fail in a way that reads like a build bug.
 """

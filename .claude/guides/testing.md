@@ -754,10 +754,10 @@ different graphs. The expectation is derived from `module-info.java`, never writ
 `requires static` is optional by definition, so those coordinates are permitted but not demanded;
 `java.*` is ignored; the provider coordinate is expected wherever the module reaches JCA.
 
-It SKIPS loudly while `jslProjectUrl` and `jslScmUrl` are unset — this fork's public home is not
-decided, and a POM generated without them would carry a placeholder someone later uploads. The
-publish path itself still fails loudly, naming the missing property. The check starts running the
-moment they are set.
+It SKIPS loudly, naming the property, if any publication property in `gradle.properties`
+(`jslGroupId`, `jslLicenceName`, `jslLicenceUrl`, `jslProjectUrl`, `jslScmUrl`) is unset: a POM
+generated without one would carry a placeholder someone later uploads. The publish path itself
+fails loudly in the same case. All five are set, so the check runs as part of `check`.
 
 Scope is asserted too: a `requires transitive` on the provider means its types are in that module's
 exported API, so a consumer compiling against the module compiles against the provider — tls, and

@@ -29,7 +29,7 @@ Build output and the gitignored `reviews/` tree are outside the set by construct
 ### What it will not touch
 
 - **Anything already under `org.bouncycastle.jsl`.** Both substitutions carry a negative lookahead.
-  Without it the six module names, `jslGroupId`, the module list in `core/build.gradle` and the
+  Without it the six module names, the module list in `core/build.gradle` and the
   `startsWith('org.bouncycastle.jsl.')` test in the root build would all become `…jsl.jsl`, and the
   module-path legs would fail in a way that reads like a build bug.
 - **Markdown.** The guides and the porting skill describe upstream bc-java as well as this fork, so

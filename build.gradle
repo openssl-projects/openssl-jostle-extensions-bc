@@ -721,10 +721,9 @@ tasks.register('checkPublishedPoms') {
     description = 'Asserts each generated POM declares exactly what its module descriptor requires.'
     group = 'verification'
 
-    // jslProjectUrl and jslScmUrl are deliberately unset until this fork's public home is decided,
-    // and generating a POM without them fails by design. So the POM tasks are depended on only when
-    // the publication is complete: otherwise this skips loudly rather than failing `check` for
-    // everyone, and it starts running the moment they are set.
+    // Generating a POM with any publication property unset fails by design. So the POM tasks are
+    // depended on only when the publication is complete: otherwise this skips loudly, naming the
+    // missing property, rather than failing `check` for everyone.
     def unset = ['jslGroupId', 'jslLicenceName', 'jslLicenceUrl', 'jslProjectUrl', 'jslScmUrl'].findAll {
         def v = rootProject.findProperty(it)
         v == null || v.toString().trim().isEmpty()
