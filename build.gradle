@@ -169,7 +169,14 @@ ext.publishProperty = { String name ->
 }
 
 allprojects {
+    // The sources are UTF-8 and some carry non-ASCII literals. Without an explicit encoding javac and
+    // javadoc read them in the platform encoding, which on Windows (JDK 17 and earlier) is
+    // windows-1252: the build breaks, or a literal compiles to different characters.
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
     tasks.withType(Javadoc).configureEach {
+        options.encoding = 'UTF-8'
         options.addStringOption('Xdoclint:none', '-quiet')
     }
 }
