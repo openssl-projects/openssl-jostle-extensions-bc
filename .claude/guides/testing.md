@@ -29,7 +29,7 @@ Match the error first. Each row gives the cause and the action.
 | FIPS suite passes in milliseconds | Gradle replayed a cached result | `TEST_FIPS_LIB` must be a task input. See **Gradle**. |
 | A leg reports 0 failures but the work looks absent | JUnit3 gates return early, which counts as a PASS | Read the `silent-skips` figure in the leg summary. See **Reading a leg summary**. |
 | `--tests` run fails tests that pass in a full run | The filtered subset loses the provider registration other classes' `TestSetup` performs | Prefer the whole task. A class that installs the provider through its OWN `suite()`/`TestSetup` - `NewEnvelopedDataTest` and `NewSignedDataTest` both do - filters safely, and this failure is loud rather than silent. But see **Filtered runs and absolute totals**. |
-| `Test data directory bc-test-data not found` | `TestResourceFinder` walks UP from the working directory, and `BC_TEST_DATA_HOME` is not wired into `build.gradle` | Run from inside the tree, or put a `bc-test-data` symlink in a parent. Bites in a git worktree. |
+| `Test data directory bc-test-data not found above <dir>` | No `-Dbc.test.data.home`, no `BC_TEST_DATA_HOME`, and no `bc-test-data` directory at or above the working directory | Set `BC_TEST_DATA_HOME` to a checkout of the public mirror `bcgit/bc-test-data`. CI pins it to `7584d20a` and checks out only the directories the tests read (see `extensions-ci.yaml`). A local run that finds `~/bc-test-data` by walking up is using data CI does not have unless the two agree. |
 
 ## The two runs
 

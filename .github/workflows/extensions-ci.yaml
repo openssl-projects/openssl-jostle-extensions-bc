@@ -289,6 +289,23 @@ jobs:
         with:
           name: "fips-modules-${{ matrix.runner }}"
           path: "fips-out"
+      # The fixtures the pkix and tls tests read, from the public bc-test-data mirror, pinned and
+      # limited to the directories the tests use. Named test-data, not bc-test-data, so the test
+      # support's walk-up cannot find it by accident: BC_TEST_DATA_HOME is the only route to it.
+      - name: "Check out the test data"
+        uses: "actions/checkout@v7"
+        with:
+          repository: "bcgit/bc-test-data"
+          ref: "7584d20af80fcbaaeea93ee5d88020d31a66bdfa"
+          path: "test-data"
+          persist-credentials: false
+          sparse-checkout: |
+            PKITS/certs
+            asn1
+            cmp/invalid-messages
+            pkix
+            tls/credentials
+            tsp/20170316_Testdaten
       # One wrapper and one module path per platform. Forward slashes keep the Windows path
       # intact through bash and Java alike.
       - name: "Select the Gradle wrapper and the FIPS module paths"
@@ -311,6 +328,7 @@ jobs:
             fi
           done
           echo "GRADLEW=$wrapper" >> "$GITHUB_ENV"
+          echo "BC_TEST_DATA_HOME=$ws/test-data" >> "$GITHUB_ENV"
           echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext" >> "$GITHUB_ENV"
           echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext" >> "$GITHUB_ENV"
 

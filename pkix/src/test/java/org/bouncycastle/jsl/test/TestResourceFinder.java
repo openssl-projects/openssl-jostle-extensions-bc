@@ -64,22 +64,34 @@ public class TestResourceFinder
             return new FileInputStream(new File(dataDir, homeDir + separator + fileName));
         }
 
-        String wrkDirName = System.getProperty("user.dir");
-        File wrkDir = new File(wrkDirName);
-        File dataDir = new File(wrkDir, dataDirName);
-        while (!dataDir.exists() && wrkDirName.length() > 1)
-        {
-            wrkDirName = wrkDirName.substring(0, wrkDirName.lastIndexOf(separator));
-            wrkDir = new File(wrkDirName);
-            dataDir = new File(wrkDir, dataDirName);
-        }
-
-        if (!dataDir.exists())
+        File start = new File(System.getProperty("user.dir")).getAbsoluteFile();
+        File dataDir = findDataDir(start);
+        if (dataDir == null)
         {
             String ln = Strings.lineSeparator();
-            throw new FileNotFoundException("Test data directory " + dataDirName + " not found." + ln + "Test data available from: https://github.com/bcgit/bc-test-data.git");
+            throw new FileNotFoundException("Test data directory " + dataDirName + " not found above " + start
+                + "; set -D" + DATA_HOME_PROPERTY + " or $" + DATA_HOME_ENV + " to a checkout of it." + ln
+                + "Test data available from: https://github.com/bcgit/bc-test-data.git");
         }
 
         return new FileInputStream(new File(dataDir, homeDir + separator + fileName));
+    }
+
+    /**
+     * The nearest {@code bc-test-data} directory at or above {@code start}, or null when there is none.
+     * Walks by parent File rather than trimming the path string, which ran off the front of a Windows
+     * drive root ("D:") with a StringIndexOutOfBoundsException instead of reaching the error above.
+     */
+    static File findDataDir(File start)
+    {
+        for (File dir = start; dir != null; dir = dir.getParentFile())
+        {
+            File candidate = new File(dir, dataDirName);
+            if (candidate.isDirectory())
+            {
+                return candidate;
+            }
+        }
+        return null;
     }
 }
