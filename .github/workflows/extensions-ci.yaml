@@ -30,22 +30,15 @@ jobs:
       - uses: "actions/checkout@v7"
         with:
           persist-credentials: false
-      # One step per JDK, as jostle does; the last one sets JAVA_HOME. 17 runs Gradle, 11 and 25
-      # run the module-path legs.
+      # The last JDK listed sets JAVA_HOME. 17 runs Gradle, 11 and 25 run the module-path legs.
       - uses: "actions/setup-java@v5"
         with:
           distribution: "corretto"
-          java-version: "11"
-      - uses: "actions/setup-java@v5"
-        with:
-          distribution: "corretto"
-          java-version: "25"
-      - uses: "actions/setup-java@v5"
-        with:
-          distribution: "corretto"
-          java-version: "17"
+          java-version: |
+            11
+            25
+            17
       - name: "Assert that JAVA_HOME is JDK 17, the Gradle and test JVM"
-        shell: "bash"
         run: |
           jh="${JAVA_HOME//\\//}"
           v="$("$jh/bin/java" -version 2>&1 | head -1)"
@@ -55,11 +48,12 @@ jobs:
             *) echo "JAVA_HOME is not JDK 17: $v" >&2; exit 1 ;;
           esac
       - name: "Point the BC_JDK toolchains at the installed JDKs"
-        shell: "bash"
         run: |
-          echo "BC_JDK11=$JAVA_HOME_11_X64" >> "$GITHUB_ENV"
-          echo "BC_JDK17=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-          echo "BC_JDK25=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+          {
+            echo "BC_JDK11=$JAVA_HOME_11_X64"
+            echo "BC_JDK17=$JAVA_HOME_17_X64"
+            echo "BC_JDK25=$JAVA_HOME_25_X64"
+          } >> "$GITHUB_ENV"
       - uses: "actions/cache@v6"
         with:
           path: |
@@ -68,12 +62,9 @@ jobs:
           key: "gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}"
           restore-keys: "gradle-${{ runner.os }}-${{ runner.arch }}-"
       - name: "Build the jars and check them as bundles and on the module path"
-        shell: "bash"
         run: |
-          # shellcheck disable=SC2086
-          ./gradlew assemble checkBundlePackages :core:moduleLegsCheck $RELEASE_ARGS
+          ./gradlew assemble checkBundlePackages :core:moduleLegsCheck ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Collect the six main jars"
-        shell: "bash"
         run: |
           set -eu
           mkdir -p dist-jars
@@ -100,14 +91,11 @@ jobs:
       # published from a run whose tests failed.
       - name: "Stage the Maven layout"
         if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
-        shell: "bash"
         run: |
-          # shellcheck disable=SC2086
-          ./gradlew publish checkPublishedPoms $RELEASE_ARGS
+          ./gradlew publish checkPublishedPoms ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       # The layout's jars must be the ones the test legs ran against, byte for byte.
       - name: "Assert the staged jars are the tested jars"
         if: "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')"
-        shell: "bash"
         run: |
           set -eu
           staged=0
@@ -163,7 +151,6 @@ jobs:
           key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
       - name: "Build both FIPS modules (POSIX)"
         if: "steps.cache-fips.outputs.cache-hit != 'true' && runner.os != 'Windows'"
-        shell: "bash"
         run: |
           set -eu
           out="$GITHUB_WORKSPACE/fips-out"
@@ -190,8 +177,7 @@ jobs:
             # The config sits beside the module; -pedantic on 3.5.x, defaults on 3.1.2.
             pedantic=""
             case "$ver" in 3.5.*) pedantic="-pedantic" ;; esac
-            # shellcheck disable=SC2086
-            "$src/dist/bin/openssl" fipsinstall $pedantic \
+            "$src/dist/bin/openssl" fipsinstall ${pedantic:+"$pedantic"} \
               -module "$out/$ver/$(basename "$modfile")" \
               -out "$out/$ver/fipsmodule.cnf"
             cat "$out/$ver/fipsmodule.cnf"
@@ -308,12 +294,11 @@ jobs:
             echo "setup-java exported neither $x64 nor $arm" >&2
             exit 1
           fi
-          echo "BC_JDK${JDK}=$home" >> "$GITHUB_ENV"
-          args="-PtestJdk=$JDK"
-          if [ -n "$BRIDGE" ]; then
-            args="$args -PtestBridge=$BRIDGE"
-          fi
-          echo "JVM_ARGS=$args" >> "$GITHUB_ENV"
+          {
+            echo "BC_JDK${JDK}=$home"
+            echo "TEST_JDK_ARG=-PtestJdk=$JDK"
+            echo "TEST_BRIDGE_ARG=${BRIDGE:+-PtestBridge=$BRIDGE}"
+          } >> "$GITHUB_ENV"
       - uses: "actions/cache@v6"
         with:
           path: |
@@ -367,17 +352,19 @@ jobs:
               exit 1
             fi
           done
-          echo "GRADLEW=$wrapper" >> "$GITHUB_ENV"
-          echo "BC_TEST_DATA_HOME=$ws/test-data" >> "$GITHUB_ENV"
-          echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext" >> "$GITHUB_ENV"
-          echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext" >> "$GITHUB_ENV"
+          {
+            echo "GRADLEW=$wrapper"
+            echo "BC_TEST_DATA_HOME=$ws/test-data"
+            echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext"
+            echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext"
+          } >> "$GITHUB_ENV"
 
       - name: "Leg JSL"
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          # shellcheck disable=SC2086
-          "$GRADLEW" --rerun-tasks --continue test -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+          "$GRADLEW" --rerun-tasks --continue test -PtestJars=dist-jars "$TEST_JDK_ARG" \
+            ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSL results"
         if: "${{ !cancelled() }}"
         shell: "bash"
@@ -390,8 +377,8 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          # shellcheck disable=SC2086
-          TEST_FIPS_LIB="$FIPS_358" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+          TEST_FIPS_LIB="$FIPS_358" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
+            ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSLFIPS 3.5.8 results"
         if: "${{ !cancelled() }}"
         shell: "bash"
@@ -404,8 +391,8 @@ jobs:
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          # shellcheck disable=SC2086
-          TEST_FIPS_LIB="$FIPS_312" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars $JVM_ARGS $RELEASE_ARGS
+          TEST_FIPS_LIB="$FIPS_312" "$GRADLEW" --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
+            ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
       - name: "Keep the JSLFIPS 3.1.2 results"
         if: "${{ !cancelled() }}"
         shell: "bash"
