@@ -1,6 +1,6 @@
 dependencies {
-    implementation project(':core')
-    implementation project(':util')
+    api project(':core')
+    api project(':util')
     // The CMS and operator KTS wrappers name JSL's KTSParameterSpec, so pkix compiles against the
     // provider. No JSL type reaches pkix's exported API, so the requires is not transitive.
     implementation files(rootProject.jostleProviderJar())

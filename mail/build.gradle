@@ -1,7 +1,7 @@
 dependencies {
-    implementation project(':core')
-    implementation project(':util')
-    implementation project(':pkix')
+    api project(':core')
+    api project(':util')
+    api project(':pkix')
     // No provider jar: mail:compileJava succeeds without it; the provider is reached
     // through JCA at run time, not by reference. tls is the one module that names it.
     implementation group: 'javax.mail', name: 'mail', version: '1.4'

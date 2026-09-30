@@ -188,7 +188,7 @@ allprojects {
 }
 
 subprojects {
-    apply plugin: 'java'
+    apply plugin: 'java-library'
     apply plugin: 'maven-publish'
     apply plugin: 'biz.aQute.bnd.builder'
 
@@ -782,6 +782,8 @@ tasks.register('checkPublishedPoms') {
             // transitive` on the provider means its types are in this module's exported API, so a
             // consumer compiling against this module compiles against the provider too.
             def expectedProviderScope = 'runtime'
+            // The same rule for the sibling libraries: a `requires transitive` sibling is API.
+            def expectedSiblingScopes = [:]
 
             m.descriptor.eachLine { line ->
                 def match = line.trim() =~ /^requires\s+(static\s+|transitive\s+)*([A-Za-z0-9_.]+)\s*;/
@@ -801,6 +803,10 @@ tasks.register('checkPublishedPoms') {
                     if (coordinate == providerCoord && line.contains('requires transitive'))
                     {
                         expectedProviderScope = 'compile'
+                    }
+                    if (coordinate.startsWith("${group}:"))
+                    {
+                        expectedSiblingScopes[coordinate] = line.contains('requires transitive') ? 'compile' : 'runtime'
                     }
 
                     (line.contains('requires static') ? optional : required) << coordinate
@@ -835,6 +841,14 @@ tasks.register('checkPublishedPoms') {
             {
                 problems << "${name}: provider dependency is scope '${scopes[providerCoord]}'," +
                     " but the descriptor asks for '${expectedProviderScope}'"
+            }
+
+            expectedSiblingScopes.each { coordinate, expected ->
+                if (declared.contains(coordinate) && scopes[coordinate] != expected)
+                {
+                    problems << "${name}: ${coordinate} is scope '${scopes[coordinate]}'," +
+                        " but the descriptor asks for '${expected}'"
+                }
             }
 
             def missing = required - declared
