@@ -9,6 +9,39 @@ The libraries keep BC's familiar high-level APIs (`org.bouncycastle.jsl.asn1`,
 primitive cryptography — ciphers, signatures, KEMs, digests, RNG — to OpenSSL
 through the JSL provider via standard JCA/JCE.
 
+## Maven coordinates
+
+The libraries are published to Maven Central under the group `org.openssl.jostle.bc`, version
+`1.86.0`. The artifacts are `bccore-jsl`, `bcutil-jsl`, `bcpkix-jsl`, `bcmail-jsl`, `bcpg-jsl`
+and `bctls-jsl`. Each POM brings in the other libraries it needs.
+
+The POMs declare the provider as `org.openssl.jostle:openssl-jostle:0.1.0` with type `pom`. That
+coordinate carries no jar, so also add the provider jar for your architecture, `aarch64` or
+`x86_64`. For example, with `bcpkix-jsl` on an `aarch64` machine:
+
+```groovy
+dependencies {
+    implementation 'org.openssl.jostle.bc:bcpkix-jsl:1.86.0'
+    implementation 'org.openssl.jostle:openssl-jostle:0.1.0:aarch64'
+}
+```
+
+```xml
+<dependency>
+  <groupId>org.openssl.jostle.bc</groupId>
+  <artifactId>bcpkix-jsl</artifactId>
+  <version>1.86.0</version>
+</dependency>
+<dependency>
+  <groupId>org.openssl.jostle</groupId>
+  <artifactId>openssl-jostle</artifactId>
+  <version>0.1.0</version>
+  <classifier>aarch64</classifier>
+</dependency>
+```
+
+The provider's own README covers the module path and the native-access flag.
+
 ## Modules
 
 | Module | Artifact            | Contents                                                                 |
