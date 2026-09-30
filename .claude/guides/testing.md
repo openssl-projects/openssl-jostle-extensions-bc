@@ -43,23 +43,12 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 ./gradlew test fipsTest --continue
 ```
 
-Current state, against jar `6376ab68` on 2026-09-29 (sha256 `6376ab68bf852a7320c99d02eaa89c0dc97e16d7b0a6fbaf606ebd93e1714f48`, the first release build of openssl-jostle 0.1.0):
-
-| leg | tests | failures | reported skips | silent skips | doing real work |
-|---|---|---|---|---|---|
-| JSL | 601 | 0 | 0 | 6 | 595 |
-| JSLFIPS 3.5.8 | 601 | 0 | 12 | 94 | 495 |
-| JSLFIPS 3.1.2 | 601 | 0 | 20 | 136 | 445 |
-
 Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git hash-object` on the
 same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
 one. Check with `shasum -a 256 ~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.1.0/*/openssl-jostle-0.1.0-aarch64.jar`, or against the `.sha256` Maven Central
 publishes beside the jar.
 
-Measured by a full three-leg run from `./gradlew clean` on 2026-09-29, not inferred. The three silent-skip figures differ from each other, which is also how you
-tell these apart from a replayed cached result.
-
-"Doing real work" is tests minus both skip columns, which is only knowable because the leg summary
+"Doing real work" is tests minus both skip figures, which is only knowable because the leg summary
 reports silent skips - see **Reading a leg summary**. Run BOTH modules: they skip different tests,
 in both directions, and a green run on one proves nothing about the other. Differing skip counts
 are also how you tell a real FIPS run from a replayed cached one.
@@ -68,19 +57,19 @@ Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing mo
 
 ## State of the disabled tests
 
-46 test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
-every count the legs report. 46 is the count of DECLARATIONS; grepping the prefix loosely finds
-more lines, because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on 2026-09-08 and re-measured where
-noted. What they are:
+Some test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside
+every count the legs report. Count the DECLARATIONS; grepping the prefix loosely finds more lines,
+because `main()` and `suite()` call sites mention it too. Each carries a one-line reason, measured on
+2026-09-08 and re-measured where noted. What they are:
 
-| cause | tests | item |
-|---|---|---|
-| CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | 9 | MT-72 |
-| `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | 4 | MT-80 |
-| `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | 1 | MT-70 |
-| JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | 1 | MT-71 |
-| the fork ships no `CertPathValidator` SPI, so a test asserting a BC path-validation message cannot pass | 1 | — |
-| algorithms absent on every configuration — SEED, CAST5, RC2, RC4, Twofish, GOST, ECMQV, Camellia `KeyGenerator` | 30 | — |
+| cause | item |
+|---|---|
+| CMS/PKCS#8 resolves the algorithm by **OID** and the provider registers no such alias | MT-72 |
+| `Cipher ETSIKEMwithSHA256` absent — BC's ETSI ITS KEM name, with no JCA-canonical spelling to switch to | MT-80 |
+| `Cipher.updateAAD` after content — illegal per the JCE contract, so not fixable provider-side | MT-70 |
+| JSLFIPS mints EC keys on `sect*` curves with cofactor ≠ 1, then cannot ECDH-derive on them | MT-71 |
+| the fork ships no `CertPathValidator` SPI, so a test asserting a BC path-validation message cannot pass | — |
+| algorithms absent on every configuration — SEED, CAST5, RC2, RC4, Twofish, GOST, ECMQV, Camellia `KeyGenerator` | — |
 
 MT-73 closed on 2026-09-09 with jostle `8d8cf1e`, ungating 15 rows. One limit worth knowing: four
 of them (`testKem*` in `NewEnvelopedDataTest`) are the only pins for the `CMSEnvelopedDataParser`
@@ -99,9 +88,9 @@ Exception parity, measured 2026-09-14 against BC 1.86 rather than recalled: both
 BC `InvalidKeyException`, JSL `InvalidAlgorithmParameterException` - so the pin asserts the surfaced
 type and our own message, not the root type.
 
-The count and this table must agree at every commit. Recount with
+Count them with
 `grep -rh 'public void DISABLED_test' --include="*.java" */src/test | wc -l` rather than trusting
-the prose: it read **62** while the real figure was 57, an intermediate value nobody corrected.
+prose: a count here once read **62** while the real figure was 57, an intermediate value nobody corrected.
 
 **A reason comment is a measurement with a date on it, not a permanent label.** The four
 `ETSIEncryptedDataTest` rows were filed under MT-69, the Spi-less `SecureRandom` NPE. Re-measuring
@@ -653,7 +642,7 @@ SSLv3 through TLS 1.3, both crypto backends on each side, and the auth variants.
 **Gradle never calls it.** `TlsTestCase` and `DTLSTestCase` each report one test, `testDummy`, whose
 comment says it exists to "avoid 'No tests found' warning from junit".
 
-So the 58 tests counted in `tls` are the unit-level classes plus the four `Jca*Protocol*` classes
+So the tests counted in `tls` are the unit-level classes plus the four `Jca*Protocol*` classes
 (KEM, hybrid, XDH, raw keys). No end-to-end handshake runs on either provider.
 
 This is the `SimpleTest` `@Test`-bridge trap one level up. A `suite()` factory needs
@@ -785,10 +774,9 @@ classpath too. It is now `testImplementation`, which the tests need and the POM 
   `CMSAuthEnvelopedDataStreamGeneratorTest` were removed and replaced by per-test capability gates;
   see **Gating a class, and why not to**. The four causes it named are still real, but they now
   gate individual rows instead of hiding whole classes.
-- **JUnit 3 early returns are silent passes**, not skips - 115 gated executions on a 3.1.2 module
-  and 74 on a 3.5.8 one at 525 tests. The result XML still cannot distinguish them, but the per-leg
-  gate summary now counts them: read `silent-skips` rather than treating the FIPS count as an upper
-  bound. See **Reading a leg summary**.
+- **JUnit 3 early returns are silent passes**, not skips. The result XML still cannot distinguish
+  them, but the per-leg gate summary now counts them: read `silent-skips` rather than treating the
+  FIPS count as an upper bound. See **Reading a leg summary**.
 - **The handshake matrix**, above.
 
 ## Reading a FIPS security policy

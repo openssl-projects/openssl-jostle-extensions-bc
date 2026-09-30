@@ -132,9 +132,8 @@ either direction.
 
 Record and compare. Do not accept "it built".
 
-- JSL: 525 tests, 0 failures, 4 gated executions - the four MT-84 vectors inside testOpenSSLVectors.
-- JSLFIPS: 525 tests, 0 failures on both modules; 446 doing real work on a 3.5.8 module and 394 on
-  a 3.1.2 one, the rest gated. Quote the module and the silent-skip count, never the bare 525.
+- Compare each module's leg summary line against the previous run, on JSL and on both FIPS
+  modules, and explain any drop. Quote the module and the silent-skip count, never a bare total.
 
 A suite that shrinks silently is a regression. Compare counts, not just exit codes.
 
