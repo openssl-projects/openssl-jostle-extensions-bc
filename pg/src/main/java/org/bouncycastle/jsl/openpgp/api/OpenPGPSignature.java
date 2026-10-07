@@ -492,7 +492,8 @@ public abstract class OpenPGPSignature
         ArmoredOutputStream aOut = armorBuilder.build(bOut);
         aOut.write(getEncoded(packetFormat));
         aOut.close();
-        return bOut.toString();
+        // Armor headers are UTF-8 (RFC 9580 6.2).
+        return bOut.toString("UTF-8");
     }
 
     /**

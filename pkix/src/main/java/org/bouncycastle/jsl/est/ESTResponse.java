@@ -243,7 +243,8 @@ public class ESTResponse
             throw new EOFException();
         }
 
-        return new String(lineBuffer, 0, c).trim();
+        // UTF-8, never the platform charset.
+        return new String(lineBuffer, 0, c, "UTF-8").trim();
     }
 
     public ESTRequest getOriginalRequest()

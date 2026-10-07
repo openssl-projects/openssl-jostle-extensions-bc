@@ -32,7 +32,8 @@ class DefaultESTClient
     private static void writeLine(OutputStream os, String s)
         throws IOException
     {
-        os.write(s.getBytes());
+        // UTF-8, never the platform charset.
+        os.write(s.getBytes("UTF-8"));
         os.write(CRLF);
     }
 

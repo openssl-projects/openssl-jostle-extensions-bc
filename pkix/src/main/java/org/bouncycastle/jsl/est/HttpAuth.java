@@ -208,7 +208,8 @@ public class HttpAuth
                 "Parsing WWW-Authentication header: " + t.getMessage(),
                 t,
                 res.getStatusCode(),
-                new ByteArrayInputStream(res.getHeader("WWW-Authenticate").getBytes()));
+                // UTF-8, never the platform charset.
+                new ByteArrayInputStream(res.getHeader("WWW-Authenticate").getBytes("UTF-8")));
         }
 
 
