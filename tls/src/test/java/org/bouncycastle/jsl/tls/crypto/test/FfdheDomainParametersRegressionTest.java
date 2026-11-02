@@ -133,10 +133,29 @@ public class FfdheDomainParametersRegressionTest
     }
 
     /**
-     * A public value outside the q-order subgroup is refused at import, and only when the domain
-     * carries Q: handed a plain {@code DHParameterSpec} the provider has no subgroup order to test
-     * against, so it accepts. That is the second reason the TLS code has to build Jostle's
-     * {@code DHDomainParameterSpec} rather than any {@code DHParameterSpec}.
+     * A 2048-bit safe prime (p = 2q + 1, q prime, generator 2) that is not an RFC 7919 or RFC 3526
+     * group. The provider recognises a named group from P alone and supplies its Q, so the no-Q case
+     * below needs a P it cannot recognise.
+     */
+    private static final BigInteger UNNAMED_SAFE_PRIME = new BigInteger(
+        "DDE69E75E2D84488D085FB7B3F4AA9FCF08673BA17BC226D85B40264BC259A7E"
+        + "672C900DF8B5D96E09B178E2B83624C8BA8738A78F3EC2D0F75EB3698EACBC18"
+        + "DE08C188D22B41DC5385D5A5D7E10A5FD9874A00C27B0C46DC0E770B44C81A67"
+        + "3FBF59F31F03F1D564E1857BD955D88E0AEC20FDC7147166D9335012049B5FBA"
+        + "639725A0A44A69E5A71E221966860D9741D7244A390ACC1B47BADE3E59182043"
+        + "01BE3A55593EF20A09842E4FF42BBCAEB690543A324CFD482E6D60C4964249D1"
+        + "61EBB6CC61144530170FE7DF1188247C4EEBDCAB9F694531841D6B8366BB7A23"
+        + "5417F03695FD1433612FDE86D2CC87F99C7FD13CB6B82177A5166A710979CB67", 16);
+
+    /**
+     * A public value outside the q-order subgroup is refused at import, and only when the provider
+     * knows Q: handed a plain {@code DHParameterSpec} over a P it does not recognise, it has no
+     * subgroup order to test against, so it accepts. That is the second reason the TLS code has to
+     * build Jostle's {@code DHDomainParameterSpec} rather than any {@code DHParameterSpec}.
+     * <p>
+     * The no-Q case does not use ffdhe2048: the provider recognises a named group from P and checks
+     * against its Q even when the spec omits it, so that import is refused too. An unnamed safe prime
+     * keeps the case this test is about, a domain whose Q only the spec can supply.
      */
     @Test
     public void aValueOutsideTheSubgroupIsRefusedWhenTheDomainCarriesQ()
@@ -149,24 +168,33 @@ public class FfdheDomainParametersRegressionTest
         DHDomainParameterSpec domain = new DHDomainParameterSpec(p, q, group.getG(), group.getL());
         KeyFactory kf = KeyFactory.getInstance("DiffieHellman", JslTestProvider.name());
 
-        // Derived, not hard-coded: the generator itself is in the subgroup, so a literal would have
-        // to be re-checked whenever the group changes.
-        BigInteger outside = null;
+        BigInteger outside = outsideTheSubgroup(p, q);
+        refuseAtImport(kf, outside, domain, "y outside the subgroup (" + outside + ")");
+
+        // a value outside the subgroup of an unnamed group, with no Q to check it against
+        for (int namedGroup : FFDHE_GROUPS)
+        {
+            assertTrue("the unnamed prime is " + NamedGroup.getText(namedGroup),
+                !UNNAMED_SAFE_PRIME.equals(TlsDHUtils.getNamedDHGroup(namedGroup).getP()));
+        }
+        BigInteger unnamedQ = UNNAMED_SAFE_PRIME.shiftRight(1);
+        kf.generatePublic(new DHExtendedPublicKeySpec(outsideTheSubgroup(UNNAMED_SAFE_PRIME, unnamedQ),
+            new DHParameterSpec(UNNAMED_SAFE_PRIME, BigInteger.valueOf(2))));
+    }
+
+    // Derived, not hard-coded: the generator itself is in the subgroup, so a literal would have to be
+    // re-checked whenever the group changes.
+    private static BigInteger outsideTheSubgroup(BigInteger p, BigInteger q)
+    {
         for (BigInteger c = BigInteger.valueOf(3); c.intValue() < 1000; c = c.add(BigInteger.ONE))
         {
             if (!c.modPow(q, p).equals(BigInteger.ONE))
             {
-                outside = c;
-                break;
+                return c;
             }
         }
-        assertNotNull("no value outside the subgroup was found to test with", outside);
-
-        refuseAtImport(kf, outside, domain, "y outside the subgroup (" + outside + ")");
-
-        // the same value, with no Q to check it against
-        kf.generatePublic(new DHExtendedPublicKeySpec(outside,
-            new DHParameterSpec(p, group.getG(), group.getL())));
+        fail("no value outside the subgroup was found to test with");
+        return null;
     }
 
     private void refuseAtImport(KeyFactory kf, BigInteger y, DHDomainParameterSpec domain, String what)

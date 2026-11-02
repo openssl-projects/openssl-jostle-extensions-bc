@@ -1,8 +1,8 @@
 package org.bouncycastle.jsl.test;
 
 import java.io.InputStream;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
-import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 
 import org.bouncycastle.jsl.test.TestResourceFinder;
@@ -41,7 +41,7 @@ public class CertificateCeilingTest
                 cf.generateCertificate(fixture());
                 fail("a " + FIXTURE_BYTES + " byte certificate was parsed under the default ceiling");
             }
-            catch (CertificateParsingException e)
+            catch (CertificateException e)
             {
                 assertTrue("the refusal does not name the property that lifts it: " + e.getMessage(),
                     e.getMessage().indexOf(CEILING) >= 0);
