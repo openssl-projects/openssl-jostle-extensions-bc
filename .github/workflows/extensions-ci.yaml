@@ -2,7 +2,7 @@ name: "extensions-ci"
 
 # Builds the six extension jars once, then runs the test legs against those jars on every
 # supported platform and every JDK jostle supports (8, 11, 17, 21, and 25 over both the JNI and
-# the FFM bridge): JSL, then JSLFIPS with the 3.5.8 and the 3.1.2 FIPS module. The provider jar
+# the FFM bridge): JSL, then JSLFIPS with the 3.5.9 and the 3.1.2 FIPS module. The provider jar
 # resolves from Maven Central by os.arch, so each runner gets its own architecture's bundle.
 # Only GitHub's own actions are used.
 
@@ -123,7 +123,7 @@ jobs:
         uses: "actions/cache@v6"
         with:
           path: "fips-out"
-          key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
+          key: "extensions-fips-v1-3.5.9+3.1.2-${{ runner.os }}-${{ runner.arch }}"
       - name: "Build both FIPS modules"
         if: "steps.cache-fips.outputs.cache-hit != 'true'"
         run: |
@@ -131,7 +131,7 @@ jobs:
           out="$GITHUB_WORKSPACE/fips-out"
           # Bounded -j: a bare "make -j" exhausts the process table on the macOS arm64 runner.
           jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
-          for ver in 3.5.8 3.1.2; do
+          for ver in 3.5.9 3.1.2; do
             src="$GITHUB_WORKSPACE/openssl-fips-$ver"
             rm -rf "$src"
             git clone --depth 1 --branch "openssl-$ver" \
@@ -181,17 +181,17 @@ jobs:
         uses: "actions/cache@v6"
         with:
           path: "fips-out"
-          key: "extensions-fips-v1-3.5.8+3.1.2-${{ runner.os }}-${{ runner.arch }}"
+          key: "extensions-fips-v1-3.5.9+3.1.2-${{ runner.os }}-${{ runner.arch }}"
       # Short source directories: the OpenSSL build overruns MAX_PATH under longer ones.
       - name: "Build both FIPS modules"
         if: "steps.cache-fips.outputs.cache-hit != 'true'"
         shell: "cmd"
         run: |
           call "%VCVARS%" || exit /b 1
-          rmdir /s /q "${{ github.workspace }}\fips-358" 2>nul
-          git clone --depth 1 --branch openssl-3.5.8 https://github.com/openssl/openssl.git "${{ github.workspace }}\fips-358" || exit /b 1
-          pushd "${{ github.workspace }}\fips-358" || exit /b 1
-          perl Configure VC-WIN64A enable-fips no-tests --prefix=${{ github.workspace }}\fips-358\dist || exit /b 1
+          rmdir /s /q "${{ github.workspace }}\fips-359" 2>nul
+          git clone --depth 1 --branch openssl-3.5.9 https://github.com/openssl/openssl.git "${{ github.workspace }}\fips-359" || exit /b 1
+          pushd "${{ github.workspace }}\fips-359" || exit /b 1
+          perl Configure VC-WIN64A enable-fips no-tests --prefix=${{ github.workspace }}\fips-359\dist || exit /b 1
           nmake || exit /b 1
           nmake install_sw install_fips || exit /b 1
           popd
@@ -207,7 +207,7 @@ jobs:
         shell: "pwsh"
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($pair in @(@("358", "3.5.8"), @("312", "3.1.2"))) {
+          foreach ($pair in @(@("359", "3.5.9"), @("312", "3.1.2"))) {
             $dir, $ver = $pair
             $prefix = "${{ github.workspace }}\fips-$dir\dist"
             $mod = Get-ChildItem -Path $prefix -Recurse -Filter "fips.dll" | Select-Object -First 1
@@ -324,7 +324,7 @@ jobs:
             Linux) ext=so ;; macOS) ext=dylib ;; Windows) ext=dll ;;
           esac
           ws="${GITHUB_WORKSPACE//\\//}"
-          for ver in 3.5.8 3.1.2; do
+          for ver in 3.5.9 3.1.2; do
             lib="$ws/fips-out/$ver/fips.$ext"
             if [ ! -f "$lib" ] || [ ! -f "$ws/fips-out/$ver/fipsmodule.cnf" ]; then
               echo "FIPS module $ver not staged at $lib" >&2
@@ -334,7 +334,7 @@ jobs:
           done
           {
             echo "BC_TEST_DATA_HOME=$ws/test-data"
-            echo "FIPS_358=$ws/fips-out/3.5.8/fips.$ext"
+            echo "FIPS_359=$ws/fips-out/3.5.9/fips.$ext"
             echo "FIPS_312=$ws/fips-out/3.1.2/fips.$ext"
           } >> "$GITHUB_ENV"
 
@@ -353,20 +353,20 @@ jobs:
             mkdir -p "results/jsl/${d%%/*}"
             cp "$d"/*.xml "results/jsl/${d%%/*}/" 2>/dev/null || true
           done
-      - name: "Leg JSLFIPS 3.5.8"
+      - name: "Leg JSLFIPS 3.5.9"
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
-          TEST_FIPS_LIB="$FIPS_358" ./gradlew --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
+          TEST_FIPS_LIB="$FIPS_359" ./gradlew --rerun-tasks --continue fipsTest -PtestJars=dist-jars "$TEST_JDK_ARG" \
             ${TEST_BRIDGE_ARG:+"$TEST_BRIDGE_ARG"} ${RELEASE_ARGS:+"$RELEASE_ARGS"}
-      - name: "Keep the JSLFIPS 3.5.8 results"
+      - name: "Keep the JSLFIPS 3.5.9 results"
         if: "${{ !cancelled() }}"
         shell: "bash"
         run: |
           for d in */build/test-results/fipsTest; do
             [ -d "$d" ] || continue
-            mkdir -p "results/fips-3.5.8/${d%%/*}"
-            cp "$d"/*.xml "results/fips-3.5.8/${d%%/*}/" 2>/dev/null || true
+            mkdir -p "results/fips-3.5.9/${d%%/*}"
+            cp "$d"/*.xml "results/fips-3.5.9/${d%%/*}/" 2>/dev/null || true
           done
       - name: "Leg JSLFIPS 3.1.2"
         if: "${{ !cancelled() }}"

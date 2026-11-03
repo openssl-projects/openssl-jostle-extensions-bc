@@ -1,3 +1,12 @@
+# Release 1.86.1
+
+- Built and tested against the OpenSSL Jostle provider 0.2.0. The POMs declare
+  `org.openssl.jostle:openssl-jostle:0.2.0` with type `pom`, so a consumer adds
+  `org.openssl.jostle:openssl-jostle:0.2.0:aarch64` or `:0.2.0:x86_64`.
+- Tested against `JSL`, and `JSLFIPS` with the OpenSSL 3.5.9 and 3.1.2 FIPS modules. The 3.5.8
+  module is no longer tested.
+- OpenPGP armor and the EST client read and write UTF-8, whatever the platform charset.
+
 # Release 1.86.0
 
 This is the initial release of the Bouncy Castle extension libraries for OpenSSL Jostle. They are

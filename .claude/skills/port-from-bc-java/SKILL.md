@@ -20,7 +20,7 @@ minimized. **A verbatim copy is almost always wrong.** Work through the steps be
 | `bc-java/util` (asn1 satellites) | `util/` | |
 
 The provider itself is a **separate repo** (`../openssl-jostle`), consumed from Maven Central as
-`org.openssl.jostle:openssl-jostle:0.1.0:<arch>`. Do not try to fix provider bugs from this repo.
+`org.openssl.jostle:openssl-jostle:0.2.0:<arch>`. Do not try to fix provider bugs from this repo.
 
 ## 0. Classify mechanically first — do not read 400 diffs
 
@@ -135,7 +135,7 @@ report sitting on disk, and `build/test-results/` holds only the LAST run of eac
 SUCCESSFUL` first, then read counts, and copy the XML aside per leg if you need to compare legs.
 
 **Gotcha:** the provider jar is not in the repo. Gradle fetches it from Maven Central into
-`~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.1.0/*/openssl-jostle-0.1.0-aarch64.jar`
+`~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.2.0/*/openssl-jostle-0.2.0-aarch64.jar`
 (`x86_64` on an Intel machine). Use that path wherever a classpath below names the provider.
 
 ## 4. Porting tests specifically
