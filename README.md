@@ -12,17 +12,17 @@ through the JSL provider via standard JCA/JCE.
 ## Maven coordinates
 
 The libraries are published to Maven Central under the group `org.openssl.jostle.bc`, version
-`1.86.0`. The artifacts are `bccore-jsl`, `bcutil-jsl`, `bcpkix-jsl`, `bcmail-jsl`, `bcpg-jsl`
+`1.86.1`. The artifacts are `bccore-jsl`, `bcutil-jsl`, `bcpkix-jsl`, `bcmail-jsl`, `bcpg-jsl`
 and `bctls-jsl`. Each POM brings in the other libraries it needs.
 
-The POMs declare the provider as `org.openssl.jostle:openssl-jostle:0.1.0` with type `pom`. That
+The POMs declare the provider as `org.openssl.jostle:openssl-jostle:0.2.0` with type `pom`. That
 coordinate carries no jar, so also add the provider jar for your architecture, `aarch64` or
 `x86_64`. For example, with `bcpkix-jsl` on an `aarch64` machine:
 
 ```groovy
 dependencies {
-    implementation 'org.openssl.jostle.bc:bcpkix-jsl:1.86.0'
-    implementation 'org.openssl.jostle:openssl-jostle:0.1.0:aarch64'
+    implementation 'org.openssl.jostle.bc:bcpkix-jsl:1.86.1'
+    implementation 'org.openssl.jostle:openssl-jostle:0.2.0:aarch64'
 }
 ```
 
@@ -30,12 +30,12 @@ dependencies {
 <dependency>
   <groupId>org.openssl.jostle.bc</groupId>
   <artifactId>bcpkix-jsl</artifactId>
-  <version>1.86.0</version>
+  <version>1.86.1</version>
 </dependency>
 <dependency>
   <groupId>org.openssl.jostle</groupId>
   <artifactId>openssl-jostle</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <classifier>aarch64</classifier>
 </dependency>
 ```
