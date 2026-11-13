@@ -45,7 +45,7 @@ public interface BCObjectIdentifiers
      */
     ASN1ObjectIdentifier bc_pbe_sha224 = bc_pbe.branch("2.4");
 
-    /**
+    /*
      * PKCS-5(1)|PKCS-12(2)
      */
     /**
@@ -66,7 +66,7 @@ public interface BCObjectIdentifiers
      */
     ASN1ObjectIdentifier bc_pbe_sha256_pkcs12 = bc_pbe_sha256.branch("2");
 
-    /**
+    /*
      * AES(1) . (CBC-128(2)|CBC-192(22)|CBC-256(42))
      */
     /**
@@ -331,7 +331,7 @@ public interface BCObjectIdentifiers
     /*
      * ML-DSA
      */
-    ///** 2.16.840.1.101.3.4.3.17 OQS_OID_MLDSA44 */
+    // /** 2.16.840.1.101.3.4.3.17 OQS_OID_MLDSA44 */
     /** 1.3.9999.7.5 OQS_OID_P256_MLDSA44 */
     ASN1ObjectIdentifier p256_mldsa44 = new ASN1ObjectIdentifier("1.3.9999.7.5");
     /** 1.3.9999.7.6 OQS_OID_RSA3072_MLDSA44 */
@@ -346,7 +346,7 @@ public interface BCObjectIdentifiers
     ASN1ObjectIdentifier mldsa44_p256 = new ASN1ObjectIdentifier("2.16.840.1.114027.80.8.1.4");
     /** 2.16.840.1.114027.80.8.1.5 OQS_OID_MLDSA44_bp256 */
     ASN1ObjectIdentifier mldsa44_bp256 = new ASN1ObjectIdentifier("2.16.840.1.114027.80.8.1.5");
-    ///** 2.16.840.1.101.3.4.3.18 OQS_OID_MLDSA65 */
+    // /** 2.16.840.1.101.3.4.3.18 OQS_OID_MLDSA65 */
     /** 1.3.9999.7.7 OQS_OID_P384_MLDSA65 */
     ASN1ObjectIdentifier p384_mldsa65 = new ASN1ObjectIdentifier("1.3.9999.7.7");
     /** 2.16.840.1.114027.80.8.1.6 OQS_OID_MLDSA65_pss3072 */
@@ -359,7 +359,7 @@ public interface BCObjectIdentifiers
     ASN1ObjectIdentifier mldsa65_bp256 = new ASN1ObjectIdentifier("2.16.840.1.114027.80.8.1.9");
     /** 2.16.840.1.114027.80.8.1.10 OQS_OID_MLDSA65_ed25519 */
     ASN1ObjectIdentifier mldsa65_ed25519 = new ASN1ObjectIdentifier("2.16.840.1.114027.80.8.1.10");
-    ///** 2.16.840.1.101.3.4.3.19 OQS_OID_MLDSA87 */
+    // /** 2.16.840.1.101.3.4.3.19 OQS_OID_MLDSA87 */
     /** 1.3.9999.7.8 OQS_OID_P521_MLDSA87 */
     ASN1ObjectIdentifier p521_mldsa87 = new ASN1ObjectIdentifier("1.3.9999.7.8");
     /** 2.16.840.1.114027.80.8.1.11 OQS_OID_MLDSA87_p384 */
@@ -464,24 +464,51 @@ public interface BCObjectIdentifiers
 
     /**
      * Placeholder for the id-rcd discovery-intent arc defined by
-     * draft-ietf-lamps-certdiscovery-03 (registered as TBD4). Parent of the
-     * five DiscoveryIntentId values below.
-     * <p>
-     * 1.3.6.1.4.1.22554.4.5 (BC private placeholder; replace with the
-     * IANA-assigned id-rcd once the draft progresses to RFC)
+     * draft-ietf-lamps-certdiscovery-03. Parent of the five DiscoveryIntentId
+     * values below. 1.3.6.1.4.1.22554.4.5 (BC private placeholder).
+     *
+     * @deprecated draft-ietf-lamps-certdiscovery-04 removed the intent field from
+     * RelatedCertificateDescriptor and with it the id-rcd arc; nothing in BC uses
+     * these values and they will be removed.
      */
+    @Deprecated
     ASN1ObjectIdentifier id_rcd = bc_ext.branch("5");
 
-    /** id-rcd-agility: secondary certificate provides cryptographic agility. */
-    ASN1ObjectIdentifier id_rcd_agility       = id_rcd.branch("1");
-    /** id-rcd-redundancy: secondary certificate is a backup (different CA / validity). */
-    ASN1ObjectIdentifier id_rcd_redundancy    = id_rcd.branch("2");
-    /** id-rcd-dual: secondary certificate provides the complementary key usage (sign/encrypt split). */
-    ASN1ObjectIdentifier id_rcd_dual          = id_rcd.branch("3");
-    /** id-rcd-priv-key-stmt: secondary certificate carries a proof-of-possession statement signed for the primary. */
+    /**
+     * id-rcd-agility: secondary certificate provides cryptographic agility.
+     *
+     * @deprecated removed with the intent field in draft-ietf-lamps-certdiscovery-04, see {@link #id_rcd}.
+     */
+    @Deprecated
+    ASN1ObjectIdentifier id_rcd_agility = id_rcd.branch("1");
+    /**
+     * id-rcd-redundancy: secondary certificate is a backup (different CA / validity).
+     *
+     * @deprecated removed with the intent field in draft-ietf-lamps-certdiscovery-04, see {@link #id_rcd}.
+     */
+    @Deprecated
+    ASN1ObjectIdentifier id_rcd_redundancy = id_rcd.branch("2");
+    /**
+     * id-rcd-dual: secondary certificate provides the complementary key usage (sign/encrypt split).
+     *
+     * @deprecated removed with the intent field in draft-ietf-lamps-certdiscovery-04, see {@link #id_rcd}.
+     */
+    @Deprecated
+    ASN1ObjectIdentifier id_rcd_dual = id_rcd.branch("3");
+    /**
+     * id-rcd-priv-key-stmt: secondary certificate carries a proof-of-possession statement signed for the primary.
+     *
+     * @deprecated removed with the intent field in draft-ietf-lamps-certdiscovery-04, see {@link #id_rcd}.
+     */
+    @Deprecated
     ASN1ObjectIdentifier id_rcd_priv_key_stmt = id_rcd.branch("4");
-    /** id-rcd-self: descriptor points at the location of the current certificate itself. */
-    ASN1ObjectIdentifier id_rcd_self          = id_rcd.branch("5");
+    /**
+     * id-rcd-self: descriptor points at the location of the current certificate itself.
+     *
+     * @deprecated removed with the intent field in draft-ietf-lamps-certdiscovery-04, see {@link #id_rcd}.
+     */
+    @Deprecated
+    ASN1ObjectIdentifier id_rcd_self = id_rcd.branch("5");
 
     /**
      * KEM(5) algorithms
@@ -644,7 +671,7 @@ public interface BCObjectIdentifiers
     ASN1ObjectIdentifier mayo3 = mayo_3;
     ASN1ObjectIdentifier mayo5 = mayo_5;
 
-    /**
+    /*
      * cross
      */
 //    /** 1.3.6.1.4.1.62245.2.1.1.2 OQS_OID_CROSSRSDP128BALANCED */
@@ -680,9 +707,9 @@ public interface BCObjectIdentifiers
 //    /** 1.3.6.1.4.1.62245.2.1.18.2 OQS_OID_CROSSRSDPG256SMALL */
 //    ASN1ObjectIdentifier crossrsdpg_256small = new ASN1ObjectIdentifier("1.3.6.1.4.1.62245.2.1.18.2");
 
-    /**
+    /*
      * OV
-     * */
+     */
 //    /** 1.3.9999.9.1.1 OQS_OID_OV_IS */
 //    ASN1ObjectIdentifier ov_is = new ASN1ObjectIdentifier("1.3.9999.9.1.1");
 //    /** 1.3.9999.9.1.2 OQS_OID_P256_OV_IS */
@@ -996,4 +1023,12 @@ public interface BCObjectIdentifiers
     ASN1ObjectIdentifier smaugt_mode3 = pqc_kem_smaugt.branch("2");
     ASN1ObjectIdentifier smaugt_mode5 = pqc_kem_smaugt.branch("3");
     ASN1ObjectIdentifier smaugt_modet = pqc_kem_smaugt.branch("4");
+
+    /**
+     * X-Wing, the X25519 and ML-KEM-768 hybrid KEM of draft-connolly-cfrg-xwing-kem-11. The value is the
+     * draft's id-XWing (Section 5.8), assigned in its authors' private enterprise arc rather than in the
+     * Bouncy Castle arc: { 1 3 6 1 4 1 62253 25722 }. The subjectPublicKey is the raw 1216-byte
+     * encapsulation key and the privateKey OCTET STRING the raw 32-byte seed, both with parameters absent.
+     */
+    ASN1ObjectIdentifier xwing = new ASN1ObjectIdentifier("1.3.6.1.4.1.62253.25722").intern();
 }

@@ -18,6 +18,8 @@ module org.bouncycastle.jsl.pg
     exports org.bouncycastle.jsl.openpgp.api;
     exports org.bouncycastle.jsl.openpgp.api.exception;
     exports org.bouncycastle.jsl.openpgp.api.jcajce;
+    exports org.bouncycastle.jsl.openpgp.api.operator;
+    exports org.bouncycastle.jsl.openpgp.api.operator.jcajce;
     exports org.bouncycastle.jsl.openpgp.api.util;
     exports org.bouncycastle.jsl.openpgp.jcajce;
     exports org.bouncycastle.jsl.openpgp.operator;

@@ -22,6 +22,7 @@ public class TlsClientProtocol
     TlsClientContextImpl tlsClientContext = null;
 
     protected Hashtable clientAgreements = null;
+    private boolean deferredClientHello = false;
     OfferedPsks.BindersConfig clientBinders = null;
     protected ClientHello clientHello = null;
     protected TlsKeyExchange keyExchange = null;
@@ -104,6 +105,13 @@ public class TlsClientProtocol
     {
         super.beginHandshake(renegotiation);
 
+        if (!blocking && shouldDeferClientHello())
+        {
+            // The ClientHello (including key share generation) is produced by processDeferredHandshake()
+            this.deferredClientHello = true;
+            return;
+        }
+
         sendClientHello();
         this.connection_state = CS_CLIENT_HELLO;
     }
@@ -111,6 +119,8 @@ public class TlsClientProtocol
     protected void cleanupHandshake()
     {
         super.cleanupHandshake();
+
+        this.deferredClientHello = false;
 
         this.clientAgreements = null;
         this.clientBinders = null;
@@ -131,10 +141,40 @@ public class TlsClientProtocol
     {
         return tlsClientContext;
     }
-    
+
     protected TlsPeer getPeer()
     {
         return tlsClient;
+    }
+
+    /**
+     * Non-blocking mode only. Whether sending the initial ClientHello should be deferred from
+     * {@link #connect(TlsClient)} to {@link #processDeferredHandshake()}, so that its preparation (notably
+     * the key share generation) can run on a thread of the caller's choosing. The default is not to defer.
+     * See also {@link #shouldDeferHandshakeMessage(short)}.
+     */
+    protected boolean shouldDeferClientHello()
+    {
+        return false;
+    }
+
+    protected boolean isDeferredHandshakePending()
+    {
+        return deferredClientHello || super.isDeferredHandshakePending();
+    }
+
+    protected void dispatchDeferredHandshake() throws IOException
+    {
+        if (deferredClientHello)
+        {
+            this.deferredClientHello = false;
+
+            sendClientHello();
+            this.connection_state = CS_CLIENT_HELLO;
+            return;
+        }
+
+        super.dispatchDeferredHandshake();
     }
 
     protected void handle13HandshakeMessage(short type, HandshakeMessageInput buf)
@@ -624,7 +664,7 @@ public class TlsClientProtocol
                 }
                 else
                 {
-                    keyExchange.processClientCredentials(clientAuthCredentials);                    
+                    keyExchange.processClientCredentials(clientAuthCredentials);
                 }
 
                 Vector clientSupplementalData = tlsClient.getClientSupplementalData();
@@ -637,7 +677,7 @@ public class TlsClientProtocol
                 if (certificateRequest != null)
                 {
                     sendCertificateMessage(clientAuthCertificate, null);
-                    this.connection_state = CS_CLIENT_CERTIFICATE;                    
+                    this.connection_state = CS_CLIENT_CERTIFICATE;
                 }
 
                 sendClientKeyExchange();
@@ -879,7 +919,7 @@ public class TlsClientProtocol
                     continue;
                 }
 
-                if (null == TlsUtils.getExtensionData(clientExtensions, extType))
+                if (!TlsUtils.hasExtension(clientExtensions, extType))
                 {
                     throw new TlsFatalAlert(AlertDescription.unsupported_extension,
                         "Unrequested extension in HelloRetryRequest: " + ExtensionType.getText(extensionType));
@@ -915,36 +955,45 @@ public class TlsClientProtocol
             }
         }
 
+        final byte[] cookie = TlsExtensionsUtils.getCookieExtension(extensions);
+
         final int selectedGroup = TlsExtensionsUtils.getKeyShareHelloRetryRequest(extensions);
 
         /*
-         * TODO[tls:psk_ke]
+         * RFC 9846 4.2.4. A HelloRetryRequest "SHOULD contain the minimal set of extensions necessary for the
+         * client to generate a correct ClientHello pair", and the client "MUST abort the handshake with an
+         * "illegal_parameter" alert if the HelloRetryRequest would not result in any change in the
+         * ClientHello". So "key_share" is optional: a HelloRetryRequest carrying only a cookie is a stateless
+         * server's cookie exchange (4.3.2), and the original shares then stand (4.2.2: they are replaced only
+         * "If a "key_share" extension was supplied in the HelloRetryRequest").
          *
-         * RFC 8446 4.2.8. Servers [..] MUST NOT send a KeyShareEntry when using the "psk_ke"
+         * TODO[tls:psk_ke] RFC 9846 4.3.8. Servers [..] MUST NOT send a KeyShareEntry when using the "psk_ke"
          * PskKeyExchangeMode.
          */
         if (selectedGroup < 0)
         {
-            throw new TlsFatalAlert(AlertDescription.missing_extension,
-                "missing extension response: " + ExtensionType.getText(ExtensionType.key_share));
+            if (null == cookie)
+            {
+                throw new TlsFatalAlert(AlertDescription.illegal_parameter,
+                    "HelloRetryRequest would not change the ClientHello");
+            }
         }
-
-        /*
-         * RFC 8446 4.2.8. Upon receipt of this [Key Share] extension in a HelloRetryRequest, the
-         * client MUST verify that (1) the selected_group field corresponds to a group which was
-         * provided in the "supported_groups" extension in the original ClientHello and (2) the
-         * selected_group field does not correspond to a group which was provided in the "key_share"
-         * extension in the original ClientHello. If either of these checks fails, then the client
-         * MUST abort the handshake with an "illegal_parameter" alert.
-         */
-        if (!TlsUtils.isValidKeyShareSelection(server_version, securityParameters.getClientSupportedGroups(),
-            clientAgreements, selectedGroup))
+        else
         {
-            throw new TlsFatalAlert(AlertDescription.illegal_parameter, "invalid key_share selected");
+            /*
+             * RFC 9846 4.3.8. Upon receipt of this [Key Share] extension in a HelloRetryRequest, the
+             * client MUST verify that (1) the selected_group field corresponds to a group which was
+             * provided in the "supported_groups" extension in the original ClientHello and (2) the
+             * selected_group field does not correspond to a group which was provided in the "key_share"
+             * extension in the original ClientHello. If either of these checks fails, then the client
+             * MUST abort the handshake with an "illegal_parameter" alert.
+             */
+            if (!TlsUtils.isValidKeyShareSelection(server_version, securityParameters.getClientSupportedGroups(),
+                clientAgreements, selectedGroup))
+            {
+                throw new TlsFatalAlert(AlertDescription.illegal_parameter, "invalid key_share selected");
+            }
         }
-
-        final byte[] cookie = TlsExtensionsUtils.getCookieExtension(extensions);
-
 
 
         securityParameters.negotiatedVersion = server_version;
@@ -957,9 +1006,15 @@ public class TlsClientProtocol
         TlsUtils.negotiatedCipherSuite(securityParameters, cipherSuite);
         tlsClient.notifySelectedCipherSuite(cipherSuite);
 
-        securityParameters.negotiatedGroup = selectedGroup;
+        if (selectedGroup >= 0)
+        {
+            securityParameters.negotiatedGroup = selectedGroup;
 
-        this.clientAgreements = null;
+            // The original shares are dropped: the second ClientHello carries one for the selected group
+            this.clientAgreements = null;
+        }
+        // else the original shares and their agreements stand, and the ServerHello chooses among them
+
         this.retryCookie = cookie;
         this.retryGroup = selectedGroup;
     }
@@ -1099,9 +1154,13 @@ public class TlsClientProtocol
                 agreement.receivePeerValue(serverShare.getKeyExchange());
                 sharedSecret = agreement.calculateSecret();
 
-                if (!afterHelloRetryRequest)
+                /*
+                 * A HelloRetryRequest that selected a group fixed it there; after one that carried only a
+                 * cookie the original shares stood, and the server chooses among them here.
+                 */
+                if (!afterHelloRetryRequest || securityParameters.getNegotiatedGroup() < 0)
                 {
-                    securityParameters.negotiatedGroup = namedGroup;                    
+                    securityParameters.negotiatedGroup = namedGroup;
                 }
             }
         }
@@ -1252,7 +1311,7 @@ public class TlsClientProtocol
         /*
          * RFC 3546 2.2 Note that the extended server hello message is only sent in response to an
          * extended client hello message.
-         * 
+         *
          * However, see RFC 5746 exception below. We always include the SCSV, so an Extended Server
          * Hello is always allowed.
          */
@@ -1283,7 +1342,7 @@ public class TlsClientProtocol
                  * associated ClientHello, it MUST abort the handshake with an unsupported_extension
                  * fatal alert.
                  */
-                if (null == TlsUtils.getExtensionData(clientHelloExtensions, extType))
+                if (!TlsUtils.hasExtension(clientHelloExtensions, extType))
                 {
                     throw new TlsFatalAlert(AlertDescription.unsupported_extension,
                         "Unrequested extension in ServerHello: " + ExtensionType.getText(extType.intValue()));
@@ -1508,7 +1567,7 @@ public class TlsClientProtocol
             throw new TlsFatalAlert(AlertDescription.internal_error);
         }
 
-        /* 
+        /*
          * RFC 8446 4.3.2. A server which is authenticating with a certificate MAY optionally
          * request a certificate from the client.
          */
@@ -1554,7 +1613,7 @@ public class TlsClientProtocol
             {
                 Integer extType = (Integer)e.nextElement();
 
-                if (null == TlsUtils.getExtensionData(clientExtensions, extType))
+                if (!TlsUtils.hasExtension(clientExtensions, extType))
                 {
                     throw new TlsFatalAlert(AlertDescription.unsupported_extension,
                         "Unrequested extension in EncryptedExtensions: " + ExtensionType.getText(extType.intValue()));
@@ -1643,7 +1702,8 @@ public class TlsClientProtocol
             throw new TlsFatalAlert(AlertDescription.unexpected_message);
         }
 
-        this.authentication = TlsUtils.receive13ServerCertificate(tlsClientContext, tlsClient, buf);
+        this.authentication = TlsUtils.receive13ServerCertificate(tlsClientContext, tlsClient, clientExtensions,
+            buf);
 
         // NOTE: In TLS 1.3 we don't have to wait for a possible CertificateStatus message.
         handleServerCertificate();
@@ -1711,11 +1771,10 @@ public class TlsClientProtocol
 
         clientHelloExtensions.remove(TlsExtensionsUtils.EXT_cookie);
         clientHelloExtensions.remove(TlsExtensionsUtils.EXT_early_data);
-        clientHelloExtensions.remove(TlsExtensionsUtils.EXT_key_share);
         clientHelloExtensions.remove(TlsExtensionsUtils.EXT_pre_shared_key);
 
         /*
-         * RFC 4.2.2. When sending the new ClientHello, the client MUST copy the contents of the
+         * RFC 9846 4.3.2. When sending the new ClientHello, the client MUST copy the contents of the
          * extension received in the HelloRetryRequest into a "cookie" extension in the new
          * ClientHello.
          */
@@ -1744,21 +1803,22 @@ public class TlsClientProtocol
         }
 
         /*
-         * RFC 8446 4.2.8. [..] when sending the new ClientHello, the client MUST replace the
+         * RFC 9846 4.3.8. [..] when sending the new ClientHello, the client MUST replace the
          * original "key_share" extension with one containing only a new KeyShareEntry for the group
          * indicated in the selected_group field of the triggering HelloRetryRequest.
+         *
+         * RFC 9846 4.2.2. "If a "key_share" extension was supplied in the HelloRetryRequest, replacing the
+         * list of shares with a list containing a single KeyShareEntry from the indicated group" - so after
+         * a HelloRetryRequest without one (the cookie exchange) the original shares, and their agreements,
+         * are kept as they are.
          */
-        if (retryGroup < 0)
+        if (retryGroup >= 0)
         {
-            throw new TlsFatalAlert(AlertDescription.internal_error);
-        }
+            clientHelloExtensions.remove(TlsExtensionsUtils.EXT_key_share);
 
-        /*
-         * - If a "key_share" extension was supplied in the HelloRetryRequest, replacing the list of shares
-         * with a list containing a single KeyShareEntry from the indicated group
-         */
-        this.clientAgreements = TlsUtils.addKeyShareToClientHelloRetry(tlsClientContext, clientHelloExtensions,
-            retryGroup);
+            this.clientAgreements = TlsUtils.addKeyShareToClientHelloRetry(tlsClientContext,
+                clientHelloExtensions, retryGroup);
+        }
 
         /*
          * TODO[tls13] Optionally adding, removing, or changing the length of the "padding"
@@ -1918,7 +1978,7 @@ public class TlsClientProtocol
         this.clientBinders = TlsUtils.addPreSharedKeyToClientHello(tlsClientContext, tlsClient, clientExtensions,
             offeredCipherSuites);
 
-        // TODO[tls13-psk] Perhaps don't add key_share if external PSK(s) offered and 'psk_dhe_ke' not offered  
+        // TODO[tls13-psk] Perhaps don't add key_share if external PSK(s) offered and 'psk_dhe_ke' not offered
         this.clientAgreements = TlsUtils.addKeyShareToClientHello(tlsClientContext, tlsClient, clientExtensions);
 
         if (shouldUseEMS && TlsUtils.isExtendedMasterSecretOptional(supportedVersions))
@@ -1967,7 +2027,7 @@ public class TlsClientProtocol
              * TLS_EMPTY_RENEGOTIATION_INFO_SCSV signaling cipher suite value in the ClientHello.
              * Including both is NOT RECOMMENDED.
              */
-            boolean noRenegExt = (null == TlsUtils.getExtensionData(clientExtensions, EXT_RenegotiationInfo));
+            boolean noRenegExt = !TlsUtils.hasExtension(clientExtensions, EXT_RenegotiationInfo);
             boolean noRenegSCSV = !Arrays.contains(offeredCipherSuites, CipherSuite.TLS_EMPTY_RENEGOTIATION_INFO_SCSV);
 
             if (noRenegExt && noRenegSCSV)
@@ -2008,7 +2068,8 @@ public class TlsClientProtocol
 
         if (null != clientBinders)
         {
-            OfferedPsks.encodeBinders(message, tlsClientContext.getCrypto(), handshakeHash, clientBinders);
+            // TLS over TCP, so the binders use the TLS 1.3 label prefix
+            OfferedPsks.encodeBinders(message, tlsClientContext.getCrypto(), handshakeHash, clientBinders, false);
         }
 
         message.sendClientHello(this, handshakeHash, clientHello.getBindersSize());

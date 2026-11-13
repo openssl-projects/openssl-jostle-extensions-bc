@@ -11,8 +11,6 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.List;
 
-import org.bouncycastle.jsl.asn1.ASN1BitString;
-import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
@@ -24,14 +22,32 @@ import org.bouncycastle.jsl.operator.ContentVerifierProvider;
 import org.bouncycastle.jsl.operator.OperatorCreationException;
 import org.bouncycastle.jsl.operator.RawContentVerifier;
 import org.bouncycastle.jsl.operator.RuntimeOperatorException;
-import org.bouncycastle.jsl.util.io.TeeOutputStream;
+import org.openssl.jostle.jcajce.spec.ContextParameterSpec;
 
 public class JcaContentVerifierProviderBuilder
 {
     private OperatorHelper helper = OperatorUtils.createDefaultHelper();
+    private ContextParameterSpec context;
 
     public JcaContentVerifierProviderBuilder()
     {
+    }
+
+    /**
+     * Set the context string the signatures were made with, for an ML-DSA, SLH-DSA or composite
+     * signature made through a {@link JcaContentSignerBuilder} given a {@link ContextParameterSpec}.
+     * The context is not recorded in the signature algorithm identifier, so it must be supplied
+     * here; the X.509 and CMS profiles for these algorithms require the empty context, which is
+     * what a builder with no context verifies against.
+     *
+     * @param context the context string spec, null for the empty context.
+     * @return the current builder.
+     */
+    public JcaContentVerifierProviderBuilder setContext(ContextParameterSpec context)
+    {
+        this.context = context;
+
+        return this;
     }
 
     public JcaContentVerifierProviderBuilder setProvider(Provider provider)
@@ -83,34 +99,42 @@ public class JcaContentVerifierProviderBuilder
             public ContentVerifier get(AlgorithmIdentifier algorithm)
                 throws OperatorCreationException
             {
-                if (algorithm.getAlgorithm().equals(MiscObjectIdentifiers.id_alg_composite))
+                checkNotLegacyComposite(algorithm);
+
+                // null for a key algorithm the provider does not recognise, which no Signature can be
+                // initialised with
+                PublicKey publicKey = certificate.getPublicKey();
+                if (publicKey == null)
                 {
-                    return createCompositeVerifier(algorithm, certificate.getPublicKey());
+                    throw new OperatorCreationException("unable to recover the certificate's public key");
+                }
+
+                Signature sig;
+                try
+                {
+                    sig = helper.createSignature(algorithm);
+
+                    sig.initVerify(publicKey);
+
+                    if (context != null)
+                    {
+                        sig.setParameter(context);
+                    }
+                }
+                catch (GeneralSecurityException e)
+                {
+                    throw new OperatorCreationException("exception on setup: " + e, e);
+                }
+
+                Signature rawSig = createRawSig(algorithm, publicKey);
+
+                if (rawSig != null)
+                {
+                    return new RawSigVerifier(algorithm, sig, rawSig);
                 }
                 else
                 {
-                    Signature sig;
-                    try
-                    {
-                        sig = helper.createSignature(algorithm);
-
-                        sig.initVerify(certificate.getPublicKey());
-                    }
-                    catch (GeneralSecurityException e)
-                    {
-                        throw new OperatorCreationException("exception on setup: " + e, e);
-                    }
-
-                    Signature rawSig = createRawSig(algorithm, certificate.getPublicKey());
-
-                    if (rawSig != null)
-                    {
-                        return new RawSigVerifier(algorithm, sig, rawSig);
-                    }
-                    else
-                    {
-                        return new SigVerifier(algorithm, sig);
-                    }
+                    return new SigVerifier(algorithm, sig);
                 }
             }
         };
@@ -134,11 +158,10 @@ public class JcaContentVerifierProviderBuilder
             public ContentVerifier get(AlgorithmIdentifier algorithm)
                 throws OperatorCreationException
             {
-                if (algorithm.getAlgorithm().equals(MiscObjectIdentifiers.id_alg_composite))
-                {
-                    return createCompositeVerifier(algorithm, publicKey);
-                }
+                checkNotLegacyComposite(algorithm);
 
+                // Upstream also unpacks a legacy CompositePublicKey here, by its algorithm identifier. This
+                // library's CompositePublicKey is a container with no algorithm identifier to go by.
                 Signature sig = createSignature(algorithm, publicKey);
 
                 Signature rawSig = createRawSig(algorithm, publicKey);
@@ -161,26 +184,13 @@ public class JcaContentVerifierProviderBuilder
         return this.build(helper.convertPublicKey(publicKey));
     }
 
-    private ContentVerifier createCompositeVerifier(AlgorithmIdentifier compAlgId, PublicKey publicKey)
+    private static void checkNotLegacyComposite(AlgorithmIdentifier algorithm)
         throws OperatorCreationException
     {
-        ASN1Sequence keySeq = ASN1Sequence.getInstance(compAlgId.getParameters());
-        Signature[] sigs = new Signature[keySeq.size()];
-        for (int i = 0; i != keySeq.size(); i++)
+        if (MiscObjectIdentifiers.id_alg_composite.equals(algorithm.getAlgorithm()))
         {
-            AlgorithmIdentifier sigAlg = AlgorithmIdentifier.getInstance(keySeq.getObjectAt(i));
-            try
-            {
-                sigs[i] = createSignature(sigAlg, publicKey);
-            }
-            catch (Exception e)
-            {
-                sigs[i] = null;
-                // continue
-            }
+            throw new OperatorCreationException("legacy composite signature algorithm not supported");
         }
-
-        return new CompositeVerifier(sigs);
     }
 
     private Signature createSignature(AlgorithmIdentifier algorithm, PublicKey publicKey)
@@ -191,6 +201,11 @@ public class JcaContentVerifierProviderBuilder
             Signature sig = helper.createSignature(algorithm);
 
             sig.initVerify(publicKey);
+
+            if (context != null)
+            {
+                sig.setParameter(context);
+            }
 
             return sig;
         }
@@ -319,84 +334,6 @@ public class JcaContentVerifierProviderBuilder
                 {
                     // ignore
                 }
-            }
-        }
-    }
-
-    private static class CompositeVerifier
-        implements ContentVerifier
-    {
-        private Signature[] sigs;
-        private OutputStream stream;
-
-        public CompositeVerifier(Signature[] sigs)
-            throws OperatorCreationException
-        {
-            this.sigs = sigs;
-
-            int start = 0;
-            while (start < sigs.length && sigs[start] == null)
-            {
-                start++;
-            }
-
-            if (start == sigs.length)
-            {
-                throw new OperatorCreationException("no matching signature found in composite");
-            }
-            this.stream = OutputStreamFactory.createStream(sigs[start]);
-            for (int i = start + 1; i != sigs.length; i++)
-            {
-                if (sigs[i] != null)
-                {
-                    this.stream = new TeeOutputStream(this.stream, OutputStreamFactory.createStream(sigs[i]));
-                }
-            }
-        }
-
-        public AlgorithmIdentifier getAlgorithmIdentifier()
-        {
-            return new AlgorithmIdentifier(MiscObjectIdentifiers.id_alg_composite);
-        }
-
-        public OutputStream getOutputStream()
-        {
-            return stream;
-        }
-
-        public boolean verify(byte[] expected)
-        {
-            try
-            {
-                ASN1Sequence sigSeq = ASN1Sequence.getInstance(expected);
-
-                // A composite signature MUST carry exactly one component for every
-                // component key; reject a signature that has had components removed
-                // (e.g. stripped to a single verifiable component) or added.
-                if (sigSeq.size() != sigs.length)
-                {
-                    return false;
-                }
-
-                boolean failed = false;
-                boolean atLeastOneChecked = false;
-
-                for (int i = 0; i != sigSeq.size(); i++)
-                {
-                    if (sigs[i] != null)
-                    {
-                        atLeastOneChecked = true;
-                        if (!sigs[i].verify(ASN1BitString.getInstance(sigSeq.getObjectAt(i)).getBytes()))
-                        {
-                            failed = true;
-                        }
-                    }
-                }
-                return !failed & atLeastOneChecked;
-            }
-            catch (SignatureException e)
-            {
-                throw new RuntimeOperatorException("exception obtaining signature: " + e.getMessage(), e);
             }
         }
     }

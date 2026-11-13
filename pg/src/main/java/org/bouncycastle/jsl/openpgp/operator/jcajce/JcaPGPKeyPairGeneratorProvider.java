@@ -4,6 +4,8 @@ import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
 import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
+import org.bouncycastle.jsl.jcajce.CompositePrivateKey;
+import org.bouncycastle.jsl.jcajce.CompositePublicKey;
 import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
 import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
 import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
@@ -14,12 +16,17 @@ import org.bouncycastle.jsl.openpgp.operator.PGPKeyPairGeneratorProvider;
 // JSL accepts no foreign spec type, and registers no generic "XDH" generator - X25519 and X448
 // are named services that need no parameters.
 import org.openssl.jostle.jcajce.spec.EdDSAParameterSpec;
+import org.openssl.jostle.jcajce.spec.MLDSAParameterSpec;
+import org.openssl.jostle.jcajce.spec.MLKEMParameterSpec;
+import org.openssl.jostle.jcajce.spec.SLHDSAParameterSpec;
 
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.RSAKeyGenParameterSpec;
@@ -46,7 +53,7 @@ public class JcaPGPKeyPairGeneratorProvider
      */
     public JcaPGPKeyPairGeneratorProvider setProvider(Provider provider)
     {
-        this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+        this.helper = OperatorUtils.createProviderHelper(provider);
         return this;
     }
 
@@ -168,6 +175,130 @@ public class JcaPGPKeyPairGeneratorProvider
             {
                 throw new PGPException("Cannot generate X448 key pair", e);
             }
+        }
+
+        @Override
+        public PGPKeyPair generateMLDSA65Ed25519KeyPair()
+            throws PGPException
+        {
+            return generateMLDSACompositeKeyPair(PublicKeyAlgorithmTags.MLDSA65_Ed25519, "Ed25519", MLDSAParameterSpec.ml_dsa_65);
+        }
+
+        @Override
+        public PGPKeyPair generateMLDSA87Ed448KeyPair()
+            throws PGPException
+        {
+            return generateMLDSACompositeKeyPair(PublicKeyAlgorithmTags.MLDSA87_Ed448, "Ed448", MLDSAParameterSpec.ml_dsa_87);
+        }
+
+        @Override
+        public PGPKeyPair generateSLHDSAShake128sKeyPair()
+            throws PGPException
+        {
+            return generateSLHDSAKeyPair(PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s, SLHDSAParameterSpec.slh_dsa_shake_128s);
+        }
+
+        @Override
+        public PGPKeyPair generateSLHDSAShake128fKeyPair()
+            throws PGPException
+        {
+            return generateSLHDSAKeyPair(PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f, SLHDSAParameterSpec.slh_dsa_shake_128f);
+        }
+
+        @Override
+        public PGPKeyPair generateSLHDSAShake256sKeyPair()
+            throws PGPException
+        {
+            return generateSLHDSAKeyPair(PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s, SLHDSAParameterSpec.slh_dsa_shake_256s);
+        }
+
+        @Override
+        public PGPKeyPair generateMLKEM768X25519KeyPair()
+            throws PGPException
+        {
+            return generateMLKEMCompositeKeyPair(PublicKeyAlgorithmTags.MLKEM768_X25519, "X25519", MLKEMParameterSpec.ml_kem_768);
+        }
+
+        @Override
+        public PGPKeyPair generateMLKEM1024X448KeyPair()
+            throws PGPException
+        {
+            return generateMLKEMCompositeKeyPair(PublicKeyAlgorithmTags.MLKEM1024_X448, "X448", MLKEMParameterSpec.ml_kem_1024);
+        }
+
+        /**
+         * RFC 9980 sec. 5.2.1: the ML-DSA and the EdDSA component keys are generated independently.
+         */
+        private PGPKeyPair generateMLDSACompositeKeyPair(int algorithm, String curveName, MLDSAParameterSpec mldsaSpec)
+            throws PGPException
+        {
+            checkPQCKeyVersion(algorithm);
+            try
+            {
+                KeyPairGenerator eddsaGen = helper.createKeyPairGenerator("EDDSA");
+                eddsaGen.initialize(
+                    "Ed25519".equals(curveName) ? EdDSAParameterSpec.ED25519 : EdDSAParameterSpec.ED448, random);
+                KeyPair eddsaKp = eddsaGen.generateKeyPair();
+
+                KeyPairGenerator mldsaGen = helper.createKeyPairGenerator("ML-DSA");
+                mldsaGen.initialize(mldsaSpec, random);
+                KeyPair mldsaKp = mldsaGen.generateKeyPair();
+
+                return new JcaPGPKeyPair(version, algorithm, compose(eddsaKp, mldsaKp), creationTime);
+            }
+            catch (GeneralSecurityException e)
+            {
+                throw new PGPException("Cannot generate ML-DSA + " + curveName + " key pair", e);
+            }
+        }
+
+        private PGPKeyPair generateSLHDSAKeyPair(int algorithm, SLHDSAParameterSpec spec)
+            throws PGPException
+        {
+            checkPQCKeyVersion(algorithm);
+            try
+            {
+                KeyPairGenerator gen = helper.createKeyPairGenerator("SLH-DSA");
+                gen.initialize(spec, random);
+                KeyPair keyPair = gen.generateKeyPair();
+                return new JcaPGPKeyPair(version, algorithm, keyPair, creationTime);
+            }
+            catch (GeneralSecurityException e)
+            {
+                throw new PGPException("Cannot generate " + spec.getName() + " key pair", e);
+            }
+        }
+
+        /**
+         * RFC 9980 sec. 4.2.2: the ML-KEM and the ECDH component keys are generated independently.
+         */
+        private PGPKeyPair generateMLKEMCompositeKeyPair(int algorithm, String curveName, MLKEMParameterSpec mlkemSpec)
+            throws PGPException
+        {
+            checkPQCKeyVersion(algorithm);
+            try
+            {
+                // JSL names the curve in the generator, as the X25519 and X448 generators above do.
+                KeyPairGenerator xdhGen = helper.createKeyPairGenerator(curveName);
+                KeyPair xdhKp = xdhGen.generateKeyPair();
+
+                KeyPairGenerator mlkemGen = helper.createKeyPairGenerator("ML-KEM");
+                mlkemGen.initialize(mlkemSpec, random);
+                KeyPair mlkemKp = mlkemGen.generateKeyPair();
+
+                return new JcaPGPKeyPair(version, algorithm, compose(xdhKp, mlkemKp), creationTime);
+            }
+            catch (GeneralSecurityException e)
+            {
+                throw new PGPException("Cannot generate ML-KEM + " + curveName + " key pair", e);
+            }
+        }
+
+        private static KeyPair compose(KeyPair traditional, KeyPair postQuantum)
+        {
+            return new KeyPair(
+                new CompositePublicKey(new PublicKey[]{ traditional.getPublic(), postQuantum.getPublic() }),
+                new CompositePrivateKey(new PrivateKey[]{ traditional.getPrivate(), postQuantum.getPrivate() }));
         }
 
         @Override

@@ -85,9 +85,10 @@ public class DHParameters
     {
         if (l != 0)
         {
-            if (l >= p.bitLength())
+            // PKCS#3 sec. 6: 2^(l-1) <= p, so l may be up to the length of p
+            if (l > p.bitLength())
             {
-                throw new IllegalArgumentException("when l value specified, it must be less than bitlength(p)");
+                throw new IllegalArgumentException("when l value specified, it must not be greater than bitlength(p)");
             }
             if (l < m)
             {

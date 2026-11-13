@@ -54,12 +54,17 @@ public class OCSPResponseStatus
     public OCSPResponseStatus(
         int value)
     {
-        this(new ASN1Enumerated(value));
+        this(ASN1Enumerated.valueOf(value));
     }
 
     private OCSPResponseStatus(
         ASN1Enumerated value)
     {
+        // the defined statuses are 0 to 6; one too large for an int cannot be reported by getIntValue()
+        if (value.getValue().bitLength() > 31)
+        {
+            throw new IllegalArgumentException("invalid OCSP response status");
+        }
         this.value = value;
     }
 

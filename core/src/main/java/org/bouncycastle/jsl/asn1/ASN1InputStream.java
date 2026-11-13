@@ -238,21 +238,29 @@ public class ASN1InputStream
         int tagNo = readTagNumber(this, tag);
         int length = readLength(this);
 
-        if (length >= 0)
+        try
         {
-            // definite-length
-            try
+            if (length >= 0)
             {
+                // definite-length
                 return buildObject(tag, tagNo, length);
             }
-            catch (IllegalArgumentException e)
-            {
-                throw new ASN1Exception("corrupted stream detected", e);
-            }
+
+            return buildIndefiniteLengthObject(tag, tagNo);
         }
+        catch (IllegalArgumentException e)
+        {
+            throw new ASN1Exception("corrupted stream detected", e);
+        }
+        catch (IllegalStateException e)
+        {
+            throw new ASN1Exception("corrupted stream detected", e);
+        }
+    }
 
-        // indefinite-length
-
+    private ASN1Primitive buildIndefiniteLengthObject(int tag, int tagNo)
+        throws IOException
+    {
         if (0 == (tag & CONSTRUCTED))
         {
             throw new IOException("indefinite-length primitive encoding encountered");
@@ -546,7 +554,7 @@ public class ASN1InputStream
             case IA5_STRING:
                 return ASN1IA5String.createPrimitive(defIn.toByteArray());
             case INTEGER:
-                return ASN1Integer.createPrimitive(defIn.toByteArray());
+                return ASN1Integer.createPrimitive(defIn);
             case NULL:
                 return ASN1Null.createPrimitive(defIn);
             case NUMERIC_STRING:

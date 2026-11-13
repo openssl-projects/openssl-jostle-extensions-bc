@@ -231,7 +231,7 @@ public class EnvelopedDataHelper
                 keyData = (byte[])key.getRepresentation();
             }
 
-            AlgorithmIdentifier encAlgId = AlgorithmIdentifier.getInstance(algId.getParameters());
+            AlgorithmIdentifier encAlgId = CMSUtils.getContentEncryptionAlgorithm(algId);
 
             // RFC 9629 id-alg-cek-hkdf-sha256: derive the CEK with HKDF-SHA256 through the
             // provider's native HKDF SecretKeyFactory (info == the DER enc-algorithm identifier).
@@ -261,7 +261,10 @@ public class EnvelopedDataHelper
     public void keySizeCheck(AlgorithmIdentifier keyAlgorithm, Key key)
         throws CMSException
     {
-        int expectedKeySize = EnvelopedDataHelper.KEY_SIZE_PROVIDER.getKeySize(keyAlgorithm);
+        // an RFC 9709 key derivation wraps the algorithm that fixes the size of the recovered CEK
+        AlgorithmIdentifier encAlgId = CMSUtils.getContentEncryptionAlgorithm(keyAlgorithm);
+
+        int expectedKeySize = EnvelopedDataHelper.KEY_SIZE_PROVIDER.getKeySize(encAlgId);
         if (expectedKeySize > 0)
         {
             byte[] keyEnc = null;
@@ -423,19 +426,10 @@ public class EnvelopedDataHelper
                 InvalidKeyException, InvalidParameterSpecException, NoSuchAlgorithmException,
                 NoSuchPaddingException, NoSuchProviderException
             {
-                AlgorithmIdentifier encAlgId;
-                // RFC 9709: the EncryptedContentInfo carries an outer id-alg-cek-hkdf-sha256
-                // wrapping the real inner content-encryption AlgorithmIdentifier. The HKDF
-                // derivation of the CEK happens upstream in getJceKey(AlgorithmIdentifier, ...);
-                // here we only need to unwrap to the inner algId to select the right cipher.
-                if (encryptionAlgID.getAlgorithm().equals(CMSObjectIdentifiers.id_alg_cek_hkdf_sha256))
-                {
-                    encAlgId = AlgorithmIdentifier.getInstance(encryptionAlgID.getParameters());
-                }
-                else
-                {
-                    encAlgId = encryptionAlgID;
-                }
+                // the HKDF derivation of the CEK happens upstream in getJceKey(AlgorithmIdentifier, ...);
+                // here the RFC 9709 wrapper is resolved only to select the right cipher
+                AlgorithmIdentifier encAlgId = CMSUtils.getContentEncryptionAlgorithm(encryptionAlgID);
+
                 Cipher cipher = createCipher(encAlgId.getAlgorithm());
                 ASN1Encodable sParams = encAlgId.getParameters();
                 String encAlg = encAlgId.getAlgorithm().getId();

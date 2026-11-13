@@ -9,7 +9,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +41,7 @@ import org.bouncycastle.jsl.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.jsl.operator.DigestCalculator;
 import org.bouncycastle.jsl.operator.DigestCalculatorProvider;
 import org.bouncycastle.jsl.operator.OperatorCreationException;
+import org.bouncycastle.jsl.util.Properties;
 import org.bouncycastle.jsl.util.Store;
 import org.bouncycastle.jsl.util.io.Streams;
 
@@ -166,7 +166,14 @@ public class CMSSignedDataParser
         try
         {
             _signedContent = signedContent;
-            _signedData = SignedDataParser.getInstance(_contentInfo.getContent(BERTags.SEQUENCE));
+
+            ASN1Encodable content = _contentInfo.getContent(BERTags.SEQUENCE);
+            if (content == null)
+            {
+                throw new CMSException("Missing content.");
+            }
+
+            _signedData = SignedDataParser.getInstance(content);
             digests = new HashMap();
             
             ASN1SetParser digAlgs = _signedData.getDigestAlgorithms();
@@ -174,11 +181,12 @@ public class CMSSignedDataParser
 
             boolean digestAlgsBer = digAlgs instanceof BERSetParser;
             ASN1EncodableVector digestAlgsVector = new ASN1EncodableVector();
-            Set<AlgorithmIdentifier> algSet = new HashSet<AlgorithmIdentifier>();
+            Set<AlgorithmIdentifier> algSet = CMSUtils.algorithmIdentifierSet();
+            int digestAlgorithmLimit = Properties.asInteger(Properties.CMS_MAX_DIGEST_ALGORITHMS, 0);
 
             while ((o = digAlgs.readObject()) != null)
             {
-                ASN1Primitive algPrim = o.toASN1Primitive();
+                ASN1Primitive algPrim = CMSUtils.getLoadedObject(o);
 
                 digestAlgsVector.add(algPrim);
 
@@ -193,6 +201,8 @@ public class CMSSignedDataParser
                     if (calculator != null)
                     {
                         this.digests.put(algId.getAlgorithm(), calculator);
+
+                        ContentDigestCache.checkLimit(digestAlgorithmLimit, this.digests.size());
                     }
                 }
                 catch (OperatorCreationException e)
@@ -262,6 +272,14 @@ public class CMSSignedDataParser
         catch (IOException e)
         {
             throw new CMSException("io exception: " + e.getMessage(), e);
+        }
+        catch (ClassCastException e)
+        {
+            throw new CMSException("Malformed content.", e);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("Malformed content.", e);
         }
     }
 
@@ -365,6 +383,14 @@ public class CMSSignedDataParser
                 // SignerInfo this way - e.g. a malformed time in a signed attribute (github #2411);
                 // report it as the CMSException this method declares rather than letting it escape.
                 throw new CMSException("io exception: " + e.getMessage(), e);
+            }
+            catch (ClassCastException e)
+            {
+                throw new CMSException("Malformed content.", e);
+            }
+            catch (IllegalArgumentException e)
+            {
+                throw new CMSException("Malformed content.", e);
             }
 
             _signerInfoStore = new SignerInformationStore(signerInfos);
@@ -541,7 +567,7 @@ public class CMSSignedDataParser
         // digests
         signedData.getDigestAlgorithms().toASN1Primitive();  // skip old ones
 
-        Set<AlgorithmIdentifier> digestAlgs = new HashSet<AlgorithmIdentifier>();
+        Set<AlgorithmIdentifier> digestAlgs = CMSUtils.algorithmIdentifierSet();
         for (Iterator it = signerInformationStore.getSigners().iterator(); it.hasNext(); )
         {
             SignerInformation signer = (SignerInformation)it.next();
@@ -730,7 +756,7 @@ public class CMSSignedDataParser
      * @param attrCerts new attribute certificates to be used, if any.
      * @param out the stream to write the new signed data object to.
      * @return out.
-     * @exception CMSException if there is an error processing the CertStore
+     * @throws CMSException if there is an error processing the CertStore
      */
     public static OutputStream replaceCertificatesAndCRLs(
         InputStream   original,
@@ -830,10 +856,11 @@ public class CMSSignedDataParser
 
     private static ASN1Set getASN1Set(
         ASN1SetParser asn1SetParser)
+        throws IOException
     {
         return asn1SetParser == null
             ?   null
-            :   ASN1Set.getInstance(asn1SetParser.toASN1Primitive());
+            :   ASN1Set.getInstance(asn1SetParser.getLoadedObject());
     }
 
     private static void pipeEncapsulatedOctetString(ContentInfoParser encapContentInfo,

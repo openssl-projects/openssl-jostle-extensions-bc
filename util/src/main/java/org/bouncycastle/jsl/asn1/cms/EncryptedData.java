@@ -9,6 +9,7 @@ import org.bouncycastle.jsl.asn1.ASN1Set;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
 import org.bouncycastle.jsl.asn1.BERSequence;
 import org.bouncycastle.jsl.asn1.BERTaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 
 /**
  * <a href="https://tools.ietf.org/html/rfc5652#section-8">RFC 5652</a> EncryptedData object.
@@ -38,7 +39,7 @@ public class EncryptedData
      * </ul>
      *
      * @param o the object we want converted.
-     * @exception IllegalArgumentException if the object cannot be converted.
+     * @throws IllegalArgumentException if the object cannot be converted.
      */
     public static EncryptedData getInstance(Object o)
     {
@@ -69,12 +70,17 @@ public class EncryptedData
 
     private EncryptedData(ASN1Sequence seq)
     {
+        if (seq.size() < 2 || seq.size() > 3)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         this.version = ASN1Integer.getInstance(seq.getObjectAt(0));
         this.encryptedContentInfo = EncryptedContentInfo.getInstance(seq.getObjectAt(1));
 
         if (seq.size() == 3)
         {
-            this.unprotectedAttrs = ASN1Set.getInstance((ASN1TaggedObject)seq.getObjectAt(2), false);
+            this.unprotectedAttrs = ASN1Set.getInstance(ASN1TaggedObject.getInstance(seq.getObjectAt(2), BERTags.CONTEXT_SPECIFIC, 1), false);
         }
     }
 

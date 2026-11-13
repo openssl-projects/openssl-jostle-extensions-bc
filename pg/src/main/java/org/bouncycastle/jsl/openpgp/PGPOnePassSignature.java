@@ -9,6 +9,7 @@ import org.bouncycastle.jsl.bcpg.BCPGOutputStream;
 import org.bouncycastle.jsl.bcpg.HashUtils;
 import org.bouncycastle.jsl.bcpg.KeyIdentifier;
 import org.bouncycastle.jsl.bcpg.OnePassSignaturePacket;
+import org.bouncycastle.jsl.bcpg.PublicKeyUtils;
 import org.bouncycastle.jsl.bcpg.Packet;
 import org.bouncycastle.jsl.bcpg.SignaturePacket;
 import org.bouncycastle.jsl.openpgp.operator.PGPContentVerifier;
@@ -24,6 +25,7 @@ public class PGPOnePassSignature
 {
     private OnePassSignaturePacket sigPack;
     private PGPContentVerifier verifier;
+    private PGPContentVerifier legacyTextVerifier;
 
     private static OnePassSignaturePacket cast(Packet packet)
         throws IOException
@@ -61,15 +63,32 @@ public class PGPOnePassSignature
     public void init(PGPContentVerifierBuilderProvider verifierBuilderProvider, PGPPublicKey pubKey)
         throws PGPException
     {
+        if (PublicKeyUtils.isPQCAlgorithm(sigPack.getKeyAlgorithm()) && getVersion() != SignaturePacket.VERSION_6)
+        {
+            // RFC 9980 sec. 5.3.1 and 6.2.1: the PQ(/T) signature algorithms MUST be used only with v6 signatures
+            throw new PGPException("public key algorithm " + sigPack.getKeyAlgorithm()
+                + " MUST only be used with version 6 signatures (RFC 9980), not version " + getVersion());
+        }
+
         PGPContentVerifierBuilder verifierBuilder = verifierBuilderProvider.get(sigPack.getKeyAlgorithm(), sigPack.getHashAlgorithm());
 
         verifier = verifierBuilder.build(pubKey);
 
-        lastb = 0;
+        resetTextState();
+        legacyTextVerifier = null;
         sigOut = verifier.getOutputStream();
 
         checkSaltSize();
-        updateWithSalt();
+        updateWithSalt(sigOut);
+
+        if (sigType == PGPSignature.CANONICAL_TEXT_DOCUMENT && isLegacyTextFormAllowed())
+        {
+            // a second hash over the pre-1.87 form, consulted only if the data held a bare CR
+            // and the signature does not verify over the current form (github #2553).
+            legacyTextVerifier = verifierBuilder.build(pubKey);
+            legacyTextSigOut = legacyTextVerifier.getOutputStream();
+            updateWithSalt(legacyTextSigOut);
+        }
     }
 
     private void checkSaltSize()
@@ -88,14 +107,14 @@ public class PGPOnePassSignature
         }
     }
 
-    private void updateWithSalt()
+    private void updateWithSalt(OutputStream out)
         throws PGPException
     {
         if (version == SignaturePacket.VERSION_6)
         {
             try
             {
-                sigOut.write(getSalt());
+                out.write(getSalt());
             }
             catch (IOException e)
             {
@@ -117,9 +136,10 @@ public class PGPOnePassSignature
     {
         compareSalt(pgpSig);
         
+        byte[] trailer = pgpSig.getSignatureTrailer();
         try
         {
-            sigOut.write(pgpSig.getSignatureTrailer());
+            sigOut.write(trailer);
 
             sigOut.close();
         }
@@ -128,7 +148,12 @@ public class PGPOnePassSignature
             throw new PGPException("unable to add trailer: " + e.getMessage(), e);
         }
 
-        return verifier.verify(pgpSig.getSignature());
+        if (verifier.verify(pgpSig.getSignature()))
+        {
+            return true;
+        }
+
+        return verifyLegacyTextForm(legacyTextVerifier, trailer, pgpSig.getSignature());
     }
 
     private void compareSalt(PGPSignature signature)

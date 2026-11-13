@@ -67,6 +67,11 @@ public class JcaOpenPGPImplementation
         this.secureRandom = secureRandom;
     }
 
+    public Provider getProvider()
+    {
+        return provider;
+    }
+
     @Override
     public PGPObjectFactory pgpObjectFactory(InputStream packetInputStream)
     {

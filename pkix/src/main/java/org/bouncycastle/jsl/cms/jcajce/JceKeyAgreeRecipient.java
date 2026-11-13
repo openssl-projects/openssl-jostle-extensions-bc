@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
+import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashSet;
@@ -30,11 +31,11 @@ import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jsl.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.jsl.cms.AbstractKeyAgreeRecipient;
-import org.bouncycastle.jsl.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.jsl.cms.CMSException;
 import org.bouncycastle.jsl.jcajce.spec.MQVParameterSpec;
 import org.bouncycastle.jsl.operator.DefaultSecretKeySizeProvider;
 import org.bouncycastle.jsl.operator.SecretKeySizeProvider;
+import org.bouncycastle.jsl.util.Properties;
 import org.bouncycastle.jsl.util.Exceptions;
 import org.bouncycastle.jsl.util.Pack;
 // JSL accepts no foreign spec type. MQV has no JSL equivalent, so that branch keeps BC's spec
@@ -196,10 +197,20 @@ public abstract class JceKeyAgreeRecipient
                                              PublicKey senderPublicKey, ASN1OctetString userKeyingMaterial, PrivateKey receiverPrivateKey, KeyMaterialGenerator kmGen)
         throws CMSException, GeneralSecurityException, IOException
     {
+        ASN1ObjectIdentifier agreeAlgOID = keyEncAlg.getAlgorithm();
+
         receiverPrivateKey = CMSUtils.cleanPrivateKey(receiverPrivateKey);
 
-        if (isMQV(keyEncAlg.getAlgorithm()))
+        AlgorithmParameterSpec initParams = null;
+
+        if (isMQV(agreeAlgOID))
         {
+            // RFC 5753 sec. 3.2.1: for 1-Pass ECMQV the ukm MUST be present
+            if (userKeyingMaterial == null)
+            {
+                throw new CMSException("User keying material must be present for MQV.");
+            }
+
             MQVuserKeyingMaterial ukm = MQVuserKeyingMaterial.getInstance(userKeyingMaterial.getOctets());
 
             SubjectPublicKeyInfo pubInfo = new SubjectPublicKeyInfo(
@@ -207,29 +218,19 @@ public abstract class JceKeyAgreeRecipient
                 ukm.getEphemeralPublicKey().getPublicKeyData());
 
             X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubInfo.getEncoded());
-            KeyFactory fact = helper.createKeyFactory(keyEncAlg.getAlgorithm());
+            KeyFactory fact = helper.createKeyFactory(agreeAlgOID);
             PublicKey ephemeralKey = fact.generatePublic(pubSpec);
 
-            KeyAgreement agreement = helper.createKeyAgreement(keyEncAlg.getAlgorithm());
+            // RFC 5753 sec. 3.2.3 / 7.2: the KDF SharedInfo is DER(ECC-CMS-SharedInfo) with the addedukm as
+            // its entityUInfo, exactly as for ECDH; the generator passed in selects which form is tried.
+            byte[] addedukm = (ukm.getAddedukm() != null) ? ukm.getAddedukm().getOctets() : null;
+            byte[] ukmKeyingMaterial = kmGen.generateKDFMaterial(wrapAlg, keySizeProvider.getKeySize(wrapAlg), addedukm);
 
-            byte[] ukmKeyingMaterial = (ukm.getAddedukm() != null) ? ukm.getAddedukm().getOctets() : null;
-            if (kmGen == old_ecc_cms_Generator)
-            {
-                ukmKeyingMaterial = old_ecc_cms_Generator.generateKDFMaterial(wrapAlg, keySizeProvider.getKeySize(wrapAlg), ukmKeyingMaterial);
-            }
-
-            agreement.init(receiverPrivateKey, new MQVParameterSpec(receiverPrivateKey, ephemeralKey, ukmKeyingMaterial));
-            agreement.doPhase(senderPublicKey, true);
-
-            return agreement.generateSecret(wrapAlg.getAlgorithm().getId());
+            initParams = new MQVParameterSpec(receiverPrivateKey, ephemeralKey, ukmKeyingMaterial);
         }
         else
         {
-            KeyAgreement agreement = helper.createKeyAgreement(keyEncAlg.getAlgorithm());
-
-            UserKeyingMaterialSpec userKeyingMaterialSpec = null;
-
-            if (isEC(keyEncAlg.getAlgorithm()))
+            if (isEC(agreeAlgOID))
             {
                 byte[] ukmKeyingMaterial;
                 if (userKeyingMaterial != null)
@@ -240,26 +241,36 @@ public abstract class JceKeyAgreeRecipient
                 {
                     ukmKeyingMaterial = kmGen.generateKDFMaterial(wrapAlg, keySizeProvider.getKeySize(wrapAlg), null);
                 }
-                userKeyingMaterialSpec = new UserKeyingMaterialSpec(ukmKeyingMaterial);
+                // RFC 8418 sec. 2.2: for the HKDF schemes a ukm is both the entityUInfo of the
+                // ECC-CMS-SharedInfo and the HKDF salt
+                if (userKeyingMaterial != null && isHKDF(agreeAlgOID))
+                {
+                    initParams = new UserKeyingMaterialSpec(ukmKeyingMaterial, userKeyingMaterial.getOctets());
+                }
+                else
+                {
+                    initParams = new UserKeyingMaterialSpec(ukmKeyingMaterial);
+                }
             }
-            else if (isRFC2631(keyEncAlg.getAlgorithm()))
+            else if (isRFC2631(agreeAlgOID))
             {
                 if (userKeyingMaterial != null)
                 {
-                    userKeyingMaterialSpec = new UserKeyingMaterialSpec(userKeyingMaterial.getOctets());
+                    initParams = new UserKeyingMaterialSpec(userKeyingMaterial.getOctets());
                 }
             }
             else
             {
-                throw new CMSException("Unknown key agreement algorithm: " + keyEncAlg.getAlgorithm());
+                throw new CMSException("Unknown key agreement algorithm: " + agreeAlgOID);
             }
-
-            agreement.init(receiverPrivateKey, userKeyingMaterialSpec);
-
-            agreement.doPhase(senderPublicKey, true);
-
-            return agreement.generateSecret(wrapAlg.getAlgorithm().getId());
         }
+
+        KeyAgreement agreement = helper.createKeyAgreement(agreeAlgOID);
+
+        agreement.init(receiverPrivateKey, initParams);
+        agreement.doPhase(senderPublicKey, true);
+
+        return agreement.generateSecret(wrapAlg.getAlgorithm().getId());
     }
 
     protected Key unwrapSessionKey(ASN1ObjectIdentifier wrapAlg, SecretKey agreedKey, ASN1ObjectIdentifier contentEncryptionAlgorithm, byte[] encryptedContentEncryptionKey)
@@ -273,12 +284,7 @@ public abstract class JceKeyAgreeRecipient
     protected Key extractSecretKey(AlgorithmIdentifier keyEncryptionAlgorithm, AlgorithmIdentifier contentEncryptionAlgorithm, SubjectPublicKeyInfo senderKey, ASN1OctetString userKeyingMaterial, byte[] encryptedContentEncryptionKey)
         throws CMSException
     {
-        if (!isContentAlgorithmAllowed(contentEncryptionAlgorithm.getAlgorithm()))
-        {
-            throw new CMSAlgorithmNotAllowedException("content-encryption algorithm not in recipient's allowed set: " + contentEncryptionAlgorithm.getAlgorithm());
-        }
-
-        checkTagSize(contentEncryptionAlgorithm);
+        checkContentAlgorithm(contentEncryptionAlgorithm);
 
         try
         {
@@ -302,14 +308,22 @@ public abstract class JceKeyAgreeRecipient
                 // might be a pre-RFC 5753 message
                 if (possibleOldMessages.contains(keyEncryptionAlgorithm.getAlgorithm()))
                 {
-                    SecretKey agreedWrapKey = calculateAgreedWrapKey(keyEncryptionAlgorithm, wrapAlgID,
-                        senderPublicKey, userKeyingMaterial, recipientKey, old_ecc_cms_Generator);
+                    try
+                    {
+                        SecretKey agreedWrapKey = calculateAgreedWrapKey(keyEncryptionAlgorithm, wrapAlgID,
+                            senderPublicKey, userKeyingMaterial, recipientKey, old_ecc_cms_Generator);
 
-                    return unwrapSessionKey(wrapAlgOID, agreedWrapKey, contentEncryptionAlgorithm.getAlgorithm(),
-                        encryptedContentEncryptionKey);
+                        return unwrapSessionKey(wrapAlgOID, agreedWrapKey, contentEncryptionAlgorithm.getAlgorithm(),
+                            encryptedContentEncryptionKey);
+                    }
+                    catch (InvalidKeyException ex)
+                    {
+                        // fall through to the raw ukm form, reporting the original failure if that fails too
+                    }
                 }
-                // one last try - people do actually do this it turns out
-                if (userKeyingMaterial != null)
+                // one last try - the raw ukm as the KDF SharedInfo: people do actually do this it turns out, and
+                // for ECMQV it is the form BC itself produced from 1.53 to 1.86.
+                if (userKeyingMaterial != null && Properties.isOverrideSet(Properties.CMS_ALLOW_LEGACY_KEYAGREE_KDF, true))
                 {
                     try
                     {
@@ -342,6 +356,10 @@ public abstract class JceKeyAgreeRecipient
         catch (NoSuchPaddingException e)
         {
             throw new CMSException("required padding not supported.", e);
+        }
+        catch (CMSException e)
+        {
+            throw e;
         }
         catch (Exception e)
         {

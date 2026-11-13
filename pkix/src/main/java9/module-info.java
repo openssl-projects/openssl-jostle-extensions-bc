@@ -10,6 +10,8 @@ module org.bouncycastle.jsl.pkix
 
     exports org.bouncycastle.jsl.cades;
     exports org.bouncycastle.jsl.cert;
+    exports org.bouncycastle.jsl.cert.c509;
+    exports org.bouncycastle.jsl.cert.c509.jcajce;
     exports org.bouncycastle.jsl.cert.cmp;
     exports org.bouncycastle.jsl.cert.crmf;
     exports org.bouncycastle.jsl.cert.crmf.jcajce;

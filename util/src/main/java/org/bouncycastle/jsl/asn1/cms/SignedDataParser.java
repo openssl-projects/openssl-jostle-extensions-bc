@@ -53,7 +53,11 @@ public class SignedDataParser
         throws IOException
     {
         this._seq = seq;
-        this._version = (ASN1Integer)seq.readObject();
+        this._version = ASN1Integer.getInstance(seq.readObject());
+        if (_version == null)
+        {
+            throw new IOException("SignedData missing version");
+        }
     }
 
     public ASN1Integer getVersion()
@@ -66,6 +70,11 @@ public class SignedDataParser
     {
         Object o = _seq.readObject();
 
+        if (o == null)
+        {
+            throw new IOException("SignedData missing digestAlgorithms");
+        }
+
         if (o instanceof ASN1Set)
         {
             return ((ASN1Set)o).parser();
@@ -77,7 +86,14 @@ public class SignedDataParser
     public ContentInfoParser getEncapContentInfo()
         throws IOException
     {
-        return new ContentInfoParser((ASN1SequenceParser)_seq.readObject());
+        ASN1SequenceParser o = (ASN1SequenceParser)_seq.readObject();
+
+        if (o == null)
+        {
+            throw new IOException("SignedData missing encapContentInfo");
+        }
+
+        return new ContentInfoParser(o);
     }
 
     public ASN1SetParser getCertificates()
@@ -142,6 +158,15 @@ public class SignedDataParser
             _nextObject = _seq.readObject();
         }
 
-        return (ASN1SetParser)_nextObject;
+        if (_nextObject == null)
+        {
+            throw new IOException("SignedData missing signerInfos");
+        }
+        if (!(_nextObject instanceof ASN1SetParser))
+        {
+            throw new IOException("SignedData has an unexpected element where signerInfos is expected");
+        }
+
+        return new EndCheckedSetParser((ASN1SetParser)_nextObject, _seq, "SignedData", "signerInfos");
     }
 }

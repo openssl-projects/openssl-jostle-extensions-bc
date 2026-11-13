@@ -681,6 +681,12 @@ public abstract class OpenPGPSignature
                 throws PGPException
         {
             isTested = true;
+            // the one-pass signature packet announces the type of its signature packet (RFC9580, section 5.4)
+            if (ops.getSignatureType() != signature.getSignatureType())
+            {
+                isCorrect = false;
+                return false;
+            }
             isCorrect = ops.verify(signature);
             return isCorrect;
         }
@@ -701,7 +707,7 @@ public abstract class OpenPGPSignature
 
         /**
          * Return true, if the signature is valid at this moment.
-         * A valid signature is effective, correct and was issued by a valid signing key.
+         * A valid signature is a binary or text document signature which is effective, correct and was issued by a valid signing key.
          *
          * @return true if the signature is valid now.
          */
@@ -713,7 +719,7 @@ public abstract class OpenPGPSignature
 
         /**
          * Return true, if the signature is valid at this moment using the given policy.
-         * A valid signature is effective, correct and was issued by a valid signing key.
+         * A valid signature is a binary or text document signature which is effective, correct and was issued by a valid signing key.
          *
          * @param policy policy
          * @return true if the signature is valid now.
@@ -726,7 +732,7 @@ public abstract class OpenPGPSignature
 
         /**
          * Return true, if th signature is valid at the given date.
-         * A valid signature is effective, correct and was issued by a valid signing key.
+         * A valid signature is a binary or text document signature which is effective, correct and was issued by a valid signing key.
          *
          * @param date evaluation time
          * @return true if the signature is valid at the given date
@@ -740,7 +746,7 @@ public abstract class OpenPGPSignature
 
         /**
          * Return true, if th signature is valid at the given date using the given policy.
-         * A valid signature is effective, correct and was issued by a valid signing key.
+         * A valid signature is a binary or text document signature which is effective, correct and was issued by a valid signing key.
          *
          * @param date evaluation time
          * @param policy policy
@@ -755,6 +761,13 @@ public abstract class OpenPGPSignature
                 throw new IllegalStateException("Signature has not yet been verified.");
             }
             if (!isTestedCorrect())
+            {
+                return false;
+            }
+
+            // only a binary or text signature is made over a document (RFC9580, section 5.2.1)
+            int type = signature.getSignatureType();
+            if (type != PGPSignature.BINARY_DOCUMENT && type != PGPSignature.CANONICAL_TEXT_DOCUMENT)
             {
                 return false;
             }

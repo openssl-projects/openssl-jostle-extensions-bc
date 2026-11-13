@@ -5,6 +5,7 @@ import org.bouncycastle.jsl.asn1.ASN1Object;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.x509.Extensions;
@@ -26,12 +27,17 @@ public class Request
     private Request(
         ASN1Sequence    seq)
     {
+        if (seq.size() < 1 || seq.size() > 2)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         reqCert = CertID.getInstance(seq.getObjectAt(0));
 
         if (seq.size() == 2)
         {
             singleRequestExtensions = Extensions.getInstance(
-                                (ASN1TaggedObject)seq.getObjectAt(1), true);
+                                ASN1TaggedObject.getInstance(seq.getObjectAt(1), BERTags.CONTEXT_SPECIFIC, 0), true);
         }
     }
 

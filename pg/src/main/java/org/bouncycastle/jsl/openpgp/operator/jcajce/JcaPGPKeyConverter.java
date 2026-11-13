@@ -28,6 +28,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Date;
 import java.util.Enumeration;
+import java.util.List;
 
 import javax.crypto.interfaces.DHPrivateKey;
 import javax.crypto.interfaces.DHPublicKey;
@@ -38,10 +39,14 @@ import javax.crypto.spec.DHPublicKeySpec;
 import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1Sequence;
+import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
 import org.bouncycastle.jsl.asn1.DEROctetString;
+import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.cryptlib.CryptlibObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.gnu.GNUObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
@@ -66,15 +71,23 @@ import org.bouncycastle.jsl.bcpg.EdDSAPublicBCPGKey;
 import org.bouncycastle.jsl.bcpg.EdSecretBCPGKey;
 import org.bouncycastle.jsl.bcpg.ElGamalPublicBCPGKey;
 import org.bouncycastle.jsl.bcpg.ElGamalSecretBCPGKey;
+import org.bouncycastle.jsl.bcpg.MLDSACompositePublicBCPGKey;
+import org.bouncycastle.jsl.bcpg.MLDSACompositeSecretBCPGKey;
+import org.bouncycastle.jsl.bcpg.MLKEMCompositePublicBCPGKey;
+import org.bouncycastle.jsl.bcpg.MLKEMCompositeSecretBCPGKey;
 import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
 import org.bouncycastle.jsl.bcpg.RSAPublicBCPGKey;
 import org.bouncycastle.jsl.bcpg.RSASecretBCPGKey;
+import org.bouncycastle.jsl.bcpg.SLHDSAPublicBCPGKey;
+import org.bouncycastle.jsl.bcpg.SLHDSASecretBCPGKey;
 import org.bouncycastle.jsl.bcpg.X25519PublicBCPGKey;
 import org.bouncycastle.jsl.bcpg.X25519SecretBCPGKey;
 import org.bouncycastle.jsl.bcpg.X448PublicBCPGKey;
 import org.bouncycastle.jsl.bcpg.X448SecretBCPGKey;
 import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
+import org.bouncycastle.jsl.jcajce.CompositePrivateKey;
+import org.bouncycastle.jsl.jcajce.CompositePublicKey;
 import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
 import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
 import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
@@ -105,7 +118,7 @@ public class JcaPGPKeyConverter
 
     public JcaPGPKeyConverter setProvider(Provider provider)
     {
-        this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+        this.helper = OperatorUtils.createProviderHelper(provider);
 
         return this;
     }
@@ -225,7 +238,7 @@ public class JcaPGPKeyConverter
         }
 
         PublicKeyPacket pubPk = privKey.getPublicKeyPacket();
-        BCPGKey privPk = privKey.getPrivateKeyDataPacket();
+        final BCPGKey privPk = privKey.getPrivateKeyDataPacket();
 
         try
         {
@@ -373,6 +386,81 @@ public class JcaPGPKeyConverter
                     }
                 });
             }
+            // RFC 9980 ML-DSA + EdDSA composites: EdDSA secret key || 32 octet ML-DSA seed
+            case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+            case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+            {
+                final int algorithm = pubPk.getAlgorithm();
+                final MLDSACompositeSecretBCPGKey compPriv = (MLDSACompositeSecretBCPGKey)privPk;
+                final ASN1ObjectIdentifier eddsaOid = algorithm == PublicKeyAlgorithmTags.MLDSA65_Ed25519
+                    ? EdECObjectIdentifiers.id_Ed25519 : EdECObjectIdentifiers.id_Ed448;
+                PrivateKey eddsaPriv = implGeneratePrivate("EdDSA", new Operation()
+                {
+                    @Override
+                    public PrivateKeyInfo getPrivateKeyInfos()
+                        throws IOException
+                    {
+                        return getPrivateKeyInfo(eddsaOid, compPriv.getEdDSASecretKey());
+                    }
+                });
+                PrivateKey mldsaPriv = implGeneratePrivate("ML-DSA", new Operation()
+                {
+                    @Override
+                    public PrivateKeyInfo getPrivateKeyInfos()
+                        throws IOException
+                    {
+                        // RFC 9881 sec. 6: the seed-only PKCS#8 form, seed [0] OCTET STRING
+                        return getSeedPrivateKeyInfo(getMLDSAOid(algorithm), compPriv.getMLDSASeed());
+                    }
+                });
+                return new CompositePrivateKey(new PrivateKey[]{ eddsaPriv, mldsaPriv });
+            }
+            // RFC 9980 SLH-DSA: SK.seed || SK.prf || PK.seed || PK.root
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+            {
+                final int algorithm = pubPk.getAlgorithm();
+                return implGeneratePrivate("SLH-DSA", new Operation()
+                {
+                    @Override
+                    public PrivateKeyInfo getPrivateKeyInfos()
+                        throws IOException
+                    {
+                        // RFC 9814 sec. 6: the privateKey OCTET STRING holds the raw SLH-DSA secret key
+                        return new PrivateKeyInfo(new AlgorithmIdentifier(getSLHDSAOid(algorithm)), privPk.getEncoded());
+                    }
+                });
+            }
+            // RFC 9980 ML-KEM + ECDH composites: ECDH secret key || 64 octet ML-KEM seed d || z
+            case PublicKeyAlgorithmTags.MLKEM768_X25519:
+            case PublicKeyAlgorithmTags.MLKEM1024_X448:
+            {
+                final int algorithm = pubPk.getAlgorithm();
+                final MLKEMCompositeSecretBCPGKey compPriv = (MLKEMCompositeSecretBCPGKey)privPk;
+                final ASN1ObjectIdentifier xdhOid = algorithm == PublicKeyAlgorithmTags.MLKEM768_X25519
+                    ? EdECObjectIdentifiers.id_X25519 : EdECObjectIdentifiers.id_X448;
+                PrivateKey xdhPriv = implGeneratePrivate("XDH", new Operation()
+                {
+                    @Override
+                    public PrivateKeyInfo getPrivateKeyInfos()
+                        throws IOException
+                    {
+                        return getPrivateKeyInfo(xdhOid, compPriv.getECDHSecretKey());
+                    }
+                });
+                PrivateKey mlkemPriv = implGeneratePrivate("ML-KEM", new Operation()
+                {
+                    @Override
+                    public PrivateKeyInfo getPrivateKeyInfos()
+                        throws IOException
+                    {
+                        // RFC 9935 sec. 6: the seed-only PKCS#8 form, seed [0] OCTET STRING
+                        return getSeedPrivateKeyInfo(getMLKEMOid(algorithm), compPriv.getMLKEMSeed());
+                    }
+                });
+                return new CompositePrivateKey(new PrivateKey[]{ xdhPriv, mlkemPriv });
+            }
             case PublicKeyAlgorithmTags.ELGAMAL_ENCRYPT:
             case PublicKeyAlgorithmTags.ELGAMAL_GENERAL:
             {
@@ -486,6 +574,37 @@ public class JcaPGPKeyConverter
             {
                 return implGetPublicKeyX509(publicPk.getKey().getEncoded(),
                     0, EdECObjectIdentifiers.id_Ed448, "EdDSA");
+            }
+            // RFC 9980 ML-DSA + EdDSA composites
+            case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+            case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+            {
+                int algorithm = publicPk.getAlgorithm();
+                MLDSACompositePublicBCPGKey compK = (MLDSACompositePublicBCPGKey)publicPk.getKey();
+                PublicKey eddsaPub = implGetPublicKeyX509(compK.getEdDSAPublicKey(), 0,
+                    algorithm == PublicKeyAlgorithmTags.MLDSA65_Ed25519 ? EdECObjectIdentifiers.id_Ed25519 : EdECObjectIdentifiers.id_Ed448,
+                    "EdDSA");
+                PublicKey mldsaPub = implGetPublicKeyX509(compK.getMLDSAPublicKey(), 0, getMLDSAOid(algorithm), "ML-DSA");
+                return new CompositePublicKey(new PublicKey[]{ eddsaPub, mldsaPub });
+            }
+            // RFC 9980 SLH-DSA
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+            case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+            {
+                return implGetPublicKeyX509(publicPk.getKey().getEncoded(), 0, getSLHDSAOid(publicPk.getAlgorithm()), "SLH-DSA");
+            }
+            // RFC 9980 ML-KEM + ECDH composites
+            case PublicKeyAlgorithmTags.MLKEM768_X25519:
+            case PublicKeyAlgorithmTags.MLKEM1024_X448:
+            {
+                int algorithm = publicPk.getAlgorithm();
+                MLKEMCompositePublicBCPGKey compK = (MLKEMCompositePublicBCPGKey)publicPk.getKey();
+                PublicKey xdhPub = implGetPublicKeyX509(compK.getECDHPublicKey(), 0,
+                    algorithm == PublicKeyAlgorithmTags.MLKEM768_X25519 ? EdECObjectIdentifiers.id_X25519 : EdECObjectIdentifiers.id_X448,
+                    "XDH");
+                PublicKey mlkemPub = implGetPublicKeyX509(compK.getMLKEMPublicKey(), 0, getMLKEMOid(algorithm), "ML-KEM");
+                return new CompositePublicKey(new PublicKey[]{ xdhPub, mlkemPub });
             }
             case PublicKeyAlgorithmTags.ELGAMAL_ENCRYPT:
             case PublicKeyAlgorithmTags.ELGAMAL_GENERAL:
@@ -656,6 +775,41 @@ public class JcaPGPKeyConverter
                     return new Ed448SecretBCPGKey(key);
                 }
             });
+        }
+        // RFC 9980 ML-DSA + EdDSA composites
+        case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+        case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+        {
+            int algorithm = pub.getAlgorithm();
+            List<PrivateKey> components = getCompositeComponents(algorithm, privKey);
+            byte[] eddsaEnc = getRawPrivateKey(components.get(0), true);
+            byte[] seed = getPQCSeed(components.get(1), MLDSACompositeSecretBCPGKey.MLDSA_SEED_LENGTH);
+            if (seed == null)
+            {
+                throw new PGPException("ML-DSA private key carries no seed - RFC 9980 sec. 5.3.2.2 stores the secret key in seed format only");
+            }
+            return new MLDSACompositeSecretBCPGKey(algorithm, eddsaEnc, seed);
+        }
+        // RFC 9980 SLH-DSA
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+        {
+            return new SLHDSASecretBCPGKey(pub.getAlgorithm(), getRawPrivateKey(privKey, false));
+        }
+        // RFC 9980 ML-KEM + ECDH composites
+        case PublicKeyAlgorithmTags.MLKEM768_X25519:
+        case PublicKeyAlgorithmTags.MLKEM1024_X448:
+        {
+            int algorithm = pub.getAlgorithm();
+            List<PrivateKey> components = getCompositeComponents(algorithm, privKey);
+            byte[] xdhEnc = getRawPrivateKey(components.get(0), true);
+            byte[] seed = getPQCSeed(components.get(1), MLKEMCompositeSecretBCPGKey.MLKEM_SEED_LENGTH);
+            if (seed == null)
+            {
+                throw new PGPException("ML-KEM private key carries no seed - RFC 9980 sec. 4.3.2.2 stores the secret key in seed format only");
+            }
+            return new MLKEMCompositeSecretBCPGKey(algorithm, xdhEnc, seed);
         }
         case PublicKeyAlgorithmTags.ELGAMAL_ENCRYPT:
         case PublicKeyAlgorithmTags.ELGAMAL_GENERAL:
@@ -868,6 +1022,27 @@ public class JcaPGPKeyConverter
             });
         }
 
+        // RFC 9980 ML-DSA + EdDSA composites
+        case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+        case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+        {
+            List<PublicKey> components = getCompositeComponents(algorithm, pubKey);
+            return new MLDSACompositePublicBCPGKey(algorithm, getRawPublicKey(components.get(0)), getRawPublicKey(components.get(1)));
+        }
+        // RFC 9980 SLH-DSA
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+        {
+            return new SLHDSAPublicBCPGKey(algorithm, getRawPublicKey(pubKey));
+        }
+        // RFC 9980 ML-KEM + ECDH composites
+        case PublicKeyAlgorithmTags.MLKEM768_X25519:
+        case PublicKeyAlgorithmTags.MLKEM1024_X448:
+        {
+            List<PublicKey> components = getCompositeComponents(algorithm, pubKey);
+            return new MLKEMCompositePublicBCPGKey(algorithm, getRawPublicKey(components.get(0)), getRawPublicKey(components.get(1)));
+        }
         default:
             throw new PGPException("unknown public key algorithm encountered: " + algorithm);
         }
@@ -903,7 +1078,6 @@ public class JcaPGPKeyConverter
         return null;
     }
 
-    @FunctionalInterface
     private interface BCPGKeyOperation
     {
         BCPGKey getBCPGKey(byte[] key);
@@ -929,7 +1103,6 @@ public class JcaPGPKeyConverter
         return pointEnc;
     }
 
-    @FunctionalInterface
     private interface Operation
     {
         PrivateKeyInfo getPrivateKeyInfos()
@@ -1011,5 +1184,164 @@ public class JcaPGPKeyConverter
             throw new IllegalArgumentException("Invalid " + name + "448 public key");
         }
         return implGetPublicKeyX509(pEnc, 1, algorithm, keyAlgorithm);
+    }
+
+    /**
+     * Return the two component keys of an RFC 9980 composite key, in OpenPGP order (traditional, post-quantum).
+     */
+    private static List<PublicKey> getCompositeComponents(int algorithm, PublicKey key)
+        throws PGPException
+    {
+        if (!(key instanceof CompositePublicKey) || ((CompositePublicKey)key).getPublicKeys().size() != 2)
+        {
+            throw new PGPException("public key algorithm " + algorithm + " requires a CompositePublicKey of two component keys");
+        }
+        return ((CompositePublicKey)key).getPublicKeys();
+    }
+
+    private static List<PrivateKey> getCompositeComponents(int algorithm, PrivateKey key)
+        throws PGPException
+    {
+        if (!(key instanceof CompositePrivateKey) || ((CompositePrivateKey)key).getPrivateKeys().size() != 2)
+        {
+            throw new PGPException("public key algorithm " + algorithm + " requires a CompositePrivateKey of two component keys");
+        }
+        return ((CompositePrivateKey)key).getPrivateKeys();
+    }
+
+    /**
+     * The raw key bytes of a key whose SubjectPublicKeyInfo carries them as the bit string: EdDSA, XDH,
+     * ML-DSA, ML-KEM and SLH-DSA all do.
+     */
+    private static byte[] getRawPublicKey(PublicKey key)
+    {
+        return SubjectPublicKeyInfo.getInstance(key.getEncoded()).getPublicKeyData().getOctets();
+    }
+
+    /**
+     * The raw key bytes of a private key from its PKCS#8 encoding: for EdDSA and XDH the privateKey OCTET
+     * STRING wraps a CurvePrivateKey OCTET STRING (RFC 8410 sec. 7), for SLH-DSA it holds the secret key
+     * bytes themselves (RFC 9814 sec. 6).
+     */
+    private static byte[] getRawPrivateKey(PrivateKey key, boolean curvePrivateKey)
+        throws PGPException
+    {
+        try
+        {
+            PrivateKeyInfo info = PrivateKeyInfo.getInstance(key.getEncoded());
+            if (curvePrivateKey)
+            {
+                return ASN1OctetString.getInstance(info.parsePrivateKey()).getOctets();
+            }
+            return info.getPrivateKey().getOctets();
+        }
+        catch (Exception e)
+        {
+            throw new PGPException("cannot extract private key: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * The seed of an ML-DSA or ML-KEM private key, from the BC key interfaces when available and otherwise
+     * from the PKCS#8 encoding of RFC 9881 / RFC 9935: seed [0] OCTET STRING, or the seed element of the
+     * "both" SEQUENCE. Null for an expanded-key-only encoding, which RFC 9980 cannot carry.
+     */
+    private static byte[] getPQCSeed(PrivateKey key, int seedLength)
+        throws PGPException
+    {
+        // Upstream first asks BouncyCastle's own key interfaces. The provider's keys are not those, so the
+        // seed always comes from the PKCS#8 encoding.
+        byte[] seed = null;
+        try
+        {
+            PrivateKeyInfo info = PrivateKeyInfo.getInstance(key.getEncoded());
+            ASN1Encodable priv = info.parsePrivateKey();
+            if (priv instanceof ASN1TaggedObject)
+            {
+                seed = ASN1OctetString.getInstance((ASN1TaggedObject)priv, false).getOctets();
+            }
+            else if (priv instanceof ASN1Sequence)
+            {
+                seed = ASN1OctetString.getInstance(((ASN1Sequence)priv).getObjectAt(0)).getOctets();
+            }
+        }
+        catch (Exception e)
+        {
+            throw new PGPException("cannot extract private key seed: " + e.getMessage(), e);
+        }
+        if (seed != null && seed.length != seedLength)
+        {
+            throw new PGPException("unexpected private key seed length: " + seed.length);
+        }
+        return seed;
+    }
+
+    /**
+     * The seed-only PKCS#8 form of an ML-DSA (RFC 9881 sec. 6) or ML-KEM (RFC 9935 sec. 6) private key:
+     * privateKey is the DER of seed [0] OCTET STRING.
+     */
+    private static PrivateKeyInfo getSeedPrivateKeyInfo(ASN1ObjectIdentifier algorithm, byte[] seed)
+        throws IOException
+    {
+        return new PrivateKeyInfo(new AlgorithmIdentifier(algorithm), new DERTaggedObject(false, 0, new DEROctetString(seed)));
+    }
+
+    /**
+     * Return the object identifier of the ML-DSA parameter set of an RFC 9980 ML-DSA + EdDSA composite algorithm.
+     *
+     * @param algorithm {@link PublicKeyAlgorithmTags#MLDSA65_Ed25519} or {@link PublicKeyAlgorithmTags#MLDSA87_Ed448}
+     * @return id-ml-dsa-65 or id-ml-dsa-87
+     */
+    public static ASN1ObjectIdentifier getMLDSAOid(int algorithm)
+    {
+        switch (algorithm)
+        {
+        case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+            return NISTObjectIdentifiers.id_ml_dsa_65;
+        case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+            return NISTObjectIdentifiers.id_ml_dsa_87;
+        default:
+            throw new IllegalArgumentException("not an ML-DSA composite algorithm: " + algorithm);
+        }
+    }
+
+    /**
+     * Return the object identifier of the SLH-DSA parameter set of an RFC 9980 SLH-DSA algorithm.
+     *
+     * @param algorithm one of the SLH-DSA code points
+     * @return id-slh-dsa-shake-128s, -128f or -256s
+     */
+    public static ASN1ObjectIdentifier getSLHDSAOid(int algorithm)
+    {
+        switch (algorithm)
+        {
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+            return NISTObjectIdentifiers.id_slh_dsa_shake_128s;
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+            return NISTObjectIdentifiers.id_slh_dsa_shake_128f;
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+            return NISTObjectIdentifiers.id_slh_dsa_shake_256s;
+        default:
+            throw new IllegalArgumentException("not an SLH-DSA algorithm: " + algorithm);
+        }
+    }
+
+    /**
+     * Return the object identifier of the ML-KEM parameter set of an RFC 9980 ML-KEM + ECDH composite algorithm.
+     *
+     * @param algorithm {@link PublicKeyAlgorithmTags#MLKEM768_X25519} or {@link PublicKeyAlgorithmTags#MLKEM1024_X448}
+     * @return id-alg-ml-kem-768 or id-alg-ml-kem-1024
+     */
+    public static ASN1ObjectIdentifier getMLKEMOid(int algorithm)
+    {
+        switch (algorithm)
+        {
+        case PublicKeyAlgorithmTags.MLKEM768_X25519:
+            return NISTObjectIdentifiers.id_alg_ml_kem_768;
+        case PublicKeyAlgorithmTags.MLKEM1024_X448:
+            return NISTObjectIdentifiers.id_alg_ml_kem_1024;
+        default:
+            throw new IllegalArgumentException("not an ML-KEM composite algorithm: " + algorithm);
+        }
     }
 }

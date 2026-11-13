@@ -5,9 +5,9 @@ import java.io.IOException;
 import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1Integer;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1OctetStringParser;
 import org.bouncycastle.jsl.asn1.ASN1SequenceParser;
 import org.bouncycastle.jsl.asn1.ASN1SetParser;
-import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObjectParser;
 import org.bouncycastle.jsl.asn1.ASN1Util;
 import org.bouncycastle.jsl.asn1.BERTags;
@@ -47,6 +47,10 @@ public class AuthenticatedDataParser
     {
         this.seq = seq;
         this.version = ASN1Integer.getInstance(seq.readObject());
+        if (version == null)
+        {
+            throw new IOException("AuthenticatedData missing version");
+        }
     }
 
     public ASN1Integer getVersion()
@@ -91,6 +95,11 @@ public class AuthenticatedDataParser
             nextObject = seq.readObject();
         }
 
+        if (nextObject == null)
+        {
+            throw new IOException("AuthenticatedData missing recipientInfos");
+        }
+
         ASN1SetParser recipientInfos = (ASN1SetParser)nextObject;
         nextObject = null;
         return recipientInfos;
@@ -104,14 +113,14 @@ public class AuthenticatedDataParser
             nextObject = seq.readObject();
         }
 
-        if (nextObject != null)
+        if (nextObject == null)
         {
-            ASN1SequenceParser o = (ASN1SequenceParser)nextObject;
-            nextObject = null;
-            return AlgorithmIdentifier.getInstance(o.toASN1Primitive());
+            throw new IOException("AuthenticatedData missing macAlgorithm");
         }
 
-        return null;
+        ASN1SequenceParser o = (ASN1SequenceParser)nextObject;
+        nextObject = null;
+        return AlgorithmIdentifier.getInstance(o.toASN1Primitive());
     }
 
     public AlgorithmIdentifier getDigestAlgorithm()
@@ -124,9 +133,15 @@ public class AuthenticatedDataParser
 
         if (nextObject instanceof ASN1TaggedObjectParser)
         {
-            AlgorithmIdentifier obj = AlgorithmIdentifier.getInstance((ASN1TaggedObject)nextObject.toASN1Primitive(), false);
+            ASN1TaggedObjectParser o = (ASN1TaggedObjectParser)nextObject;
+            if (!o.hasContextTag(1))
+            {
+                throw new IOException("AuthenticatedData has an unexpected tag where digestAlgorithm [1] is expected: "
+                    + ASN1Util.getTagText(o));
+            }
+            ASN1SequenceParser digestAlgorithm = (ASN1SequenceParser)o.parseBaseUniversal(false, BERTags.SEQUENCE);
             nextObject = null;
-            return obj;
+            return AlgorithmIdentifier.getInstance(digestAlgorithm.getLoadedObject());
         }
 
         return null;
@@ -140,14 +155,14 @@ public class AuthenticatedDataParser
             nextObject = seq.readObject();
         }
 
-        if (nextObject != null)
+        if (nextObject == null)
         {
-            ASN1SequenceParser o = (ASN1SequenceParser)nextObject;
-            nextObject = null;
-            return new ContentInfoParser(o);
+            throw new IOException("AuthenticatedData missing encapContentInfo");
         }
 
-        return null;
+        ASN1SequenceParser o = (ASN1SequenceParser)nextObject;
+        nextObject = null;
+        return new ContentInfoParser(o);
     }
 
     public ASN1SetParser getAuthAttrs()
@@ -161,6 +176,10 @@ public class AuthenticatedDataParser
         if (nextObject instanceof ASN1TaggedObjectParser)
         {
             ASN1TaggedObjectParser o = (ASN1TaggedObjectParser)nextObject;
+            if (!o.hasContextTag(2))
+            {
+                throw new IOException("AuthenticatedData has an unexpected element after encapContentInfo");
+            }
             nextObject = null;
             return (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 2, false, BERTags.SET_OF);
         }
@@ -176,10 +195,20 @@ public class AuthenticatedDataParser
             nextObject = seq.readObject();
         }
 
+        if (nextObject == null)
+        {
+            throw new IOException("AuthenticatedData missing mac");
+        }
+
         ASN1Encodable o = nextObject;
         nextObject = null;
 
-        return ASN1OctetString.getInstance(o.toASN1Primitive());
+        if (!(o instanceof ASN1OctetStringParser))
+        {
+            throw new IOException("AuthenticatedData mac is not an OCTET STRING");
+        }
+
+        return ASN1OctetString.getInstance(((ASN1OctetStringParser)o).getLoadedObject());
     }
 
     public ASN1SetParser getUnauthAttrs()
@@ -192,9 +221,14 @@ public class AuthenticatedDataParser
 
         if (nextObject != null)
         {
-            ASN1TaggedObject o = (ASN1TaggedObject)nextObject;
+            if (!(nextObject instanceof ASN1TaggedObjectParser) || !((ASN1TaggedObjectParser)nextObject).hasContextTag(3))
+            {
+                throw new IOException("AuthenticatedData has an unexpected element after mac");
+            }
+            ASN1TaggedObjectParser o = (ASN1TaggedObjectParser)nextObject;
             nextObject = null;
-            return (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 3, false, BERTags.SET_OF);
+            ASN1SetParser unauthAttrs = (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 3, false, BERTags.SET_OF);
+            return new EndCheckedSetParser(unauthAttrs, seq, "AuthenticatedData", "unauthAttrs");
         }
 
         return null;

@@ -159,8 +159,11 @@ public class PGPPublicKeyEncryptedData
 
     private boolean containsChecksum(int algorithm)
     {
+        // X25519, X448 and the RFC 9980 ML-KEM composites wrap the bare session key, without checksum
         return algorithm != PublicKeyAlgorithmTags.X25519 &&
-                algorithm != PublicKeyAlgorithmTags.X448;
+                algorithm != PublicKeyAlgorithmTags.X448 &&
+                algorithm != PublicKeyAlgorithmTags.MLKEM768_X25519 &&
+                algorithm != PublicKeyAlgorithmTags.MLKEM1024_X448;
     }
 
     /**
@@ -234,7 +237,7 @@ public class PGPPublicKeyEncryptedData
                     {
                         PGPDataDecryptor dataDecryptor = dataDecryptorFactory.createDataDecryptor(true, sessionKey.getAlgorithm(), sessionKey.getKey());
 
-                        processSymmetricEncIntegrityPacketDataStream(true, dataDecryptor, encIn, true);
+                        processSymmetricEncIntegrityPacketDataStream(true, dataDecryptor, encIn, false);
                     }
                     // SEIPD v2 (OpenPGP v6 AEAD)
                     else
@@ -249,7 +252,7 @@ public class PGPPublicKeyEncryptedData
                 {
                     PGPDataDecryptor dataDecryptor = dataDecryptorFactory.createDataDecryptor(false, sessionKey.getAlgorithm(), sessionKey.getKey());
 
-                    processSymmetricEncIntegrityPacketDataStream(false, dataDecryptor, encIn, true);
+                    processSymmetricEncIntegrityPacketDataStream(false, dataDecryptor, encIn, false);
                 }
 
                 //

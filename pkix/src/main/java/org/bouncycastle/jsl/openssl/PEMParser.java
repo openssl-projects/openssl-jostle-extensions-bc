@@ -273,10 +273,27 @@ public class PEMParser
             {
                 ASN1Sequence seq = ASN1Sequence.getInstance(encoding);
 
-                org.bouncycastle.jsl.asn1.sec.ECPrivateKey pKey = org.bouncycastle.jsl.asn1.sec.ECPrivateKey.getInstance(seq);
-                AlgorithmIdentifier algId = new AlgorithmIdentifier(X9ObjectIdentifiers.id_ecPublicKey,
-                    pKey.getParametersObject());
-                PrivateKeyInfo privInfo = new PrivateKeyInfo(algId, pKey);
+                org.bouncycastle.jsl.asn1.sec.ECPrivateKey pKey;
+                AlgorithmIdentifier algId;
+                PrivateKeyInfo privInfo;
+                if (seq.size() > 1 && seq.getObjectAt(1) instanceof ASN1Sequence)
+                {
+                    // some encoders put a PKCS#8 PrivateKeyInfo under the EC PRIVATE KEY header
+                    privInfo = PrivateKeyInfo.getInstance(seq);
+                    algId = privInfo.getPrivateKeyAlgorithm();
+                    if (!X9ObjectIdentifiers.id_ecPublicKey.equals(algId.getAlgorithm()))
+                    {
+                        throw new PEMException("EC PRIVATE KEY block carries a " + algId.getAlgorithm() + " key");
+                    }
+                    pKey = org.bouncycastle.jsl.asn1.sec.ECPrivateKey.getInstance(privInfo.parsePrivateKey());
+                }
+                else
+                {
+                    pKey = org.bouncycastle.jsl.asn1.sec.ECPrivateKey.getInstance(seq);
+                    algId = new AlgorithmIdentifier(X9ObjectIdentifiers.id_ecPublicKey,
+                        pKey.getParametersObject());
+                    privInfo = new PrivateKeyInfo(algId, pKey);
+                }
 
                 ASN1BitString publicKey = pKey.getPublicKey();
                 SubjectPublicKeyInfo pubInfo = null;
@@ -402,7 +419,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing certificate: " + e.toString(), e);
             }
         }
     }
@@ -411,9 +428,9 @@ public class PEMParser
         implements PemObjectParser
     {
         /**
-         * Reads in a X509Certificate.
+         * Reads in a X509TrustedCertificateBlock.
          *
-         * @return the X509Certificate
+         * @return the X509TrustedCertificateBlock
          * @throws java.io.IOException if an I/O error occured
          */
         public Object parseObject(PemObject obj)
@@ -425,7 +442,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing trusted certificate: " + e.toString(), e);
             }
         }
     }
@@ -436,7 +453,7 @@ public class PEMParser
         /**
          * Reads in a X509CRL.
          *
-         * @return the X509Certificate
+         * @return the X509CRL
          * @throws java.io.IOException if an I/O error occured
          */
         public Object parseObject(PemObject obj)
@@ -448,7 +465,7 @@ public class PEMParser
             }
             catch (Exception e)
             {
-                throw new PEMException("problem parsing cert: " + e.toString(), e);
+                throw new PEMException("problem parsing CRL: " + e.toString(), e);
             }
         }
     }

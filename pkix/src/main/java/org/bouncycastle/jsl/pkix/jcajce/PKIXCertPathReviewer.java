@@ -2,6 +2,7 @@ package org.bouncycastle.jsl.pkix.jcajce;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
@@ -47,13 +48,19 @@ import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
+import org.bouncycastle.jsl.asn1.ASN1String;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.x500.AttributeTypeAndValue;
+import org.bouncycastle.jsl.asn1.x500.RDN;
+import org.bouncycastle.jsl.asn1.x500.X500Name;
+import org.bouncycastle.jsl.asn1.x500.style.BCStyle;
 import org.bouncycastle.jsl.asn1.x509.AccessDescription;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.asn1.x509.AuthorityInformationAccess;
 import org.bouncycastle.jsl.asn1.x509.AuthorityKeyIdentifier;
 import org.bouncycastle.jsl.asn1.x509.BasicConstraints;
 import org.bouncycastle.jsl.asn1.x509.CRLDistPoint;
+import org.bouncycastle.jsl.asn1.x509.CRLValidatorException;
 import org.bouncycastle.jsl.asn1.x509.DistributionPoint;
 import org.bouncycastle.jsl.asn1.x509.DistributionPointName;
 import org.bouncycastle.jsl.asn1.x509.Extension;
@@ -62,6 +69,7 @@ import org.bouncycastle.jsl.asn1.x509.GeneralNames;
 import org.bouncycastle.jsl.asn1.x509.GeneralSubtree;
 import org.bouncycastle.jsl.asn1.x509.IssuingDistributionPoint;
 import org.bouncycastle.jsl.asn1.x509.NameConstraints;
+import org.bouncycastle.jsl.asn1.x509.PKIXCRLValidator;
 import org.bouncycastle.jsl.asn1.x509.PolicyInformation;
 import org.bouncycastle.jsl.asn1.x509.qualified.Iso4217CurrencyCode;
 import org.bouncycastle.jsl.asn1.x509.qualified.MonetaryValue;
@@ -94,6 +102,9 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
     private static final String AUTH_INFO_ACCESS = Extension.authorityInfoAccess.getId();
     
     private static final String RESOURCE_NAME = "org.bouncycastle.jsl.pkix.CertPathReviewerMessages";
+
+    // connect and read timeout, in milliseconds, for a CRL distribution point fetch - as CrlCache
+    private static final int CRL_FETCH_TIMEOUT = 15000;
     
     private static final int NAME_CHECK_MAX = (1 << 10);
 
@@ -117,6 +128,9 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
     protected List[] notifications;
     protected List[] errors;
     protected TrustAnchor trustAnchor;
+
+    // true while the certificate being checked chains, by verified signatures, to a trust anchor
+    private boolean issuerChainVerified;
     protected PublicKey subjectPublicKey;
     protected PolicyNode policyTree;
     
@@ -437,6 +451,37 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         // (b)  and (c)
         PKIXNameConstraintValidator nameConstraintValidator = new PKIXNameConstraintValidator();
 
+        // RFC 5280 sec. 6.1.2 (b) and (c): start from the trust anchor's name constraints, if it carries any
+        if (trustAnchor != null && trustAnchor.getNameConstraints() != null)
+        {
+            try
+            {
+                NameConstraints anchorNc = NameConstraints.getInstance(
+                    ASN1Primitive.fromByteArray(trustAnchor.getNameConstraints()));
+
+                GeneralSubtree[] permitted = anchorNc.getPermittedSubtrees();
+                if (permitted != null)
+                {
+                    nameConstraintValidator.intersectPermittedSubtree(permitted);
+                }
+
+                GeneralSubtree[] excluded = anchorNc.getExcludedSubtrees();
+                if (excluded != null)
+                {
+                    for (int c = 0; c != excluded.length; c++)
+                    {
+                        nameConstraintValidator.addExcludedSubtree(excluded[c]);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                ErrorBundle msg = createErrorBundle("CertPathReviewer.ncTrustAnchorError");
+                addError(msg);
+                return;
+            }
+        }
+
         // RFC 5280 sec. 4.2.1.10: the name constraints extension MUST be used
         // only in a CA certificate. The path validation algorithm never
         // processes the extension on a non-CA certificate, so its presence
@@ -526,10 +571,39 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                         throw new CertPathReviewerException(msg,ae,certPath,index);
                     }
 
-                    /*
-                     * TODO RFC3280CertPathUtilities (used in CertPath validation) has a block checking name
-                     * constraints against subject's EmailAddress, which could be worth adding here too.
-                     */
+                    // RFC 5280 sec. 4.2.1.10: rfc822Name constraints apply to subject DN emailAddress values (SAN or not, as processCertBC)
+                    String[] subjectEmails = extractEmailAddresses(X500Name.getInstance(dns));
+                    if (subjectEmails.length > NAME_CHECK_MAX)
+                    {
+                        ErrorBundle msg = createErrorBundle("CertPathReviewer.ncSubjectNameError",
+                                new Object[] {new UntrustedInput(principal)});
+                        throw new CertPathReviewerException(msg,certPath,index);
+                    }
+
+                    for (int j = 0; j < subjectEmails.length; j++)
+                    {
+                        try
+                        {
+                            nameConstraintValidator.checkPermittedEmail(subjectEmails[j]);
+                        }
+                        catch (PKIXNameConstraintValidatorException cpve)
+                        {
+                            ErrorBundle msg = createErrorBundle("CertPathReviewer.notPermittedEmail",
+                                    new Object[] {new UntrustedInput(subjectEmails[j])});
+                            throw new CertPathReviewerException(msg,cpve,certPath,index);
+                        }
+
+                        try
+                        {
+                            nameConstraintValidator.checkExcludedEmail(subjectEmails[j]);
+                        }
+                        catch (PKIXNameConstraintValidatorException cpve)
+                        {
+                            ErrorBundle msg = createErrorBundle("CertPathReviewer.excludedEmail",
+                                    new Object[] {new UntrustedInput(subjectEmails[j])});
+                            throw new CertPathReviewerException(msg,cpve,certPath,index);
+                        }
+                    }
 
                     if (altName != null)
                     {
@@ -836,6 +910,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
 
         X509Certificate cert = null;
         int i;
+        boolean chainVerified = (workingPublicKey != null);
 
         for (int index = certs.size() - 1; index >= 0; index--)
         {
@@ -861,6 +936,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                 }
                 catch (GeneralSecurityException ex)
                 {
+                    chainVerified = false;
                     ErrorBundle msg = createErrorBundle("CertPathReviewer.signatureNotVerified",
                             new Object[] {ex.getMessage(),ex,ex.getClass().getName()}); 
                     addError(msg,index);
@@ -868,6 +944,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             }
             else if (isSelfIssued(cert))
             {
+                chainVerified = false;
                 try
                 {
                     CertPathValidatorUtilities.verifyX509Certificate(cert, cert.getPublicKey(),
@@ -884,6 +961,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             }
             else
             {
+                chainVerified = false;
                 ErrorBundle msg = createErrorBundle("CertPathReviewer.NoIssuerPublicKey");
                 // if there is an authority key extension add the serial and issuer of the missing certificate
                 byte[] akiExtValue = cert.getExtensionValue(Extension.authorityKeyIdentifier.getId());
@@ -985,6 +1063,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                 
                 // TODO also support Netscapes revocation-url and/or OCSP instead of CRLs for revocation checking
                 // check CRLs
+                issuerChainVerified = chainVerified && noErrorsAbove(index);
                 try 
                 {
                     checkRevocation(pkixParams, cert, validDate, sign, workingPublicKey, crlDistPointUrls, ocspUrls, index);
@@ -1071,6 +1150,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             }
             catch (CertPathValidatorException ex)
             {
+                chainVerified = false;
                 ErrorBundle msg = createErrorBundle("CertPathReviewer.pubKeyError");
                 addError(msg,index);
                 workingAlgId = null;
@@ -1080,6 +1160,32 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
 
         trustAnchor = trust;
         subjectPublicKey = workingPublicKey;
+    }
+
+    /**
+     * True when no error has been recorded against the trust anchor or against any certificate
+     * above the one at index, so that a CRL distribution point fetch for it stands on an issuer
+     * chain that passed every check made so far - the CA, key usage, issuer name, validity and
+     * revocation checks as well as the signatures the chainVerified flag in checkSignatures
+     * tracks. An end entity certificate from a trusted CA, or a revoked or expired intermediate,
+     * otherwise serves as the issuer of a certificate whose distribution points are fetched.
+     */
+    private boolean noErrorsAbove(int index)
+    {
+        if (!errors[0].isEmpty())
+        {
+            return false;
+        }
+
+        for (int i = index + 2; i < errors.length; i++)
+        {
+            if (!errors[i].isEmpty())
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void checkPolicy()
@@ -2082,6 +2188,29 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         checkCRLs(paramsPKIX, cert, validDate, sign, workingPublicKey, crlDistPointUrls, index);
     }
     
+    /**
+     * RFC 5280 sec. 5.2: true if the CRL carries a critical extension other than the issuing distribution
+     * point and the delta CRL indicator, the two the CertPathValidator processes.
+     */
+    private static boolean hasUnsupportedCriticalExtension(X509CRL crl)
+    {
+        Set criticalExtensions = crl.getCriticalExtensionOIDs();
+        if (criticalExtensions == null)
+        {
+            return false;
+        }
+
+        for (Iterator it = criticalExtensions.iterator(); it.hasNext();)
+        {
+            String oid = (String)it.next();
+            if (!ISSUING_DISTRIBUTION_POINT.equals(oid) && !DELTA_CRL_INDICATOR.equals(oid))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected void checkCRLs(
             PKIXParameters paramsPKIX,
             X509Certificate cert,
@@ -2106,6 +2235,8 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         }
     
         crlselect.setCertificateChecking(cert);
+        // a delta CRL lists only the changes since its base, so it cannot decide a status alone (RFC 5280 sec. 5.2.4)
+        crlselect.setCompleteCRLEnabled(true);
     
         Iterator crl_iter;
         try 
@@ -2140,6 +2271,8 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             crl_iter = new ArrayList().iterator();
         }
 
+        DistributionPoint[] distPoints = getDistributionPoints(cert);
+
         boolean validCrlFound = false;
         X509CRL crl = null;
         while (crl_iter.hasNext())
@@ -2152,6 +2285,13 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
 
             if (nextUpdate == null || validDate.before(nextUpdate))
             {
+                // a CRL only says something about this certificate if its scope covers it - keep looking otherwise, rather than taking an out of scope CRL from the issuer as proof of non-revocation.
+                if (!isScopedToCertificate(crl, distPoints, cert))
+                {
+                    crl = null;
+                    continue;
+                }
+
                 validCrlFound = true;
                 ErrorBundle msg = createErrorBundle( "CertPathReviewer.localValidCRL", arguments);
                 addNotification(msg,index);
@@ -2163,8 +2303,27 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         }
 
         // if no valid crl was found in the CertStores try to get one from a
-        // crl distribution point
-        if (!validCrlFound)
+        // crl distribution point - only when CRLDP fetching is enabled and the issuer chain verified
+        boolean fetchOnline = false;
+        if (!validCrlFound && !crlDistPointUrls.isEmpty())
+        {
+            if (!Properties.isOverrideSet(Properties.X509_ENABLE_CRLDP))
+            {
+                ErrorBundle msg = createErrorBundle("CertPathReviewer.crlDistPtFetchDisabled");
+                addNotification(msg, index);
+            }
+            else if (!issuerChainVerified)
+            {
+                ErrorBundle msg = createErrorBundle("CertPathReviewer.crlDistPtFetchUntrusted");
+                addNotification(msg, index);
+            }
+            else
+            {
+                fetchOnline = true;
+            }
+        }
+
+        if (fetchOnline)
         {
             X500Principal certIssuer = cert.getIssuerX500Principal();
 
@@ -2186,6 +2345,23 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                             ErrorBundle msg = createErrorBundle( "CertPathReviewer.onlineCRLWrongCA",
                                 new Object[]{ new UntrustedInput(crlIssuer.getName()), new UntrustedInput(certIssuer.getName()),
                                     new UntrustedUrlInput(location) });
+                            addNotification(msg,index);
+                            continue;
+                        }
+
+                        // the same RFC 5280 sec. 6.3.3 scope rules as the local store path: a CRL from the right issuer that does not cover this certificate's distribution point, or only some of the reasons, says nothing about it.
+                        if (!isScopedToCertificate(onlineCRL, distPoints, cert))
+                        {
+                            ErrorBundle msg = createErrorBundle( "CertPathReviewer.onlineCRLOutOfScope",
+                                new Object[]{ new UntrustedUrlInput(location) });
+                            addNotification(msg,index);
+                            continue;
+                        }
+
+                        if (onlineCRL.getExtensionValue(DELTA_CRL_INDICATOR) != null)
+                        {
+                            ErrorBundle msg = createErrorBundle("CertPathReviewer.onlineDeltaCRL",
+                                new Object[]{ new UntrustedUrlInput(location) });
                             addNotification(msg,index);
                             continue;
                         }
@@ -2258,7 +2434,22 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                 throw new CertPathReviewerException(msg);
             }
 
-            crl_entry = crl.getRevokedCertificate(cert.getSerialNumber());
+            // RFC 5280 sec. 5.2: a CRL with a critical extension that cannot be processed must not be used
+            if (hasUnsupportedCriticalExtension(crl))
+            {
+                ErrorBundle msg = createErrorBundle("CertPathReviewer.crlUnsupportedCriticalExt");
+                throw new CertPathReviewerException(msg);
+            }
+
+            try
+            {
+                crl_entry = getIndirectCRLEntry(crl, cert.getSerialNumber(), getEncodedIssuerPrincipal(cert));
+            }
+            catch (AnnotatedException ae)
+            {
+                ErrorBundle msg = createErrorBundle("CertPathReviewer.crlIssuerException");
+                throw new CertPathReviewerException(msg,ae);
+            }
             if (crl_entry != null)
             {
                 String reason = null;
@@ -2281,16 +2472,16 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                         // out-of-range or out-of-int value falls through to the crlReasons[7] "unknown"
                         // below rather than throwing AIOOBE / ArithmeticException from intValueExact().
                         BigInteger rc = reasonCode.getValue();
-                        if (rc.signum() >= 0 && rc.compareTo(BigInteger.valueOf(crlReasons.length)) < 0)
+                        if (rc.signum() >= 0 && rc.compareTo(BigInteger.valueOf(CertStatus.crlReasons.length)) < 0)
                         {
-                            reason = crlReasons[rc.intValue()];
+                            reason = CertStatus.crlReasons[rc.intValue()];
                         }
                     }
                 }
 
                 if (reason == null)
                 {
-                    reason = crlReasons[7]; // unknown
+                    reason = CertStatus.crlReasons[7]; // unknown
                 }
 
                 // i18n reason
@@ -2339,82 +2530,6 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                 ErrorBundle msg = createErrorBundle("CertPathReviewer.distrPtExtError");
                 throw new CertPathReviewerException(msg);
             }
-            ASN1Primitive dci;
-            try
-            {
-                dci = getExtensionValue(crl, DELTA_CRL_INDICATOR);
-            }
-            catch (AnnotatedException ae)
-            {
-                ErrorBundle msg = createErrorBundle("CertPathReviewer.deltaCrlExtError");
-                throw new CertPathReviewerException(msg);
-            }
-
-            if (dci != null)
-            {
-                X509CRLStoreSelector baseSelect = new X509CRLStoreSelector();
-
-                try
-                {
-                    baseSelect.addIssuerName(getIssuerPrincipal(crl).getEncoded());
-                }
-                catch (IOException e)
-                {
-                    ErrorBundle msg = createErrorBundle("CertPathReviewer.crlIssuerException");
-                    throw new CertPathReviewerException(msg,e);
-                }
-
-                baseSelect.setMinCRLNumber(((ASN1Integer)dci).getPositiveValue());
-                try
-                {
-                    baseSelect.setMaxCRLNumber(((ASN1Integer)getExtensionValue(crl, CRL_NUMBER)).getPositiveValue().subtract(BigInteger.valueOf(1)));
-                }
-                catch (AnnotatedException ae)
-                {
-                    ErrorBundle msg = createErrorBundle("CertPathReviewer.crlNbrExtError");
-                    throw new CertPathReviewerException(msg,ae);
-                }
-                
-                boolean  foundBase = false;
-                Iterator it;
-                try 
-                {
-                    it  = PKIXCRLUtil.findCRLs(baseSelect, paramsPKIX).iterator();
-                }
-                catch (AnnotatedException ae)
-                {
-                    ErrorBundle msg = createErrorBundle("CertPathReviewer.crlExtractionError");
-                    throw new CertPathReviewerException(msg,ae);
-                }
-                while (it.hasNext())
-                {
-                    X509CRL base = (X509CRL)it.next();
-
-                    ASN1Primitive baseIdp;
-                    try
-                    {
-                        baseIdp = getExtensionValue(base, ISSUING_DISTRIBUTION_POINT);
-                    }
-                    catch (AnnotatedException ae)
-                    {
-                        ErrorBundle msg = createErrorBundle("CertPathReviewer.distrPtExtError");
-                        throw new CertPathReviewerException(msg,ae);
-                    }
-
-                    if (Objects.areEqual(idp, baseIdp))
-                    {
-                        foundBase = true;
-                        break;
-                    }
-                }
-
-                if (!foundBase)
-                {
-                    ErrorBundle msg = createErrorBundle("CertPathReviewer.noBaseCRL");
-                    throw new CertPathReviewerException(msg);
-                }
-            }
-
             if (idp != null)
             {
                 IssuingDistributionPoint    p = IssuingDistributionPoint.getInstance(idp);
@@ -2456,6 +2571,117 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         }
     }
     
+    /**
+     * The distribution points a CRL may be scoped to for the passed in certificate: the ones in the
+     * certificate's CRL distribution points extension, followed by a distribution point naming the
+     * certificate issuer, which is what the cert path validation engine falls back to for a CRL the
+     * certificate's own distribution points do not name.
+     */
+    private DistributionPoint[] getDistributionPoints(X509Certificate cert)
+    {
+        List dps = new ArrayList();
+
+        try
+        {
+            ASN1Primitive ext = getExtensionValue(cert, CRL_DIST_POINTS);
+            if (ext != null)
+            {
+                DistributionPoint[] points = CRLDistPoint.getInstance(ext).getDistributionPoints();
+                for (int i = 0; i != points.length; i++)
+                {
+                    dps.add(points[i]);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            // a distribution points extension which will not decode is reported by the caller
+        }
+
+        try
+        {
+            X500Name issuer = X500Name.getInstance(getEncodedIssuerPrincipal(cert).getEncoded());
+
+            dps.add(new DistributionPoint(new DistributionPointName(0,
+                new GeneralNames(new GeneralName(GeneralName.directoryName, issuer))), null, null));
+        }
+        catch (Exception e)
+        {
+            // an issuer which will not re-encode leaves the certificate's own distribution points
+        }
+
+        return (DistributionPoint[])dps.toArray(new DistributionPoint[dps.size()]);
+    }
+
+    /**
+     * Whether the passed in CRL is in scope for the certificate under test, applying the RFC 5280
+     * sec. 6.3.3 (b)(2)(i) distribution point name match and the sec. 6.3.3 (d) reasons intersection
+     * that {@link PKIXCRLValidator} implements for the cert path validation engine. A CRL carrying no
+     * issuing distribution point is in scope for everything its issuer issues; one whose scope cannot
+     * be read, or which covers only some revocation reasons, is not evidence about this certificate.
+     */
+    private boolean isScopedToCertificate(X509CRL crl, DistributionPoint[] distPoints, X509Certificate cert)
+    {
+        IssuingDistributionPoint idp;
+        try
+        {
+            ASN1Primitive idpExt = getExtensionValue(crl, ISSUING_DISTRIBUTION_POINT);
+            if (idpExt == null)
+            {
+                return true;
+            }
+
+            idp = IssuingDistributionPoint.getInstance(idpExt);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+
+        for (int i = 0; i != distPoints.length; i++)
+        {
+            if (isScopedToDistributionPoint(idp, distPoints[i], crl, cert))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isScopedToDistributionPoint(IssuingDistributionPoint idp, DistributionPoint dp, X509CRL crl,
+        X509Certificate cert)
+    {
+        try
+        {
+            X500Name crlIssuer = null;
+            if (PKIXCRLValidator.requiresCRLIssuer(idp))
+            {
+                crlIssuer = X500Name.getInstance(crl.getIssuerX500Principal().getEncoded());
+            }
+
+            X500Name certIssuer = null;
+            if (PKIXCRLValidator.requiresCertificateIssuer(idp, dp))
+            {
+                certIssuer = X500Name.getInstance(getEncodedIssuerPrincipal(cert).getEncoded());
+            }
+
+            // (b) (2) (i)
+            PKIXCRLValidator.checkDistributionPointName(idp, dp, crlIssuer, certIssuer);
+        }
+        catch (CRLValidatorException e)
+        {
+            return false;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+
+        // (d) - the reviewer takes its answer from a single CRL, so one covering only some of the reasons cannot settle the certificate's status on its own.
+        return PKIXCRLValidator.intersectReasons(idp, dp) == PKIXCRLValidator.ALL_REASONS;
+    }
+
     protected Vector getCRLDistUrls(CRLDistPoint crlDistPoints)
     {
         Vector urls = new Vector();
@@ -2465,8 +2691,9 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             DistributionPoint[] distPoints = crlDistPoints.getDistributionPoints();
             for (int i = 0; i < distPoints.length; i++)
             {
+                // RFC 5280 sec. 4.2.1.13 allows a distribution point carrying only cRLIssuer
                 DistributionPointName dp_name = distPoints[i].getDistributionPoint();
-                if (dp_name.getType() == DistributionPointName.FULL_NAME)
+                if (dp_name != null && dp_name.getType() == DistributionPointName.FULL_NAME)
                 {
                     GeneralName[] generalNames = GeneralNames.getInstance(dp_name.getName()).getNames();
                     for (int j = 0; j < generalNames.length; j++)
@@ -2541,22 +2768,41 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             {
                 URLConnection conn = url.openConnection();
                 conn.setUseCaches(false);
-                // NOTE: URLConnection.setConnectTimeout and setReadTimeout are Java 5, and this
-                // class is still compiled by the jdk1.4 build, so no timeout can be set here.
+                conn.setConnectTimeout(CRL_FETCH_TIMEOUT);
+                conn.setReadTimeout(CRL_FETCH_TIMEOUT);
                 conn.setDoInput(true);
                 conn.connect();
 
-                if (conn instanceof HttpURLConnection)
+                try
                 {
-                    HttpURLConnection httpConn = (HttpURLConnection)conn;
-                    if (httpConn.getResponseCode() != HttpURLConnection.HTTP_OK)
+                    if (conn instanceof HttpURLConnection)
                     {
-                        throw new Exception(httpConn.getResponseMessage());
+                        HttpURLConnection httpConn = (HttpURLConnection)conn;
+                        if (httpConn.getResponseCode() != HttpURLConnection.HTTP_OK)
+                        {
+                            throw new Exception(httpConn.getResponseMessage());
+                        }
+                    }
+
+                    CertificateFactory cf = createCertificateFactory();
+                    InputStream crlIn = conn.getInputStream();
+                    try
+                    {
+                        result = (X509CRL) cf.generateCRL(crlIn);
+                    }
+                    finally
+                    {
+                        crlIn.close();
                     }
                 }
-
-                CertificateFactory cf = createCertificateFactory();
-                result = (X509CRL) cf.generateCRL(conn.getInputStream());
+                finally
+                {
+                    // the socket is held until the connection is disconnected, whichever way the fetch ended
+                    if (conn instanceof HttpURLConnection)
+                    {
+                        ((HttpURLConnection)conn).disconnect();
+                    }
+                }
             }
         }
         catch (Exception e)
@@ -2656,5 +2902,27 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         return null == provider
             ? CertificateFactory.getInstance("X.509")
             : CertificateFactory.getInstance("X.509", provider);
+    }
+
+    /**
+     * Return every emailAddress value in the passed in DN, including those in multi-valued RDNs
+     * (mirrors RFC3280CertPathUtilities.extractEmailAddressesFromSubjectDN).
+     */
+    private static String[] extractEmailAddresses(X500Name dn)
+    {
+        List collected = new ArrayList();
+        RDN[] rdns = dn.getRDNs(BCStyle.EmailAddress);
+        for (int rI = 0; rI != rdns.length; rI++)
+        {
+            AttributeTypeAndValue[] tvs = rdns[rI].getTypesAndValues();
+            for (int tI = 0; tI != tvs.length; tI++)
+            {
+                if (BCStyle.EmailAddress.equals(tvs[tI].getType()) && tvs[tI].getValue() instanceof ASN1String)
+                {
+                    collected.add(((ASN1String)tvs[tI].getValue()).getString());
+                }
+            }
+        }
+        return (String[])collected.toArray(new String[collected.size()]);
     }
 }

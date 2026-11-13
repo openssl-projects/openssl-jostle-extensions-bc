@@ -39,7 +39,11 @@ public class Properties
     /**
      * The PBE iteration count the PKCS12 keystore uses when <b>writing</b> a file - the write-side
      * counterpart of {@link #PKCS12_MAX_IT_COUNT}, which only bounds what is accepted on load.
-     * Default 600,000 for the key and certificate encryption, twice that for the integrity MAC.
+     * Default 300,000 for the key and certificate encryption, twice that for the integrity MAC.
+     * <p>
+     * Note that Windows currently reports an error importing a PKCS#12 file whose key and
+     * certificate encryption uses a PBE iteration count of 600,000 or greater (it accepts 600,000
+     * for the MAC), so setting this property to 600,000 or more produces files Windows may refuse.
      * <p>
      * Lowering this trades password-cracking resistance for store/load time, and is only worth
      * doing where something other than the passphrase carries the confidentiality of the file -
@@ -56,6 +60,22 @@ public class Properties
     public static final String PKCS12_STORE_IT_COUNT = "org.bouncycastle.jsl.pkcs12.store_it_count";
 
     /**
+     * The PBKDF2 iteration count the PKCS12 keystore uses for an RFC 9579 PBMAC1 integrity MAC when
+     * <b>writing</b> a file. Default 65,536.
+     * <p>
+     * This is the count that sets the work factor of a PBMAC1 MAC - the MacData count beside it is
+     * unused ballast under RFC 9579 sec. 6 - and it is also the floor for a count taken from a file
+     * that has been loaded: a file keeps its own count where that is at least this, and is raised to
+     * it otherwise, since the file being re-stored is no longer the one its count was chosen for.
+     * Reading is unaffected: a file's MAC can only be verified with the count it was made with.
+     * <p>
+     * A value outside 1 .. 2,500,000 is ignored and the default used, so a mistyped property fails
+     * towards the default rather than towards a file with no work in its MAC. Read via
+     * {@link #asInteger(String, int)}.
+     */
+    public static final String PKCS12_PBKDF2_IT_COUNT = "org.bouncycastle.jsl.pkcs12.pbkdf2_it_count";
+
+    /**
      * Maximum time, in seconds, that a downloaded CRL is cached by the internal CrlCache used
      * by the CertPath validator and X509RevocationChecker. When set to a positive value, cached
      * entries are evicted whichever expires sooner: the configured TTL or the CRL's own
@@ -65,7 +85,8 @@ public class Properties
     public static final String X509_CRL_CACHE_TTL = "org.bouncycastle.jsl.x509.crl_cache_ttl";
 
     /**
-     * If set to "true", the BC CertPath validator and X509RevocationChecker will attempt to
+     * If set to "true", the BC CertPath validator, X509RevocationChecker and both PKIXCertPathReviewer
+     * classes (and so SignedMailValidator, which uses the pkix one by default) will attempt to
      * download CRLs over the network using URIs from each certificate's CRL Distribution Points
      * extension when no PKIXCRLStore on the supplied PKIXParameters can satisfy the lookup.
      * Default (unset / "false") preserves the legacy behaviour of relying entirely on caller-supplied
@@ -93,12 +114,24 @@ public class Properties
      * stapling fetch - will read from a responder.
      * A responder's Content-Length can narrow this but never widen it, so a responder declaring
      * (and sending) hundreds of megabytes is cut off rather than read into the heap. Default is
-     * 64K, which is far above any real response; a value of zero or less is ignored and the
-     * default used, so a mistyped value cannot turn the limit off. Exceeding the limit fails the
+     * 64K, which is far above any real response; a value that is not a positive integer is
+     * ignored and the default used, so a mistyped value cannot turn the limit off. Exceeding the limit fails the
      * OCSP check the same way an unreachable responder does, so a caller with CRLs configured
      * falls back to those.
      */
     public static final String OCSP_MAX_RESPONSE_SIZE = "org.bouncycastle.jsl.ocsp.max_response_size";
+
+    /**
+     * The oldest, in seconds before the validation date, an OCSP response stating no nextUpdate
+     * may be for the CertPath validator to accept it. RFC 6960 sec. 3.2 leaves it to the client to
+     * judge whether thisUpdate is sufficiently recent, and a response without a nextUpdate gives
+     * no other indication of how long it may be relied on. Default is 3600 (one hour, the default
+     * lifetime of a staple in SunJSSE's server cache, so a BCJSSE client accepts such a staple for
+     * as long as a SunJSSE server will offer it); narrow it, or widen it for responders that
+     * pre-produce responses without a nextUpdate. A value that is not a positive integer number of seconds is ignored and the
+     * default used, so a mistyped value cannot turn the bound off. A response that states a nextUpdate is judged by that instead.
+     */
+    public static final String OCSP_MAX_RESPONSE_AGE = "org.bouncycastle.jsl.ocsp.max_response_age";
 
     /**
      * The longest OpenPGP ASCII armor header line, in bytes, ArmoredInputStream will accumulate.
@@ -118,6 +151,38 @@ public class Properties
      * ignored and the default used.
      */
     public static final String OPENPGP_MAX_ARMOR_HEADERS = "org.bouncycastle.jsl.openpgp.max_armor_headers";
+
+    /**
+     * If set to "true", BCPGInputStream rejects a packet whose first Partial Body Length is less than 512 octets, which
+     * RFC 9580 sec. 4.2.1.4 forbids. Off by default, so that messages written by earlier versions of BC with a
+     * partial-body buffer shorter than 512 bytes (which BCPGOutputStream no longer produces) can still be read.
+     */
+    public static final String OPENPGP_STRICT_PARTIAL_BODY_LENGTH = "org.bouncycastle.jsl.openpgp.strict_partial_body_length";
+
+    /**
+     * If set to "true" (the default), verifying an OpenPGP text signature (type 0x01) over data
+     * containing a bare CR - one not followed by a LF - also accepts the signature over the form
+     * releases before 1.87 hashed, in which that CR was hashed as CR LF. The signature is first
+     * checked against the current form, which hashes a bare CR unaltered as GnuPG, GopenPGP,
+     * OpenPGP.js, RNP and most other implementations do (github #2553); signatures are always
+     * generated in the current form. The legacy form is also what Sequoia 2.x generates. Set it
+     * to "false" to accept only the current form, at the cost of no longer verifying text
+     * signatures earlier BC releases (or Sequoia) made over such data. Read via
+     * {@link #isOverrideSet(String, boolean)}.
+     */
+    public static final String OPENPGP_TEXT_SIG_ALLOW_LEGACY_CR = "org.bouncycastle.jsl.openpgp.text_sig_allow_legacy_cr";
+
+    /**
+     * If set to "true", ArmoredInputStream treats a CR not followed by a LF as a line ending in the
+     * clear text of every cleartext signed message, as releases before 1.87 did: a dash after one is
+     * un-escaped or starts the signature armor, and the CR is returned as LF. Off by default, where
+     * only LF and CR LF end a line and a bare CR is ordinary text, as in RFC 9580 sec. 7 and GnuPG
+     * (github #2553); a message whose armor lines themselves end in a bare CR is read the old way
+     * whatever this is set to. Set it to read cleartext signed messages that an earlier release wrote
+     * over CR-only text under LF or CR LF armor. ArmoredOutputStream always writes the current form.
+     * Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String OPENPGP_CSF_BARE_CR_LINE_ENDING = "org.bouncycastle.jsl.openpgp.csf_bare_cr_line_ending";
 
     /**
      * If set to "true", the BC PKCS#12 KeyStore will additionally accept (on load only)
@@ -160,6 +225,31 @@ public class Properties
      * a matching SAN identifier.
      */
     public static final String JSSE_HOSTNAME_CHECK_CN_FALLBACK = "org.bouncycastle.jsl.jsse.hostname_check_cn_fallback";
+
+    /**
+     * Boolean system property setting the BCJSSE default for TLS 1.3 server named group selection,
+     * read per SSLContext initialisation. Set to "true", connections of that context default to the
+     * server choosing the key share group by its own named group order rather than the client's;
+     * the default ("false" / unset) follows the client's order. A value set on a connection's
+     * BCSSLParameters (useNamedGroupsOrder) still takes precedence over this default.
+     */
+    public static final String JSSE_USE_NAMED_GROUPS_ORDER = "org.bouncycastle.jsl.jsse.useNamedGroupsOrder";
+
+    /**
+     * Boolean system property, read per SSLContext initialisation: set to "true", a BCJSSE SSLEngine of that
+     * context in client mode hands out its handshake work through getDelegatedTask() - one task for the
+     * initial ClientHello and one for each inbound handshake message, each performing that message's
+     * processing and any response flight - rather than doing it inside wrap() and unwrap(). Default false.
+     */
+    public static final String JSSE_CLIENT_ENABLE_DELEGATED_TASKS = "org.bouncycastle.jsl.jsse.client.enableDelegatedTasks";
+
+    /**
+     * Boolean system property, read per SSLContext initialisation: set to "true", a BCJSSE SSLEngine of that
+     * context in server mode hands out the work for each inbound handshake message through
+     * getDelegatedTask() rather than doing it inside wrap() and unwrap(). Default false. See
+     * {@link #JSSE_CLIENT_ENABLE_DELEGATED_TASKS}.
+     */
+    public static final String JSSE_SERVER_ENABLE_DELEGATED_TASKS = "org.bouncycastle.jsl.jsse.server.enableDelegatedTasks";
 
     /**
      * Effective bits-of-entropy assumed per real bit when the BC DRBG provider seeds for
@@ -212,6 +302,12 @@ public class Properties
      * "Lenient" here means legal-but-non-DER formatting. Structurally malformed content is a
      * separate matter, rejected on read since 1.85 - see {@link #ASN1_ALLOW_ZONELESS_UTCTIME}, which
      * makes an exception of exactly one such value.
+     * <p>
+     * Setting this property also admits, on read, a day the month it names does not have - the 30th
+     * of February and the like. Such a value is refused by default because the lenient calendar
+     * behind {@code getDate()} rolls it into the next month, so what is read back is not what the
+     * encoding carries; OpenSSL refuses it too, while the JDK's own {@code CertificateFactory} rolls
+     * it silently, which is the behaviour this property restores.
      */
     public static final String ASN1_ALLOW_NON_DER_TIME = "org.bouncycastle.jsl.asn1.allow_non_der_time";
 
@@ -268,6 +364,15 @@ public class Properties
     public static final String DH_MAX_SIZE = "org.bouncycastle.jsl.dh.max_size";
 
     /**
+     * When set to "true", DH and ElGamal key pair generation accepts a private value length l below twice the
+     * security strength of p (the 2s floor of SP 800-56A Rev3 sec. 5.6.1.1, with the Appendix D strengths of 152,
+     * 176 and 200 bits from 4096, 6144 and 8192-bit p, and SP 800-57's below 4096 bits). l can arrive with parameters taken
+     * from someone else, such as a recipient's public key, and a short l makes the generated private value easy to
+     * recover. Default false; keys that carry a short l can always be read and used.
+     */
+    public static final String DH_ALLOW_SHORT_PRIVATE_VALUE = "org.bouncycastle.jsl.dh.allow_short_private_value";
+
+    /**
      * Upper bound (in bits) on the prime modulus p accepted when validating an imported DSA
      * public key. As with {@link #DH_MAX_SIZE}, validation runs a modular exponentiation whose
      * cost grows super-linearly in the size of p, so an unbounded p from a crafted encoding is an
@@ -311,18 +416,54 @@ public class Properties
     public static final String BCFKS_STORE_IT_COUNT = "org.bouncycastle.jsl.bcfks.store_it_count";
 
     /**
-     * Upper bound on the PBKDF2 iteration count honoured when BC takes that count from an
+     * Write BCFKS scrypt parameters with the parallelization parameter p set equal to the block
+     * size r, whatever p the caller's {@code ScryptConfig} asked for. Default true.
+     * <p>
+     * Releases up to 1.86 derived a BCFKS scrypt key with r in place of p while encoding the
+     * configured p, so a store whose p differed from its r encoded parameters that did not derive
+     * its own keys: a conformant RFC 7914 reader failed it, and BC failed a conformant writer's.
+     * Derivation now follows RFC 7914, and with this property set the written p is made to agree
+     * with what those releases derive, so a store written here is both RFC 7914 correct and
+     * readable by 1.86 and earlier. Clearing it honours the configured p instead, at the cost of
+     * a store that those releases cannot read unless p already equals r.
+     * <p>
+     * Reading is unaffected either way - a store written by an earlier release is recognised and
+     * read on its own terms, and the encoded parallelization parameter is what a store written
+     * here is derived with whichever way this is set.
+     * <p>
+     * This is transitional: the default is intended to become false once enough of the installed
+     * base is writing parameters that describe themselves, at which point a configured p is
+     * honoured as written. Callers who need that now, and who do not need 1.86 and earlier to read
+     * what they write, can clear it already. Read via {@link #isOverrideSet(String, boolean)}.
+     */
+    public static final String BCFKS_SCRYPT_P_EQ_R = "org.bouncycastle.jsl.bcfks.scrypt_p_eq_r";
+
+    /**
+     * Upper bound on the PBE iteration count honoured when BC takes that count from an
      * untrusted encoding: decrypting a PBES2-protected PKCS#8 / PEM private key or PKCS#12
      * bag, verifying an RFC 9579 PBMAC1, unwrapping a CMS password recipient, and the raw JCA
      * PBKDF2 provider (both the {@code SecretKeyFactory} derivation and the
-     * {@code AlgorithmParameters} parse a {@code Cipher} performs for PBES2). In each case the
+     * {@code AlgorithmParameters} parse a {@code Cipher} performs for PBES2). It also bounds the
+     * legacy PBES1 (PKCS#5 scheme 1) and PKCS#12 PBE families in the raw JCA provider: the
+     * {@code AlgorithmParameters} parse, and every {@code Cipher}, {@code Mac} and
+     * {@code SecretKeyFactory} derivation, whichever provider decoded the parameters. In each case the
      * key-derivation parameters travel inside an unauthenticated container, so an unbounded
-     * count makes processing attacker-supplied material a CPU-exhaustion vector. Default
+     * count makes processing attacker-supplied material a CPU-exhaustion vector. The PKCS#12
+     * key store derives through the same provider code, so a {@link #PKCS12_MAX_IT_COUNT} raised
+     * above this bound needs this one raised too. Default
      * 10,000,000 - the count RFC 8018 sec. 4.2 names as possibly appropriate for especially
      * critical keys, so generous enough for deliberately strong settings. Read via
      * {@link #asInteger(String, int)}.
      */
     public static final String PBE_MAX_ITERATION_COUNT = "org.bouncycastle.jsl.pbe.max_iteration_count";
+
+    /**
+     * When set to "true", a password-only PBKDF2 key from a SecretKeyFactory used with a Cipher and a
+     * PBEParameterSpec is derived with HMAC-SHA512 whatever PRF the factory was for, as releases 1.80 to 1.86
+     * did, so data encrypted that way by those releases can still be decrypted. Default false: the key's own
+     * PRF is used, for example HMAC-SHA256 for PBKDF2WITHHMACSHA256 and HMAC-SHA1 for PBKDF2.
+     */
+    public static final String PBKDF2_LEGACY_CIPHER_PRF = "org.bouncycastle.jsl.pbkdf2.legacy_cipher_prf";
 
     /**
      * Upper bound, in bytes, on the scrypt working memory (~128 * N * r) honoured when decrypting
@@ -472,6 +613,107 @@ public class Properties
      * depth. Default 64; real mail nests two or three deep. Read via {@link #asInteger(String, int)}.
      */
     public static final String MIME_MAX_DEPTH = "org.bouncycastle.jsl.mime.max_depth";
+
+    /**
+     * Whether a CMS key agreement recipient, having failed to unwrap the content-encryption key with the
+     * RFC 5753 derivation, may retry with the raw user keying material as the KDF's SharedInfo.
+     * <p>
+     * RFC 5753 sec. 7.2 fixes the SharedInfo of the ECDH and 1-Pass ECMQV KDF as the DER-encoded
+     * ECC-CMS-SharedInfo, which carries the ukm (the addedukm for ECMQV) as its entityUInfo. Some senders
+     * feed the KDF the ukm itself instead, and BC did so for ECMQV from 1.53 to 1.86. Default (unset or
+     * "true") keeps that retry, so such messages remain readable; set to "false" to accept only the
+     * RFC 5753 form (and, for the SHA-1 KDF schemes, the RFC 3278 form that preceded it). Read via
+     * {@link #isOverrideSet(String, boolean)}.
+     */
+    public static final String CMS_ALLOW_LEGACY_KEYAGREE_KDF = "org.bouncycastle.jsl.cms.allow_legacy_keyagree_kdf";
+
+    /**
+     * The largest number of distinct digest algorithms BC will compute over the content of one
+     * SignedData message: the content digests CMSSignedData computes while its signers are verified
+     * (one per digest algorithm, shared by the signers using it) and the digest calculators
+     * CMSSignedDataParser runs over the content for the message's digestAlgorithms field. Each
+     * algorithm beyond the limit raises a CMSException. Unset or 0, the default, leaves the number
+     * unlimited, so the work a sender can demand is the content length times the algorithms it
+     * names. Read via {@link #asInteger(String, int)}.
+     */
+    public static final String CMS_MAX_DIGEST_ALGORITHMS = "org.bouncycastle.jsl.cms.max_digest_algorithms";
+
+    /**
+     * Whether a CMS AuthenticatedData message without authenticated attributes may carry a non-zero
+     * initialisation vector for a CBC-MAC (des-ede3-cbc or rc2-cbc as its macAlgorithm). Default false.
+     * <p>
+     * RFC 5652 sec. 9.2 makes the eContent octets alone the MAC input when authAttrs are absent, so
+     * nothing covers the IV carried in the macAlgorithm parameters: the same difference XORed into the
+     * IV and the first content block leaves a CBC-MAC unchanged. BC therefore writes these MACs with a
+     * zero IV and refuses a non-zero one when authenticated attributes are absent; set to "true" to read
+     * such messages, as written by BC before 1.87, accepting that their first eight content bytes are
+     * not protected. A message with authenticated attributes is unaffected, as those bind the content.
+     */
+    public static final String CMS_ALLOW_UNAUTHENTICATED_CBC_MAC_IV = "org.bouncycastle.jsl.cms.allow_unauthenticated_cbc_mac_iv";
+
+    /**
+     * The largest SEED, in bytes, accepted in an LMS or HSS private key encoding. Default 1024.
+     * <p>
+     * SP 800-208 sec. 6.1 makes SEED n bytes (24 or 32 for the defined parameter sets), so the default is far
+     * above any legitimate value; the bound keeps what a decoder commits to on the strength of a length field
+     * read from untrusted data finite. A value below the parameter set's n is ignored, since SEED may not be
+     * shorter than that.
+     */
+    public static final String LMS_MAX_SEED_LENGTH = "org.bouncycastle.jsl.lms.max_seed_length";
+
+    /**
+     * Whether a time-stamp token whose signing-time signed attribute disagrees with the genTime of its
+     * TSTInfo is accepted. Default false.
+     * <p>
+     * Both values are the TSA's own statement of when the token was produced, so a genuine RFC 3161 token
+     * carries either no signing-time attribute or one within the token's accuracy of genTime. The
+     * {@code TimeStampToken} constructor rejects a token in which the two differ by more than the accuracy
+     * plus a one minute allowance; set to "true" to accept such a token regardless. Read via
+     * {@link #isOverrideSet(String)}.
+     */
+    public static final String TSP_ALLOW_INCONSISTENT_SIGNING_TIME = "org.bouncycastle.jsl.tsp.allow_inconsistent_signing_time";
+
+    /**
+     * The hash algorithms {@code TimeStampToken.validate(SignerInformationVerifier)} accepts for a token's message
+     * imprint, as a comma separated list of digest names or dotted OIDs (for example "SHA-256,SHA-384,SHA-512").
+     * If not set, {@code TSPAlgorithms.ALLOWED} is used. Read via {@link #asKeySet(String)}.
+     */
+    public static final String TSP_ALLOWED_IMPRINT_ALGORITHMS = "org.bouncycastle.jsl.tsp.allowed_imprint_algorithms";
+
+    /**
+     * Selects the crypto services constraint {@code CryptoServicesRegistrar} installs at start-up when
+     * no other is set: "nist" for the NIST IR 8547 timetable on the quantum-vulnerable public-key
+     * algorithms (deprecated after 2030, disallowed after 2035 except for verification and decryption),
+     * "log" to log their use, "legacy" to refuse them for anything but verification and decryption,
+     * "reject" to refuse them outright, and "none" - the default when unset - for no constraint (see
+     * {@code QuantumVulnerableConstraint.forPolicy(String)}). A constraint installed this way can be
+     * replaced through {@code CryptoServicesRegistrar.setServicesConstraints()} only when
+     * {@link #CONSTRAINTS_ALLOW_OVERRIDE} is set. An unrecognised value is logged as a warning and
+     * no constraint is installed. Read once, via {@link #getPropertyValue(String)}, when
+     * {@code CryptoServicesRegistrar} is loaded.
+     */
+    public static final String CONSTRAINTS_QUANTUM_VULNERABLE = "org.bouncycastle.jsl.constraints.quantum_vulnerable";
+
+    /**
+     * Set to "true" to let {@code CryptoServicesRegistrar.setServicesConstraints()} replace a constraint
+     * installed from a property at start-up, such as {@link #CONSTRAINTS_QUANTUM_VULNERABLE}; otherwise
+     * such an attempt is logged and ignored. Read via {@link #isOverrideSet(String)}.
+     */
+    public static final String CONSTRAINTS_ALLOW_OVERRIDE = "org.bouncycastle.jsl.constraints.allow_override";
+
+    /**
+     * Set to "true" for a deployment that uses one SM9 encryption user key for both the SM9 KEM
+     * and SM9 public-key decryption. By default an SM9 encryption user key is held, within the
+     * copy of the library in use (one per class loader that loads it), to the first of the two it
+     * is used for, and refused for the other; the key is recognised by its value, so the same key
+     * rebuilt as a new object is held to the same use
+     * (see {@code SM9EncPrivateKeyParameters.recordUsage(int)}). Setting the property turns that
+     * check off, and nothing is recorded while it is set; a key declared for one of the two when
+     * it was derived or imported is still held to that one. Read via
+     * {@link #isOverrideSet(String, boolean)} each time a key is handed to the KEM or to
+     * decryption.
+     */
+    public static final String SM9_ALLOW_MULTI_USE = "org.bouncycastle.jsl.sm9.allow_multi_use";
 
     private Properties()
     {

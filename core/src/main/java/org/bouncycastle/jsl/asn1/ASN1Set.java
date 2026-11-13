@@ -112,7 +112,7 @@ public abstract class ASN1Set
      * return an ASN1Set from the given object.
      *
      * @param obj the object we want converted.
-     * @exception IllegalArgumentException if the object cannot be converted.
+     * @throws IllegalArgumentException if the object cannot be converted.
      * @return an ASN1Set instance, or null.
      */
     public static ASN1Set getInstance(Object obj)
@@ -158,7 +158,7 @@ public abstract class ASN1Set
      * @param taggedObject the tagged object.
      * @param declaredExplicit true if the object is meant to be explicitly tagged
      *          false otherwise.
-     * @exception IllegalArgumentException if the tagged object cannot
+     * @throws IllegalArgumentException if the tagged object cannot
      *          be converted.
      * @return an ASN1Set instance.
      */
@@ -174,7 +174,7 @@ public abstract class ASN1Set
 
     protected final ASN1Encodable[] elements;
 
-    protected ASN1Encodable[] sortedElements;
+    protected volatile ASN1Encodable[] sortedElements;
 
     protected ASN1Set()
     {
@@ -221,7 +221,7 @@ public abstract class ASN1Set
         }
 
         this.elements = tmp;
-        this.sortedElements = (doSort || tmp.length < 2) ? elements : null;
+        this.sortedElements = (doSort || tmp.length < 2) ? tmp : null;
     }
 
     /**
@@ -243,7 +243,7 @@ public abstract class ASN1Set
         }
 
         this.elements = tmp;
-        this.sortedElements = (doSort || tmp.length < 2) ? elements : null;
+        this.sortedElements = (doSort || tmp.length < 2) ? tmp : null;
     }
 
     ASN1Set(boolean isSorted, ASN1Encodable[] elements)
@@ -367,13 +367,21 @@ public abstract class ASN1Set
      */
     ASN1Primitive toDERObject()
     {
-        if (sortedElements == null)
+        ASN1Encodable[] sorted = sortedElements;
+        if (sorted == null)
         {
-            sortedElements = (ASN1Encodable[])elements.clone();
-            sort(sortedElements);
+            /*
+             * Sort a copy and only then publish it, through the volatile field so that its sorted
+             * contents are visible with it: another thread re-encoding this SET at the same
+             * time must find either no cached order or a complete one, never one part way through
+             * the sort.
+             */
+            sorted = (ASN1Encodable[])elements.clone();
+            sort(sorted);
+            sortedElements = sorted;
         }
 
-        return new DERSet(true, sortedElements);
+        return new DERSet(true, sorted);
     }
 
     /**

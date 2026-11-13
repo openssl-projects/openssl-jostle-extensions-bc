@@ -1,0 +1,110 @@
+package org.bouncycastle.jsl.cert.c509;
+
+import java.io.IOException;
+import java.io.OutputStream;
+
+import org.bouncycastle.jsl.asn1.x500.X500Name;
+import org.bouncycastle.jsl.asn1.x509.Extensions;
+import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jsl.cbor.c509.C509CertificationRequest;
+import org.bouncycastle.jsl.cbor.c509.C509ConversionOptions;
+import org.bouncycastle.jsl.cbor.c509.C509PrivateKeyPossessionStatement;
+import org.bouncycastle.jsl.cert.CertIOException;
+import org.bouncycastle.jsl.operator.ContentSigner;
+
+/**
+ * Builder for natively signed C509 certification requests (type 2, Section 4 of
+ * draft-ietf-cose-cbor-encoded-cert-21). The proof-of-possession signature is
+ * computed directly over the TBSCertificationRequest CBOR sequence.
+ */
+public class C509CertificationRequestBuilder
+{
+    private final X500Name subject;
+    private final SubjectPublicKeyInfo subjectPublicKeyInfo;
+
+    private Extensions extensionRequest;
+    private String challengePassword;
+    private C509PrivateKeyPossessionStatement possessionStatement;
+    private C509ConversionOptions options = C509ConversionOptions.DEFAULT;
+
+    /**
+     * Base constructor.
+     *
+     * @param subject the X.500 name defining the certificate subject.
+     * @param subjectPublicKeyInfo the info structure for the public key to be
+     *        associated with the request.
+     */
+    public C509CertificationRequestBuilder(X500Name subject, SubjectPublicKeyInfo subjectPublicKeyInfo)
+    {
+        this.subject = subject;
+        this.subjectPublicKeyInfo = subjectPublicKeyInfo;
+    }
+
+    /**
+     * Set the extensions requested of the CA (the RFC 2985 extensionRequest
+     * attribute).
+     */
+    public C509CertificationRequestBuilder setExtensionRequest(Extensions extensionRequest)
+    {
+        this.extensionRequest = extensionRequest;
+        return this;
+    }
+
+    /**
+     * Set a challenge password (the RFC 2985 challengePassword attribute). In a
+     * natively signed request the password is always carried as a UTF-8 text string.
+     */
+    public C509CertificationRequestBuilder setChallengePassword(String challengePassword)
+    {
+        this.challengePassword = challengePassword;
+        return this;
+    }
+
+    /**
+     * Set a private key possession statement (the RFC 9883
+     * privateKeyPossessionStatement attribute, Section 4.3.3): the signature
+     * certificate whose holder vouches for possession of the key-establishment
+     * private key the request is for.
+     */
+    public C509CertificationRequestBuilder setPrivateKeyPossessionStatement(
+        C509PrivateKeyPossessionStatement possessionStatement)
+    {
+        this.possessionStatement = possessionStatement;
+        return this;
+    }
+
+    /**
+     * Set the conversion options - point compression in particular.
+     */
+    public C509CertificationRequestBuilder setConversionOptions(C509ConversionOptions options)
+    {
+        this.options = options;
+        return this;
+    }
+
+    /**
+     * Generate the certification request, signing the TBSCertificationRequest CBOR
+     * sequence with the given signer.
+     */
+    public C509CertificationRequestHolder build(ContentSigner signer)
+        throws CertIOException
+    {
+        try
+        {
+            byte[] tbsRequest = C509CertificationRequest.createTBSCertificationRequest(
+                C509CertificationRequest.TYPE_NATIVE, signer.getAlgorithmIdentifier(), subject,
+                subjectPublicKeyInfo, extensionRequest, challengePassword, possessionStatement, options);
+
+            OutputStream sOut = signer.getOutputStream();
+            sOut.write(tbsRequest);
+            sOut.close();
+
+            return new C509CertificationRequestHolder(
+                C509CertificationRequest.create(tbsRequest, signer.getSignature(), options));
+        }
+        catch (IOException e)
+        {
+            throw new CertIOException("cannot produce certification request: " + e.getMessage(), e);
+        }
+    }
+}

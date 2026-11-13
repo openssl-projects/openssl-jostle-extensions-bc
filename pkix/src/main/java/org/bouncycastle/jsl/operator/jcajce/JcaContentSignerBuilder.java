@@ -1,6 +1,5 @@
 package org.bouncycastle.jsl.operator.jcajce;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
@@ -14,41 +13,29 @@ import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PSSParameterSpec;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
-import org.bouncycastle.jsl.asn1.ASN1EncodableVector;
-import org.bouncycastle.jsl.asn1.ASN1Encoding;
-import org.bouncycastle.jsl.asn1.ASN1Integer;
 import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.jsl.asn1.ASN1Sequence;
-import org.bouncycastle.jsl.asn1.DERBitString;
+import org.bouncycastle.jsl.asn1.ASN1Integer;
 import org.bouncycastle.jsl.asn1.DERNull;
-import org.bouncycastle.jsl.asn1.DERSequence;
-import org.bouncycastle.jsl.asn1.edec.EdECObjectIdentifiers;
-import org.bouncycastle.jsl.asn1.misc.MiscObjectIdentifiers;
-import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jsl.asn1.pkcs.RSASSAPSSparams;
+import org.bouncycastle.jsl.asn1.edec.EdECObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jsl.jcajce.io.OutputStreamFactory;
-import org.bouncycastle.jsl.jcajce.spec.CompositeAlgorithmSpec;
-import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
-import org.bouncycastle.jsl.jcajce.util.NamedJcaJceHelper;
-import org.bouncycastle.jsl.jcajce.util.ProviderJcaJceHelper;
 import org.bouncycastle.jsl.operator.ContentSigner;
+import org.bouncycastle.jsl.operator.FixedLengthContentSigner;
 import org.bouncycastle.jsl.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.jsl.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.jsl.operator.DigestAlgorithmIdentifierFinder;
 import org.bouncycastle.jsl.operator.ExtendedContentSigner;
-import org.bouncycastle.jsl.operator.FixedLengthContentSigner;
 import org.bouncycastle.jsl.operator.OperatorCreationException;
 import org.bouncycastle.jsl.operator.RuntimeOperatorException;
-import org.bouncycastle.jsl.operator.SignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.jsl.util.Strings;
-import org.bouncycastle.jsl.util.io.TeeOutputStream;
+import org.openssl.jostle.jcajce.spec.ContextParameterSpec;
 
 /**
  * General builder class for ContentSigner operators based on the JCA.
@@ -73,7 +60,7 @@ public class JcaContentSignerBuilder
     private final String signatureAlgorithm;
     private final AlgorithmIdentifier signatureDigestAlgorithm;
 
-    private OperatorHelper helper = new OperatorHelper(new DefaultJcaJceHelper());
+    private OperatorHelper helper = OperatorUtils.createDefaultHelper();
     private SecureRandom random;
 
     private AlgorithmIdentifier sigAlgId;
@@ -133,6 +120,21 @@ public class JcaContentSignerBuilder
         this.signatureDigestAlgorithm = signatureDigestAlgorithmID;
     }
     
+    /**
+     * Constructor which includes a parameter spec for the signature algorithm.
+     * <p>
+     * A {@link PSSParameterSpec} selects RSASSA-PSS and its parameters are recorded in the signature
+     * algorithm identifier. A {@link ContextParameterSpec} supplies the context string of an ML-DSA,
+     * SLH-DSA or composite signature (FIPS 204 and FIPS 205); it is passed to the Signature object
+     * and does not appear in the algorithm identifier, so a verifier must be given the same context
+     * out of band (see {@link JcaContentVerifierProviderBuilder#setContext(ContextParameterSpec)}).
+     * The X.509 and CMS profiles for these algorithms (RFC 9881, RFC 9882, RFC 9814) require the
+     * empty context, which is what a builder with no spec produces.
+     * </p>
+     *
+     * @param signatureAlgorithm the signature algorithm we perform.
+     * @param sigParamSpec the parameter spec for the signature algorithm.
+     */
     public JcaContentSignerBuilder(String signatureAlgorithm, AlgorithmParameterSpec sigParamSpec)
     {
         this(signatureAlgorithm, sigParamSpec, null);
@@ -151,13 +153,10 @@ public class JcaContentSignerBuilder
             this.sigAlgId = new AlgorithmIdentifier(
                                     PKCSObjectIdentifiers.id_RSASSA_PSS, createPSSParams(pssSpec));
         }
-        else if (sigParamSpec instanceof CompositeAlgorithmSpec)
+        else if (sigParamSpec instanceof ContextParameterSpec)
         {
-            CompositeAlgorithmSpec compSpec = (CompositeAlgorithmSpec)sigParamSpec;
-
-            this.sigAlgSpec = compSpec;
-            this.sigAlgId = new AlgorithmIdentifier(
-                                    MiscObjectIdentifiers.id_alg_composite, createCompParams(compSpec));
+            // the context is not part of the algorithm identifier - that is worked out from the key as usual.
+            this.sigAlgSpec = sigParamSpec;
         }
         else
         {
@@ -168,14 +167,14 @@ public class JcaContentSignerBuilder
 
     public JcaContentSignerBuilder setProvider(Provider provider)
     {
-        this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+        this.helper = OperatorUtils.createProviderHelper(provider);
 
         return this;
     }
 
     public JcaContentSignerBuilder setProvider(String providerName)
     {
-        this.helper = new OperatorHelper(new NamedJcaJceHelper(providerName));
+        this.helper = OperatorUtils.createNamedHelper(providerName);
 
         return this;
     }
@@ -192,7 +191,7 @@ public class JcaContentSignerBuilder
     {
         try
         {
-            if (sigAlgSpec == null)
+            if (sigAlgId == null)
             {
                 this.sigAlgId = getSigAlgId(privateKey);
             }
@@ -207,6 +206,11 @@ public class JcaContentSignerBuilder
             else
             {
                 sig.initSign(privateKey);
+            }
+
+            if (sigAlgSpec instanceof ContextParameterSpec)
+            {
+                sig.setParameter(sigAlgSpec);
             }
 
             final ContentSigner contentSigner = new ContentSigner()
@@ -376,33 +380,5 @@ public class JcaContentSignerBuilder
             new AlgorithmIdentifier(PKCSObjectIdentifiers.id_mgf1, mgfDig),
             ASN1Integer.valueOf(pssSpec.getSaltLength()),
             ASN1Integer.valueOf(pssSpec.getTrailerField()));
-    }
-
-    private static ASN1Sequence createCompParams(CompositeAlgorithmSpec compSpec)
-    {
-        SignatureAlgorithmIdentifierFinder algFinder = new DefaultSignatureAlgorithmIdentifierFinder();
-        ASN1EncodableVector v = new ASN1EncodableVector();
-
-        List<String> algorithmNames = compSpec.getAlgorithmNames();
-        List<AlgorithmParameterSpec> algorithmSpecs = compSpec.getParameterSpecs();
-
-        for (int i = 0; i != algorithmNames.size(); i++)
-        {
-            AlgorithmParameterSpec sigSpec = algorithmSpecs.get(i);
-            if (sigSpec == null)
-            {
-                v.add(algFinder.find(algorithmNames.get(i)));
-            }
-            else if (sigSpec instanceof PSSParameterSpec)
-            {
-                v.add(new AlgorithmIdentifier(PKCSObjectIdentifiers.id_RSASSA_PSS, createPSSParams((PSSParameterSpec)sigSpec)));
-            }
-            else
-            {
-                throw new IllegalArgumentException("unrecognized parameterSpec");
-            }
-        }
-
-        return new DERSequence(v);
     }
 }

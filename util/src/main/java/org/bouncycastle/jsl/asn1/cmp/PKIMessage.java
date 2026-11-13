@@ -9,6 +9,7 @@ import org.bouncycastle.jsl.asn1.ASN1Object;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 
@@ -31,6 +32,11 @@ public class PKIMessage
 
     private PKIMessage(ASN1Sequence seq)
     {
+        if (seq.size() < 1)
+        {
+            throw new IllegalArgumentException("PKIMessage missing PKIHeader structure");
+        }
+
         Enumeration en = seq.getObjects();
 
         header = PKIHeader.getInstance(en.nextElement());
@@ -46,17 +52,28 @@ public class PKIMessage
         ASN1BitString protection = null;
         ASN1Sequence extraCerts = null;
 
+        // protection [0] and extraCerts [1], each optional, in that order
+        int lastTagNo = -1;
         while (en.hasMoreElements())
         {
-            ASN1TaggedObject tObj = (ASN1TaggedObject)en.nextElement();
+            ASN1TaggedObject tObj = ASN1TaggedObject.getInstance(en.nextElement(), BERTags.CONTEXT_SPECIFIC);
+            if (tObj.getTagNo() <= lastTagNo)
+            {
+                throw new IllegalArgumentException("tag [" + tObj.getTagNo() + "] repeated or out of order");
+            }
+            lastTagNo = tObj.getTagNo();
 
             if (tObj.getTagNo() == 0)
             {
                 protection = ASN1BitString.getInstance(tObj, true);
             }
-            else
+            else if (tObj.getTagNo() == 1)
             {
                 extraCerts = ASN1Sequence.getInstance(tObj, true);
+            }
+            else
+            {
+                throw new IllegalArgumentException("unknown tag: " + tObj.getTagNo());
             }
         }
 

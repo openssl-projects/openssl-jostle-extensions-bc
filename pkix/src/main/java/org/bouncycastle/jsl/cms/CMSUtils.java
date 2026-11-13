@@ -6,21 +6,23 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1EncodableVector;
 import org.bouncycastle.jsl.asn1.ASN1Encoding;
 import org.bouncycastle.jsl.asn1.ASN1InputStream;
 import org.bouncycastle.jsl.asn1.ASN1Integer;
+import org.bouncycastle.jsl.asn1.ASN1Null;
 import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
-import org.bouncycastle.jsl.asn1.ASN1SequenceParser;
 import org.bouncycastle.jsl.asn1.ASN1Set;
 import org.bouncycastle.jsl.asn1.ASN1SetParser;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
@@ -31,6 +33,7 @@ import org.bouncycastle.jsl.asn1.DERNull;
 import org.bouncycastle.jsl.asn1.DERSet;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.DLSet;
+import org.bouncycastle.jsl.asn1.InMemoryRepresentable;
 import org.bouncycastle.jsl.asn1.bsi.BSIObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.cms.AttributeTable;
 import org.bouncycastle.jsl.asn1.cms.CMSObjectIdentifiers;
@@ -44,6 +47,7 @@ import org.bouncycastle.jsl.asn1.iana.IANAObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.pkcs.RC2CBCParameter;
 import org.bouncycastle.jsl.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.cms.CCMParameters;
 import org.bouncycastle.jsl.asn1.cms.GCMParameters;
@@ -58,6 +62,9 @@ import org.bouncycastle.jsl.operator.GenericKey;
 import org.bouncycastle.jsl.operator.OidCatalogue;
 import org.bouncycastle.jsl.operator.OutputAEADEncryptor;
 import org.bouncycastle.jsl.operator.OutputEncryptor;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.Exceptions;
+import org.bouncycastle.jsl.util.Properties;
 import org.bouncycastle.jsl.util.Store;
 import org.bouncycastle.jsl.util.io.Streams;
 import org.bouncycastle.jsl.util.io.TeeInputStream;
@@ -65,9 +72,44 @@ import org.bouncycastle.jsl.util.io.TeeOutputStream;
 
 class CMSUtils
 {
+    /**
+     * Orders AlgorithmIdentifiers by their DER encodings, which coincide exactly when
+     * {@link AlgorithmIdentifier#equals(Object)} holds.
+     */
+    static final Comparator ALGORITHM_IDENTIFIER_ORDER = new Comparator()
+    {
+        public int compare(Object a, Object b)
+        {
+            return Arrays.compareUnsigned(derEncoding(a), derEncoding(b));
+        }
+    };
+
+    private static byte[] derEncoding(Object algId)
+    {
+        try
+        {
+            return ((AlgorithmIdentifier)algId).getEncoded(ASN1Encoding.DER);
+        }
+        catch (IOException e)
+        {
+            throw new IllegalStateException("unable to encode AlgorithmIdentifier: " + e.getMessage());
+        }
+    }
+
+    /**
+     * A set of AlgorithmIdentifiers ordered on their encodings rather than hashed, for identifiers read
+     * from a message: the hash code of an ASN.1 object is cheap to collide, so a hash set of them can be
+     * driven quadratic by the sender.
+     */
+    static Set<AlgorithmIdentifier> algorithmIdentifierSet()
+    {
+        return new TreeSet<AlgorithmIdentifier>(ALGORITHM_IDENTIFIER_ORDER);
+    }
+
     private static final Set desAlgs = new HashSet();
     private static final Set mqvAlgs = new HashSet();
     private static final Set ecAlgs = new HashSet();
+    private static final Set hkdfAlgs = new HashSet();
 
     static
     {
@@ -97,6 +139,10 @@ class CMSUtils
         ecAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha384_scheme);
         ecAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha512_scheme);
 
+        hkdfAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha256_scheme);
+        hkdfAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha384_scheme);
+        hkdfAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha512_scheme);
+
         // BSI TR-03111 ECKA-EG with X9.63 KDF. Structurally identical to
         // dhSinglePass_stdDH_*kdf_scheme (ECDH + X9.63 KDF + RFC 5753
         // ECC-CMS-SharedInfo per BSI TR-03109-3 / ICAO 9303-11); dispatch
@@ -119,6 +165,11 @@ class CMSUtils
     static boolean isEC(ASN1ObjectIdentifier algorithm)
     {
         return ecAlgs.contains(algorithm);
+    }
+
+    static boolean isHKDF(ASN1ObjectIdentifier algorithm)
+    {
+        return hkdfAlgs.contains(algorithm);
     }
 
     static boolean isRFC2631(ASN1ObjectIdentifier algorithm)
@@ -407,6 +458,55 @@ class CMSUtils
     }
 
     /**
+     * Return true if the MAC algorithm is a CBC-MAC (des-ede3-cbc or rc2-cbc) whose parameters carry
+     * an IV that is not all zeroes. Without authenticated attributes nothing covers that IV, and a
+     * difference XORed into it and into the first content block leaves the MAC unchanged.
+     */
+    static boolean hasNonZeroCBCMacIV(AlgorithmIdentifier macAlg)
+    {
+        ASN1ObjectIdentifier algorithm = macAlg.getAlgorithm();
+        if (!CMSAlgorithm.DES_EDE3_CBC.equals(algorithm) && !CMSAlgorithm.RC2_CBC.equals(algorithm))
+        {
+            return false;
+        }
+
+        ASN1Encodable params = macAlg.getParameters();
+        if (params == null || params instanceof ASN1Null)
+        {
+            return false;
+        }
+
+        byte[] iv = CMSAlgorithm.RC2_CBC.equals(algorithm)
+            ? RC2CBCParameter.getInstance(params).getIV()
+            : ASN1OctetString.getInstance(params).getOctets();
+
+        return !Arrays.areAllZeroes(iv, 0, iv.length);
+    }
+
+    /**
+     * Refuse a CBC-MAC with a non-zero IV for a message without authenticated attributes, unless
+     * {@link Properties#CMS_ALLOW_UNAUTHENTICATED_CBC_MAC_IV} is set.
+     */
+    static void checkUnauthenticatedMacIV(AlgorithmIdentifier macAlg)
+        throws CMSException
+    {
+        boolean nonZeroIV;
+        try
+        {
+            nonZeroIV = hasNonZeroCBCMacIV(macAlg);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("malformed MAC algorithm parameters: " + e.getMessage(), e);
+        }
+
+        if (nonZeroIV && !Properties.isOverrideSet(Properties.CMS_ALLOW_UNAUTHENTICATED_CBC_MAC_IV))
+        {
+            throw new CMSException("CBC-MAC with a non-zero IV requires authenticated attributes");
+        }
+    }
+
+    /**
      * Return the MAC output length in octets implied by the given MAC
      * algorithm, or -1 when the algorithm does not have a spec-fixed output
      * length (e.g. block-cipher based MACs, whose truncation is a provider
@@ -538,8 +638,44 @@ class CMSUtils
     }
 
     /**
-     * Return the AEAD tag length carried in AuthEnvelopedData's mac field, or
-     * -1 when the algorithm is not recognised.
+     * Return the content-encryption algorithm an EncryptedContentInfo actually names, resolving the
+     * RFC 9709 id-alg-cek-hkdf-sha256 wrapper to the AlgorithmIdentifier carried in its parameters.
+     * <p>
+     * org.bouncycastle.jsl.cms.jcajce.CMSUtils carries the same method for the JCE side of the package,
+     * which cannot see this one - keep the two in step.
+     *
+     * @param contentAlgorithm the content-encryption AlgorithmIdentifier taken from the message.
+     * @return the algorithm the content is encrypted under.
+     * @throws CMSException if the key derivation carries no readable content-encryption algorithm.
+     */
+    static AlgorithmIdentifier getContentEncryptionAlgorithm(AlgorithmIdentifier contentAlgorithm)
+        throws CMSException
+    {
+        if (!CMSObjectIdentifiers.id_alg_cek_hkdf_sha256.equals(contentAlgorithm.getAlgorithm()))
+        {
+            return contentAlgorithm;
+        }
+
+        ASN1Encodable params = contentAlgorithm.getParameters();
+
+        if (params == null)
+        {
+            throw new CMSException("RFC 9709 key derivation names no content-encryption algorithm");
+        }
+
+        try
+        {
+            return AlgorithmIdentifier.getInstance(params);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new CMSException("unable to read RFC 9709 content-encryption algorithm: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Return the AEAD tag length the content-encryption parameters declare, -1 when the algorithm is
+     * not GCM or CCM, or 0 when its parameters are absent or unreadable (fail-closed).
      */
     static int getAEADMacLength(AlgorithmIdentifier encAlgId)
     {
@@ -722,13 +858,41 @@ class CMSUtils
 
             while ((o = set.readObject()) != null)
             {
-                ASN1SequenceParser seq = (ASN1SequenceParser)o;
-
-                v.add(seq.toASN1Primitive());
+                v.add(getLoadedObject(o));
             }
-            return new AttributeTable(new DERSet(v));
+            return getAttributeTable(new DERSet(v));
         }
         return null;
+    }
+
+    /**
+     * Build an attribute table, reporting a set element that is not an Attribute as an IOException.
+     */
+    static AttributeTable getAttributeTable(ASN1Set set)
+        throws IOException
+    {
+        try
+        {
+            return new AttributeTable(set);
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw Exceptions.ioException("malformed attribute: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Load an object returned by a stream parser through getLoadedObject(), so a parse failure is reported
+     * as the IOException it declares rather than as the unchecked exception toASN1Primitive() must use.
+     */
+    static ASN1Primitive getLoadedObject(ASN1Encodable obj)
+        throws IOException
+    {
+        if (obj instanceof InMemoryRepresentable)
+        {
+            return ((InMemoryRepresentable)obj).getLoadedObject();
+        }
+        return obj.toASN1Primitive();
     }
 
     static ASN1Set getAttrDLSet(CMSAttributeTableGenerator gen)

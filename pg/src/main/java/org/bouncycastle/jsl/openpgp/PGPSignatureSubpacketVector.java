@@ -16,7 +16,6 @@ import org.bouncycastle.jsl.bcpg.sig.IssuerFingerprint;
 import org.bouncycastle.jsl.bcpg.sig.IssuerKeyID;
 import org.bouncycastle.jsl.bcpg.sig.KeyExpirationTime;
 import org.bouncycastle.jsl.bcpg.sig.KeyFlags;
-import org.bouncycastle.jsl.bcpg.sig.LibrePGPPreferredEncryptionModes;
 import org.bouncycastle.jsl.bcpg.sig.NotationData;
 import org.bouncycastle.jsl.bcpg.sig.PolicyURI;
 import org.bouncycastle.jsl.bcpg.sig.PreferredAEADCiphersuites;
@@ -331,13 +330,13 @@ public class PGPSignatureSubpacketVector
      */
     public int[] getPreferredLibrePgpEncryptionModes()
     {
-        SignatureSubpacket p = this.getSubpacket(SignatureSubpacketTags.PREFERRED_AEAD_ALGORITHMS);
+        SignatureSubpacket p = this.getSubpacket(SignatureSubpacketTags.LIBREPGP_PREFERRED_ENCRYPTION_MODES);
 
         if (p == null)
         {
             return null;
         }
-        return ((LibrePGPPreferredEncryptionModes) p).getPreferences();
+        return ((PreferredAlgorithms) p).getPreferences();
     }
 
     public int getKeyFlags()

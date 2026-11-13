@@ -13,7 +13,6 @@ import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.cms.AbstractRecipient;
-import org.bouncycastle.jsl.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.jsl.cms.CMSException;
 import org.bouncycastle.jsl.cms.PasswordRecipient;
 
@@ -89,12 +88,7 @@ public abstract class JcePasswordRecipient
     protected Key extractSecretKey(AlgorithmIdentifier keyEncryptionAlgorithm, AlgorithmIdentifier contentEncryptionAlgorithm, byte[] derivedKey, byte[] encryptedContentEncryptionKey)
         throws CMSException
     {
-        if (!isContentAlgorithmAllowed(contentEncryptionAlgorithm.getAlgorithm()))
-        {
-            throw new CMSAlgorithmNotAllowedException("content-encryption algorithm not in recipient's allowed set: " + contentEncryptionAlgorithm.getAlgorithm());
-        }
-
-        checkTagSize(contentEncryptionAlgorithm);
+        checkContentAlgorithm(contentEncryptionAlgorithm);
 
         Cipher keyEncryptionCipher = helper.createRFC3211Wrapper(keyEncryptionAlgorithm.getAlgorithm());
 

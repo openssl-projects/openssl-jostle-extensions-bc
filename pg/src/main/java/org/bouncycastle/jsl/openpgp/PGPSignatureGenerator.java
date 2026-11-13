@@ -9,6 +9,8 @@ import org.bouncycastle.jsl.bcpg.HashUtils;
 import org.bouncycastle.jsl.bcpg.MPInteger;
 import org.bouncycastle.jsl.bcpg.OnePassSignaturePacket;
 import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
+import org.bouncycastle.jsl.bcpg.PublicKeyUtils;
+import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
 import org.bouncycastle.jsl.bcpg.SignaturePacket;
 import org.bouncycastle.jsl.bcpg.SignatureSubpacket;
 import org.bouncycastle.jsl.bcpg.SignatureSubpacketTags;
@@ -18,6 +20,7 @@ import org.bouncycastle.jsl.bcpg.sig.SignatureCreationTime;
 import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.jsl.openpgp.operator.PGPContentSigner;
 import org.bouncycastle.jsl.openpgp.operator.PGPContentSignerBuilder;
+import org.bouncycastle.jsl.openpgp.operator.PGPExternalContentSignerBuilder;
 import org.bouncycastle.jsl.util.Arrays;
 import org.bouncycastle.jsl.util.Strings;
 
@@ -83,14 +86,16 @@ public class PGPSignatureGenerator
     {
         this(contentSignerBuilder, signatureVersion);
         this.signingPubKey = signingKey;
-        if (signingKey.getVersion() == 6 && signatureVersion != 6)
+        if (signingKey != null &&
+            signingKey.getVersion() == PublicKeyPacket.VERSION_6 &&
+            signatureVersion != SignaturePacket.VERSION_6)
         {
             throw new IllegalArgumentException("Version 6 keys MUST only generate version 6 signatures.");
         }
     }
 
     /**
-     * Initialise the generator for signing.
+     * Initialize the generator for signing.
      *
      * @param signatureType type of signature
      * @param key private signing key
@@ -105,17 +110,37 @@ public class PGPSignatureGenerator
         {
             throw new PGPException("Illegal signature type 0xFF provided.");
         }
-        contentSigner = contentSignerBuilder.build(signatureType, key);
+
+        if (contentSignerBuilder instanceof PGPExternalContentSignerBuilder)
+        {
+            contentSigner = ((PGPExternalContentSignerBuilder)contentSignerBuilder).build(signatureType);
+        }
+        else if (key != null)
+        {
+            contentSigner = contentSignerBuilder.build(signatureType, key);
+        }
+        else
+        {
+            throw new PGPException("Missing private key.");
+        }
+
+        if (PublicKeyUtils.isPQCAlgorithm(contentSigner.getKeyAlgorithm()) && version != SignaturePacket.VERSION_6)
+        {
+            // RFC 9980 sec. 5.3.1 and 6.2.1: the PQ(/T) signature algorithms MUST be used only with v6 signatures
+            throw new PGPException("public key algorithm " + contentSigner.getKeyAlgorithm()
+                + " MUST only be used with version 6 signatures (RFC 9980), not version " + version);
+        }
+
         sigOut = contentSigner.getOutputStream();
         sigType = contentSigner.getType();
-        lastb = 0;
+        resetTextState();
 
         if (providedKeyAlgorithm >= 0 && providedKeyAlgorithm != contentSigner.getKeyAlgorithm())
         {
             throw new PGPException("key algorithm mismatch");
         }
 
-        if (key.getPublicKeyPacket().getVersion() != version)
+        if (key != null && key.getPublicKeyPacket().getVersion() != version)
         {
             throw new PGPException("Key version mismatch.");
         }
@@ -133,6 +158,10 @@ public class PGPSignatureGenerator
             {
                 throw new PGPException("Cannot update signature with salt.");
             }
+        }
+        else
+        {
+            salt = null;
         }
     }
 
@@ -277,7 +306,13 @@ public class PGPSignatureGenerator
         }
         case PublicKeyAlgorithmTags.Ed25519:
         case PublicKeyAlgorithmTags.Ed448:
-            // Contrary to EDDSA_LEGACY, the new PK algorithms Ed25519, Ed448 do not use MPI encoding
+        case PublicKeyAlgorithmTags.MLDSA65_Ed25519:
+        case PublicKeyAlgorithmTags.MLDSA87_Ed448:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128s:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_128f:
+        case PublicKeyAlgorithmTags.SLHDSA_SHAKE_256s:
+            // Contrary to EDDSA_LEGACY, the new PK algorithms Ed25519, Ed448 and the RFC 9980 algorithms
+            // do not use MPI encoding
             sigValues = null;
             break;
         default:

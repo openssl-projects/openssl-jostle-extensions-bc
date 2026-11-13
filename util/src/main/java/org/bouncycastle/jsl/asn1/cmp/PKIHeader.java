@@ -11,7 +11,7 @@ import org.bouncycastle.jsl.asn1.ASN1OctetString;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
-import org.bouncycastle.jsl.asn1.ASN1Util;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.x500.X500Name;
@@ -81,19 +81,27 @@ public class PKIHeader
 
     private PKIHeader(ASN1Sequence seq)
     {
+        // pvno, sender and recipient are required
+        if (seq.size() < 3)
+        {
+            throw new IllegalArgumentException("bad sequence size: " + seq.size());
+        }
+
         Enumeration en = seq.getObjects();
 
         pvno = ASN1Integer.getInstance(en.nextElement());
         sender = GeneralName.getInstance(en.nextElement());
         recipient = GeneralName.getInstance(en.nextElement());
 
+        int lastTagNo = -1;
         while (en.hasMoreElements())
         {
-            ASN1TaggedObject tObj = (ASN1TaggedObject)en.nextElement();
-            if (!tObj.hasContextTag())
+            ASN1TaggedObject tObj = ASN1TaggedObject.getInstance(en.nextElement(), BERTags.CONTEXT_SPECIFIC);
+            if (tObj.getTagNo() <= lastTagNo)
             {
-                throw new IllegalArgumentException("unknown tag: " + ASN1Util.getTagText(tObj));
+                throw new IllegalArgumentException("tag [" + tObj.getTagNo() + "] repeated or out of order");
             }
+            lastTagNo = tObj.getTagNo();
 
             switch (tObj.getTagNo())
             {

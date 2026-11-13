@@ -32,6 +32,7 @@ module org.bouncycastle.jsl.core
     exports org.bouncycastle.jsl.asn1.x509.sigi;
     exports org.bouncycastle.jsl.asn1.x9;
     exports org.bouncycastle.jsl.crypto;
+    exports org.bouncycastle.jsl.crypto.constraints;
     exports org.bouncycastle.jsl.crypto.ec;
     exports org.bouncycastle.jsl.crypto.io;
     exports org.bouncycastle.jsl.crypto.params;

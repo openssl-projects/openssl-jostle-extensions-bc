@@ -154,6 +154,12 @@ public class JceKeyAgreeRecipientInfoGenerator
 
         ASN1ObjectIdentifier keyAgreementOID = keyAgreeAlgorithm.getAlgorithm();
 
+        // RFC 3370 sec. 4.1.2 (static-static DH): the ukm MUST be present
+        if (userKeyingMaterial == null && PKCSObjectIdentifiers.id_alg_SSDH.equals(keyAgreementOID))
+        {
+            throw new CMSException("User keying material must be set for static keys.");
+        }
+
         init(keyAgreementOID);
 
         PrivateKey senderPrivateKey = this.senderPrivateKey;
@@ -166,33 +172,39 @@ public class JceKeyAgreeRecipientInfoGenerator
 
             try
             {
-                AlgorithmParameterSpec agreementParamSpec;
+                AlgorithmParameterSpec agreementParamSpec = null;
                 ASN1ObjectIdentifier keyEncryptionOID = keyEncryptionAlgorithm.getAlgorithm();
 
                 if (isMQV(keyAgreementOID))
                 {
-                    agreementParamSpec = new MQVParameterSpec(ephemeralKP, recipientPublicKey, userKeyingMaterial);
+                    // RFC 5753 sec. 3.2.2 / 7.2: the KDF SharedInfo is DER(ECC-CMS-SharedInfo), with the
+                    // addedukm as its entityUInfo, exactly as for ECDH
+                    byte[] ukmKeyingMaterial = ecc_cms_Generator.generateKDFMaterial(keyEncryptionAlgorithm,
+                        keySizeProvider.getKeySize(keyEncryptionOID), userKeyingMaterial);
+
+                    agreementParamSpec = new MQVParameterSpec(ephemeralKP, recipientPublicKey, ukmKeyingMaterial);
                 }
                 else if (isEC(keyAgreementOID))
                 {
                     byte[] ukmKeyingMaterial = ecc_cms_Generator.generateKDFMaterial(keyEncryptionAlgorithm,
                         keySizeProvider.getKeySize(keyEncryptionOID), userKeyingMaterial);
 
-                    agreementParamSpec = new UserKeyingMaterialSpec(ukmKeyingMaterial);
+                    // RFC 8418 sec. 2.2: for the HKDF schemes a ukm is both the entityUInfo of the
+                    // ECC-CMS-SharedInfo and the HKDF salt
+                    if (userKeyingMaterial != null && isHKDF(keyAgreementOID))
+                    {
+                        agreementParamSpec = new UserKeyingMaterialSpec(ukmKeyingMaterial, userKeyingMaterial);
+                    }
+                    else
+                    {
+                        agreementParamSpec = new UserKeyingMaterialSpec(ukmKeyingMaterial);
+                    }
                 }
                 else if (isRFC2631(keyAgreementOID))
                 {
                     if (userKeyingMaterial != null)
                     {
                         agreementParamSpec = new UserKeyingMaterialSpec(userKeyingMaterial);
-                    }
-                    else
-                    {
-                        if (keyAgreementOID.equals(PKCSObjectIdentifiers.id_alg_SSDH))
-                        {
-                            throw new CMSException("User keying material must be set for static keys.");
-                        }
-                        agreementParamSpec = null;
                     }
                 }
                 else
@@ -252,6 +264,12 @@ public class JceKeyAgreeRecipientInfoGenerator
         }
 
         return userKeyingMaterial;
+    }
+
+    protected void generationComplete()
+    {
+        // an MQV ephemeral key pair is shared by the recipients of one KeyAgreeRecipientInfo only
+        ephemeralKP = null;
     }
 
     private void init(ASN1ObjectIdentifier keyAgreementOID)

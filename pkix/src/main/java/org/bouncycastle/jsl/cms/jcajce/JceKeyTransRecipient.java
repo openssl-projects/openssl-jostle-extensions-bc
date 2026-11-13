@@ -14,7 +14,6 @@ import org.bouncycastle.jsl.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.cms.KEMRecipientInfo;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.jsl.cms.AbstractKeyTransRecipient;
-import org.bouncycastle.jsl.cms.CMSAlgorithmNotAllowedException;
 import org.bouncycastle.jsl.cms.CMSException;
 import org.bouncycastle.jsl.operator.OperatorException;
 import org.bouncycastle.jsl.operator.jcajce.JceAsymmetricKeyUnwrapper;
@@ -177,12 +176,7 @@ public abstract class JceKeyTransRecipient
     protected Key extractSecretKey(AlgorithmIdentifier keyEncryptionAlgorithm, AlgorithmIdentifier encryptedKeyAlgorithm, byte[] encryptedEncryptionKey)
         throws CMSException
     {
-        if (!isContentAlgorithmAllowed(encryptedKeyAlgorithm.getAlgorithm()))
-        {
-            throw new CMSAlgorithmNotAllowedException("content-encryption algorithm not in recipient's allowed set: " + encryptedKeyAlgorithm.getAlgorithm());
-        }
-
-        checkTagSize(encryptedKeyAlgorithm);
+        checkContentAlgorithm(encryptedKeyAlgorithm);
 
         if (CMSObjectIdentifiers.id_ori_kem.equals(keyEncryptionAlgorithm.getAlgorithm()))
         {
@@ -236,15 +230,7 @@ public abstract class JceKeyTransRecipient
 
                 if (validateKeySize)
                 {
-                    if (encryptedKeyAlgorithm.getAlgorithm().equals(CMSObjectIdentifiers.id_alg_cek_hkdf_sha256))
-                    {
-                        helper.keySizeCheck(
-                            AlgorithmIdentifier.getInstance(encryptedKeyAlgorithm.getParameters()), key);
-                    }
-                    else
-                    {
-                        helper.keySizeCheck(encryptedKeyAlgorithm, key);
-                    }
+                    helper.keySizeCheck(encryptedKeyAlgorithm, key);
                 }
 
                 return key;

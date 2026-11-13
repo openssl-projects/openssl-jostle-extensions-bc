@@ -10,6 +10,7 @@ import org.bouncycastle.jsl.asn1.ASN1Set;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
 import org.bouncycastle.jsl.asn1.BERSequence;
 import org.bouncycastle.jsl.asn1.BERSet;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.DLSequence;
 
@@ -65,25 +66,40 @@ public class EnvelopedData
     private EnvelopedData(
         ASN1Sequence seq)
     {
+        if (seq.size() < 3)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         int index = 0;
 
-        version = (ASN1Integer)seq.getObjectAt(index++);
+        version = ASN1Integer.getInstance(seq.getObjectAt(index++));
 
         Object tmp = seq.getObjectAt(index++);
 
         if (tmp instanceof ASN1TaggedObject)
         {
-            originatorInfo = OriginatorInfo.getInstance((ASN1TaggedObject)tmp, false);
+            originatorInfo = OriginatorInfo.getInstance(ASN1TaggedObject.getInstance(tmp, BERTags.CONTEXT_SPECIFIC, 0), false);
             tmp = seq.getObjectAt(index++);
         }
 
         recipientInfos = ASN1Set.getInstance(tmp);
 
+        if (seq.size() <= index)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         encryptedContentInfo = EncryptedContentInfo.getInstance(seq.getObjectAt(index++));
 
         if (seq.size() > index)
         {
-            unprotectedAttrs = ASN1Set.getInstance((ASN1TaggedObject)seq.getObjectAt(index), false);
+            unprotectedAttrs = ASN1Set.getInstance(ASN1TaggedObject.getInstance(seq.getObjectAt(index++), BERTags.CONTEXT_SPECIFIC, 1), false);
+        }
+
+        if (index != seq.size())
+        {
+            throw new IllegalArgumentException("unexpected element at position " + index);
         }
     }
 

@@ -44,7 +44,7 @@ public class JcePBEProtectionRemoverFactory
 
     public JcePBEProtectionRemoverFactory setProvider(Provider provider)
     {
-        this.helper = new OperatorHelper(new ProviderJcaJceHelper(provider));
+        this.helper = OperatorUtils.createProviderHelper(provider);
         this.aeadUtil = new JceAEADUtil(helper);
 
         if (calculatorProviderBuilder != null)

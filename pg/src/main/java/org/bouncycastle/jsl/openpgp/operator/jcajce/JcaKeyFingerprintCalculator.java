@@ -45,7 +45,7 @@ public class JcaKeyFingerprintCalculator
      */
     public JcaKeyFingerprintCalculator setProvider(Provider provider)
     {
-        return new JcaKeyFingerprintCalculator(new ProviderJcaJceHelper(provider));
+        return new JcaKeyFingerprintCalculator(OperatorUtils.providerHelper(provider));
     }
 
     /**

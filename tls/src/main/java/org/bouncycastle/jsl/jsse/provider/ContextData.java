@@ -9,6 +9,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.Vector;
 
+import org.bouncycastle.jsl.jsse.BCSSLContext;
+import org.bouncycastle.jsl.jsse.BCSSLParameters;
 import org.bouncycastle.jsl.jsse.BCX509ExtendedKeyManager;
 import org.bouncycastle.jsl.jsse.BCX509ExtendedTrustManager;
 import org.bouncycastle.jsl.jsse.java.security.BCAlgorithmConstraints;
@@ -17,8 +19,10 @@ import org.bouncycastle.jsl.tls.ProtocolVersion;
 import org.bouncycastle.jsl.tls.SignatureAndHashAlgorithm;
 import org.bouncycastle.jsl.tls.TlsUtils;
 import org.bouncycastle.jsl.tls.crypto.impl.jcajce.JcaTlsCrypto;
+import org.bouncycastle.jsl.util.Properties;
 
 final class ContextData
+    implements BCSSLContext
 {
     private static final Set<BCCryptoPrimitive> TLS_CRYPTO_PRIMITIVES_BC = JsseUtils.KEY_AGREEMENT_CRYPTO_PRIMITIVES_BC;
 
@@ -41,6 +45,8 @@ final class ContextData
     private final boolean serverEnableStatusRequest;
     private final OcspStapleCache ocspStapleCache;
     private final boolean defaultUseNamedGroupsOrder;
+    private final boolean clientEnableDelegatedTasks;
+    private final boolean serverEnableDelegatedTasks;
 
     ContextData(boolean fipsMode, JcaTlsCrypto crypto, BCX509ExtendedKeyManager x509KeyManager,
         BCX509ExtendedTrustManager x509TrustManager, Map<String, CipherSuiteInfo> supportedCipherSuites,
@@ -80,7 +86,16 @@ final class ContextData
          * default in ProvSSLParameters; a value set on the connection's BCSSLParameters still wins.
          */
         this.defaultUseNamedGroupsOrder = PropertyUtils.getBooleanSystemProperty(
-            "org.bouncycastle.jsl.jsse.useNamedGroupsOrder", false);
+            Properties.JSSE_USE_NAMED_GROUPS_ORDER, false);
+        /*
+         * NOTE: also read per context (see above). Whether an SSLEngine from this context hands out
+         * handshake steps as delegated tasks (see ProvSSLEngine.getDelegatedTask) rather than running
+         * them inside wrap/unwrap, per role.
+         */
+        this.clientEnableDelegatedTasks = PropertyUtils.getBooleanSystemProperty(
+            Properties.JSSE_CLIENT_ENABLE_DELEGATED_TASKS, false);
+        this.serverEnableDelegatedTasks = PropertyUtils.getBooleanSystemProperty(
+            Properties.JSSE_SERVER_ENABLE_DELEGATED_TASKS, false);
     }
 
     int[] getActiveCipherSuites(JcaTlsCrypto crypto, ProvSSLParameters sslParameters,
@@ -211,6 +226,11 @@ final class ContextData
         return implGetDefaultProtocols(isClient).clone();
     }
 
+    public BCSSLParameters getDefaultParameters(boolean isClient)
+    {
+        return SSLParametersUtil.getParameters(getDefaultSSLParameters(isClient));
+    }
+
     ProvSSLParameters getDefaultSSLParameters(boolean isClient)
     {
         return new ProvSSLParameters(this, implGetDefaultCipherSuites(isClient), implGetDefaultProtocols(isClient));
@@ -256,6 +276,11 @@ final class ContextData
     boolean getDefaultUseNamedGroupsOrder()
     {
         return defaultUseNamedGroupsOrder;
+    }
+
+    boolean getEnableDelegatedTasks(boolean isClient)
+    {
+        return isClient ? clientEnableDelegatedTasks : serverEnableDelegatedTasks;
     }
 
     NamedGroupInfo.PerConnection getNamedGroupsClient(ProvSSLParameters sslParameters,
@@ -327,6 +352,11 @@ final class ContextData
     String[] getSupportedProtocols()
     {
         return JsseUtils.getKeysArray(supportedProtocols);
+    }
+
+    public BCSSLParameters getSupportedParameters(boolean isClient)
+    {
+        return SSLParametersUtil.getParameters(getSupportedSSLParameters(isClient));
     }
 
     ProvSSLParameters getSupportedSSLParameters(boolean isClient)

@@ -7,6 +7,7 @@ import org.bouncycastle.jsl.asn1.ASN1Object;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.x509.Extensions;
@@ -80,6 +81,11 @@ public class ResponseData
     {
         int index = 0;
 
+        if (seq.size() < 3)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         if (seq.getObjectAt(0) instanceof ASN1TaggedObject)
         {
             ASN1TaggedObject    o = (ASN1TaggedObject)seq.getObjectAt(0);
@@ -101,14 +107,24 @@ public class ResponseData
             this.version = V1;
         }
 
+        if (seq.size() < index + 3)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         this.responderID = ResponderID.getInstance(seq.getObjectAt(index++));
         this.producedAt = ASN1GeneralizedTime.getInstance(seq.getObjectAt(index++));
-        this.responses = (ASN1Sequence)seq.getObjectAt(index++);
+        this.responses = ASN1Sequence.getInstance(seq.getObjectAt(index++));
 
         if (seq.size() > index)
         {
             this.responseExtensions = Extensions.getInstance(
-                                (ASN1TaggedObject)seq.getObjectAt(index), true);
+                                ASN1TaggedObject.getInstance(seq.getObjectAt(index++), BERTags.CONTEXT_SPECIFIC, 1), true);
+        }
+
+        if (seq.size() != index)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
         }
     }
 

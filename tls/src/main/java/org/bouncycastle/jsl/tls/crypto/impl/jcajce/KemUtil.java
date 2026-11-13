@@ -1,5 +1,7 @@
 package org.bouncycastle.jsl.tls.crypto.impl.jcajce;
 
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.InvalidAlgorithmParameterException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -54,15 +56,17 @@ class KemUtil
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
-            // TLS uses the ML-KEM shared secret itself, and the hybrid groups concatenate it raw. The
-            // provider's spec builders start with a KDF, so both specs have to switch it off.
-            keyGenerator.init(KEMExtractSpec.builder()
-                .withPrivate(privateKey)
-                .withEncapsulatedKey(ciphertext)
-                .withAlgorithmName("DEF")
-                .withKeySizeInBits(256)
-                .withNoKdf()
-                .build());
+            try
+            {
+                keyGenerator.init(extractSpec(privateKey, ciphertext));
+            }
+            catch (InvalidAlgorithmParameterException e)
+            {
+                // The provider's KEM takes its own key objects only. A key that came from another
+                // provider is brought across by its PKCS#8 encoding, as bc-java's provider does itself.
+                keyGenerator.init(extractSpec(KeyFactory.getInstance(kemName, keyGenerator.getProvider())
+                    .generatePrivate(new PKCS8EncodedKeySpec(privateKey.getEncoded())), ciphertext));
+            }
             SecretKeyWithEncapsulation secEnc = (SecretKeyWithEncapsulation)keyGenerator.generateKey();
             return crypto.adoptLocalSecret(secEnc.getEncoded());
         }
@@ -72,18 +76,44 @@ class KemUtil
         }
     }
 
+    // TLS uses the ML-KEM shared secret itself, and the hybrid groups concatenate it raw. The provider's
+    // spec builders start with a KDF, so both specs have to switch it off.
+    private static KEMExtractSpec extractSpec(PrivateKey privateKey, byte[] ciphertext)
+    {
+        return KEMExtractSpec.builder()
+            .withPrivate(privateKey)
+            .withEncapsulatedKey(ciphertext)
+            .withAlgorithmName("DEF")
+            .withKeySizeInBits(256)
+            .withNoKdf()
+            .build();
+    }
+
+    private static KEMGenerateSpec generateSpec(PublicKey publicKey)
+    {
+        return KEMGenerateSpec.builder()
+            .withPublicKey(publicKey)
+            .withAlgorithmName("DEF")
+            .withKeySizeInBits(256)
+            .withNoKdf()
+            .build();
+    }
+
     static SecretKeyWithEncapsulation encapsulate(JcaTlsCrypto crypto, String kemName, PublicKey publicKey)
     {
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
-            // no KDF: see decapsulate
-            keyGenerator.init(KEMGenerateSpec.builder()
-                .withPublicKey(publicKey)
-                .withAlgorithmName("DEF")
-                .withKeySizeInBits(256)
-                .withNoKdf()
-                .build());
+            try
+            {
+                keyGenerator.init(generateSpec(publicKey));
+            }
+            catch (InvalidAlgorithmParameterException e)
+            {
+                // as in decapsulate: a key from another provider is brought across by its encoding
+                keyGenerator.init(generateSpec(KeyFactory.getInstance(kemName, keyGenerator.getProvider())
+                    .generatePublic(new X509EncodedKeySpec(publicKey.getEncoded()))));
+            }
             return (SecretKeyWithEncapsulation)keyGenerator.generateKey();
         }
         catch (Exception e)

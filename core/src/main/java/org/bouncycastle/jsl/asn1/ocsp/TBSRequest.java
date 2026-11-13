@@ -6,6 +6,7 @@ import org.bouncycastle.jsl.asn1.ASN1Object;
 import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
 import org.bouncycastle.jsl.asn1.x509.Extensions;
@@ -57,6 +58,11 @@ public class TBSRequest
     {
         int    index = 0;
 
+        if (seq.size() < 1)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         if (seq.getObjectAt(0) instanceof ASN1TaggedObject)
         {
             ASN1TaggedObject    o = (ASN1TaggedObject)seq.getObjectAt(0);
@@ -77,16 +83,31 @@ public class TBSRequest
             version = V1;
         }
 
+        if (seq.size() < index + 1)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
         if (seq.getObjectAt(index) instanceof ASN1TaggedObject)
         {
-            requestorName = GeneralName.getInstance((ASN1TaggedObject)seq.getObjectAt(index++), true);
+            requestorName = GeneralName.getInstance(ASN1TaggedObject.getInstance(seq.getObjectAt(index++), BERTags.CONTEXT_SPECIFIC, 1), true);
         }
         
-        requestList = (ASN1Sequence)seq.getObjectAt(index++);
-
-        if (seq.size() == (index + 1))
+        if (seq.size() < index + 1)
         {
-            requestExtensions = Extensions.getInstance((ASN1TaggedObject)seq.getObjectAt(index), true);
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
+        }
+
+        requestList = ASN1Sequence.getInstance(seq.getObjectAt(index++));
+
+        if (seq.size() > index)
+        {
+            requestExtensions = Extensions.getInstance(ASN1TaggedObject.getInstance(seq.getObjectAt(index++), BERTags.CONTEXT_SPECIFIC, 2), true);
+        }
+
+        if (seq.size() != index)
+        {
+            throw new IllegalArgumentException("Bad sequence size: " + seq.size());
         }
     }
 

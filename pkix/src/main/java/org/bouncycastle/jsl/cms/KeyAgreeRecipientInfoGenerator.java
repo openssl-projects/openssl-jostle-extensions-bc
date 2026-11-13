@@ -32,23 +32,30 @@ public abstract class KeyAgreeRecipientInfoGenerator
 
     public RecipientInfo generate(GenericKey contentEncryptionKey) throws CMSException
     {
-        OriginatorPublicKey originatorPublicKey = createOriginatorPublicKey(originatorKeyInfo); 
-        OriginatorIdentifierOrKey originator = new OriginatorIdentifierOrKey(originatorPublicKey);
-
-        ASN1Encodable keyEncAlgParams = null;
-        if (CMSUtils.isDES(keyEncryptionOID) || PKCSObjectIdentifiers.id_alg_CMSRC2wrap.equals(keyEncryptionOID))
+        try
         {
-            keyEncAlgParams = DERNull.INSTANCE;
+            OriginatorPublicKey originatorPublicKey = createOriginatorPublicKey(originatorKeyInfo);
+            OriginatorIdentifierOrKey originator = new OriginatorIdentifierOrKey(originatorPublicKey);
+
+            ASN1Encodable keyEncAlgParams = null;
+            if (CMSUtils.isDES(keyEncryptionOID) || PKCSObjectIdentifiers.id_alg_CMSRC2wrap.equals(keyEncryptionOID))
+            {
+                keyEncAlgParams = DERNull.INSTANCE;
+            }
+
+            AlgorithmIdentifier keyEncAlgorithm = new AlgorithmIdentifier(keyEncryptionOID, keyEncAlgParams);
+            AlgorithmIdentifier keyAgreeAlgorithm = new AlgorithmIdentifier(keyAgreementOID, keyEncAlgorithm);
+
+            ASN1Sequence recipients = generateRecipientEncryptedKeys(keyAgreeAlgorithm, keyEncAlgorithm, contentEncryptionKey);
+
+            ASN1OctetString ukm = DEROctetString.fromContentsOptional(getUserKeyingMaterial(keyAgreeAlgorithm));
+
+            return new RecipientInfo(new KeyAgreeRecipientInfo(originator, ukm, keyAgreeAlgorithm, recipients));
         }
-
-        AlgorithmIdentifier keyEncAlgorithm = new AlgorithmIdentifier(keyEncryptionOID, keyEncAlgParams);
-        AlgorithmIdentifier keyAgreeAlgorithm = new AlgorithmIdentifier(keyAgreementOID, keyEncAlgorithm);
-
-        ASN1Sequence recipients = generateRecipientEncryptedKeys(keyAgreeAlgorithm, keyEncAlgorithm, contentEncryptionKey);
-
-        ASN1OctetString ukm = DEROctetString.fromContentsOptional(getUserKeyingMaterial(keyAgreeAlgorithm));
-
-        return new RecipientInfo(new KeyAgreeRecipientInfo(originator, ukm, keyAgreeAlgorithm, recipients));
+        finally
+        {
+            generationComplete();
+        }
     }
 
     protected OriginatorPublicKey createOriginatorPublicKey(SubjectPublicKeyInfo originatorKeyInfo)
@@ -59,6 +66,11 @@ public abstract class KeyAgreeRecipientInfoGenerator
     protected boolean isEC(ASN1ObjectIdentifier algorithmOID)
     {
         return CMSUtils.isEC(algorithmOID);
+    }
+
+    protected boolean isHKDF(ASN1ObjectIdentifier algorithmOID)
+    {
+        return CMSUtils.isHKDF(algorithmOID);
     }
 
     protected boolean isMQV(ASN1ObjectIdentifier algorithmOID)
@@ -75,4 +87,17 @@ public abstract class KeyAgreeRecipientInfoGenerator
         AlgorithmIdentifier keyEncAlgorithm, GenericKey contentEncryptionKey) throws CMSException;
 
     protected abstract byte[] getUserKeyingMaterial(AlgorithmIdentifier keyAgreeAlgorithm) throws CMSException;
+
+    /**
+     * Called at the end of every {@link #generate(GenericKey)}, whether it completed normally or not, so a
+     * subclass can release any state it holds for the duration of a single KeyAgreeRecipientInfo (e.g. an
+     * ephemeral key pair). The default implementation does nothing.
+     * <p>
+     * This is called from a finally block, so an implementation must not throw: an exception thrown here would
+     * replace the result, or the exception, of the generate call.
+     * </p>
+     */
+    protected void generationComplete()
+    {
+    }
 }

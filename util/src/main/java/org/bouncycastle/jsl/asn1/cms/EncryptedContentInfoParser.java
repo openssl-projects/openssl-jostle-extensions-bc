@@ -31,8 +31,24 @@ public class EncryptedContentInfoParser
         throws IOException
     {
         _contentType = (ASN1ObjectIdentifier)seq.readObject();
-        _contentEncryptionAlgorithm = AlgorithmIdentifier.getInstance(seq.readObject().toASN1Primitive());
-        _encryptedContent = (ASN1TaggedObjectParser)seq.readObject();
+        if (_contentType == null)
+        {
+            throw new IOException("EncryptedContentInfo missing contentType");
+        }
+
+        ASN1Encodable alg = seq.readObject();
+        if (alg == null)
+        {
+            throw new IOException("EncryptedContentInfo missing contentEncryptionAlgorithm");
+        }
+
+        _contentEncryptionAlgorithm = AlgorithmIdentifier.getInstance(alg.toASN1Primitive());
+        ASN1Encodable next = seq.readObject();
+        if (next != null && !(next instanceof ASN1TaggedObjectParser))
+        {
+            throw new IOException("EncryptedContentInfo has an unexpected element where encryptedContent [0] is expected");
+        }
+        _encryptedContent = (ASN1TaggedObjectParser)next;
     }
 
     public ASN1ObjectIdentifier getContentType()
@@ -49,6 +65,11 @@ public class EncryptedContentInfoParser
         int  tag)
         throws IOException
     {
+        if (_encryptedContent == null)
+        {
+            return null;
+        }
+
         return ASN1Util.parseContextBaseUniversal(_encryptedContent, 0, false, tag);
     }
 }

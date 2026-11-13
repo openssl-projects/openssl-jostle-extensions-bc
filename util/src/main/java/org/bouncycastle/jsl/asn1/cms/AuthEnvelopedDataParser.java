@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1Integer;
 import org.bouncycastle.jsl.asn1.ASN1OctetString;
+import org.bouncycastle.jsl.asn1.ASN1OctetStringParser;
 import org.bouncycastle.jsl.asn1.ASN1ParsingException;
 import org.bouncycastle.jsl.asn1.ASN1SequenceParser;
 import org.bouncycastle.jsl.asn1.ASN1SetParser;
@@ -40,6 +41,10 @@ public class AuthEnvelopedDataParser
 
         // "It MUST be set to 0."
         this.version = ASN1Integer.getInstance(seq.readObject());
+        if (version == null)
+        {
+            throw new IOException("AuthEnvelopedData missing version");
+        }
         if (!version.hasValue(0))
         {
             throw new ASN1ParsingException("AuthEnvelopedData version number must be 0");
@@ -88,6 +93,11 @@ public class AuthEnvelopedDataParser
             nextObject = seq.readObject();
         }
 
+        if (nextObject == null)
+        {
+            throw new IOException("AuthEnvelopedData missing recipientInfos");
+        }
+
         ASN1SetParser recipientInfos = (ASN1SetParser)nextObject;
         nextObject = null;
         return recipientInfos;
@@ -101,16 +111,16 @@ public class AuthEnvelopedDataParser
             nextObject = seq.readObject();
         }
 
-        if (nextObject != null)
+        if (nextObject == null)
         {
-            ASN1SequenceParser o = (ASN1SequenceParser) nextObject;
-            nextObject = null;
-            EncryptedContentInfoParser encryptedContentInfoParser = new EncryptedContentInfoParser(o);
-            isData = CMSObjectIdentifiers.data.equals(encryptedContentInfoParser.getContentType());
-            return encryptedContentInfoParser;
+            throw new IOException("AuthEnvelopedData missing authEncryptedContentInfo");
         }
 
-        return null;
+        ASN1SequenceParser o = (ASN1SequenceParser)nextObject;
+        nextObject = null;
+        EncryptedContentInfoParser encryptedContentInfoParser = new EncryptedContentInfoParser(o);
+        isData = CMSObjectIdentifiers.data.equals(encryptedContentInfoParser.getContentType());
+        return encryptedContentInfoParser;
     }
 
     public ASN1SetParser getAuthAttrs()
@@ -124,6 +134,10 @@ public class AuthEnvelopedDataParser
         if (nextObject instanceof ASN1TaggedObjectParser)
         {
             ASN1TaggedObjectParser o = (ASN1TaggedObjectParser)nextObject;
+            if (!o.hasContextTag(1))
+            {
+                throw new IOException("AuthEnvelopedData has an unexpected element after authEncryptedContentInfo");
+            }
             nextObject = null;
             return (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 1, false, BERTags.SET_OF);
         }
@@ -132,7 +146,7 @@ public class AuthEnvelopedDataParser
         // EncryptedContentInfo is not id-data."
         if (!isData)
         {
-            throw new ASN1ParsingException("authAttrs must be present with non-data content");
+            throw new IOException("authAttrs must be present with non-data content");
         }
 
         return null;
@@ -146,10 +160,20 @@ public class AuthEnvelopedDataParser
             nextObject = seq.readObject();
         }
 
+        if (nextObject == null)
+        {
+            throw new IOException("AuthEnvelopedData missing mac");
+        }
+
         ASN1Encodable o = nextObject;
         nextObject = null;
 
-        return ASN1OctetString.getInstance(o.toASN1Primitive());
+        if (!(o instanceof ASN1OctetStringParser))
+        {
+            throw new IOException("AuthEnvelopedData mac is not an OCTET STRING");
+        }
+
+        return ASN1OctetString.getInstance(((ASN1OctetStringParser)o).getLoadedObject());
     }
 
     public ASN1SetParser getUnauthAttrs()
@@ -162,9 +186,14 @@ public class AuthEnvelopedDataParser
 
         if (nextObject != null)
         {
+            if (!(nextObject instanceof ASN1TaggedObjectParser) || !((ASN1TaggedObjectParser)nextObject).hasContextTag(2))
+            {
+                throw new IOException("AuthEnvelopedData has an unexpected element after mac");
+            }
             ASN1TaggedObjectParser o = (ASN1TaggedObjectParser)nextObject;
             nextObject = null;
-            return (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 2, false, BERTags.SET_OF);
+            ASN1SetParser unauthAttrs = (ASN1SetParser)ASN1Util.parseContextBaseUniversal(o, 2, false, BERTags.SET_OF);
+            return new EndCheckedSetParser(unauthAttrs, seq, "AuthEnvelopedData", "unauthAttrs");
         }
 
         return null;

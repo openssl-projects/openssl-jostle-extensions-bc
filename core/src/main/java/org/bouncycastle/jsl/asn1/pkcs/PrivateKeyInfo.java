@@ -14,6 +14,7 @@ import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1Set;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DERBitString;
 import org.bouncycastle.jsl.asn1.DEROctetString;
 import org.bouncycastle.jsl.asn1.DERSequence;
@@ -88,12 +89,12 @@ public class PrivateKeyInfo
 
     private static int getVersionValue(ASN1Integer version)
     {
-        int versionValue = version.intValueExact();
-        if (versionValue < 0 || versionValue > 1)
+        // tested before converting, as a version too large for an int is as invalid as 2
+        if (!version.hasValue(0) && !version.hasValue(1))
         {
             throw new IllegalArgumentException("invalid version for private key info");
         }
-        return versionValue;
+        return version.intValueExact();
     }
 
     /**
@@ -201,6 +202,11 @@ public class PrivateKeyInfo
 
     private PrivateKeyInfo(ASN1Sequence seq)
     {
+        if (seq.size() < 3)
+        {
+            throw new IllegalArgumentException("bad sequence size: " + seq.size());
+        }
+
         Enumeration e = seq.getObjects();
 
         this.version = ASN1Integer.getInstance(e.nextElement());
@@ -213,7 +219,7 @@ public class PrivateKeyInfo
         int lastTag = -1;
         while (e.hasMoreElements())
         {
-            ASN1TaggedObject tagged = (ASN1TaggedObject)e.nextElement();
+            ASN1TaggedObject tagged = ASN1TaggedObject.getInstance(e.nextElement(), BERTags.CONTEXT_SPECIFIC);
 
             int tag = tagged.getTagNo();
             if (tag <= lastTag)

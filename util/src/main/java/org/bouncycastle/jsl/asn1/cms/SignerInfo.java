@@ -10,6 +10,7 @@ import org.bouncycastle.jsl.asn1.ASN1Primitive;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1Set;
 import org.bouncycastle.jsl.asn1.ASN1TaggedObject;
+import org.bouncycastle.jsl.asn1.BERTags;
 import org.bouncycastle.jsl.asn1.DEROctetString;
 import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERTaggedObject;
@@ -94,7 +95,7 @@ public class SignerInfo
      * </ul>
      *
      * @param o the object we want converted.
-     * @exception IllegalArgumentException if the object cannot be converted.
+     * @throws IllegalArgumentException if the object cannot be converted.
      */
     public static SignerInfo getInstance(
         Object  o)
@@ -183,6 +184,12 @@ public class SignerInfo
     private SignerInfo(
         ASN1Sequence seq)
     {
+        // version, sid, digestAlgorithm, digestEncryptionAlgorithm and encryptedDigest are required
+        if (seq.size() < 5)
+        {
+            throw new IllegalArgumentException("bad sequence size: " + seq.size());
+        }
+
         Enumeration     e = seq.getObjects();
 
         version = ASN1Integer.getInstance(e.nextElement());
@@ -193,7 +200,7 @@ public class SignerInfo
 
         if (obj instanceof ASN1TaggedObject)
         {
-            authenticatedAttributes = ASN1Set.getInstance((ASN1TaggedObject)obj, false);
+            authenticatedAttributes = ASN1Set.getInstance(ASN1TaggedObject.getInstance(obj, BERTags.CONTEXT_SPECIFIC, 0), false);
 
             digEncryptionAlgorithm = AlgorithmIdentifier.getInstance(e.nextElement());
         }
@@ -207,11 +214,16 @@ public class SignerInfo
 
         if (e.hasMoreElements())
         {
-            unauthenticatedAttributes = ASN1Set.getInstance(ASN1TaggedObject.getInstance(e.nextElement()), false);
+            unauthenticatedAttributes = ASN1Set.getInstance(ASN1TaggedObject.getInstance(e.nextElement(), BERTags.CONTEXT_SPECIFIC, 1), false);
         }
         else
         {
             unauthenticatedAttributes = null;
+        }
+
+        if (e.hasMoreElements())
+        {
+            throw new IllegalArgumentException("unexpected element after unsignedAttrs");
         }
     }
 

@@ -27,7 +27,16 @@ public class ContentInfoParser
         throws IOException
     {
         contentType = (ASN1ObjectIdentifier)seq.readObject();
-        content = (ASN1TaggedObjectParser)seq.readObject();
+        if (contentType == null)
+        {
+            throw new IOException("ContentInfo missing contentType");
+        }
+        ASN1Encodable next = seq.readObject();
+        if (next != null && !(next instanceof ASN1TaggedObjectParser))
+        {
+            throw new IOException("ContentInfo has an unexpected element where content [0] is expected");
+        }
+        content = (ASN1TaggedObjectParser)next;
     }
 
     public ASN1ObjectIdentifier getContentType()

@@ -38,7 +38,8 @@ import org.bouncycastle.jsl.util.io.TeeOutputStream;
  *      ByteArrayOutputStream  bOut = new ByteArrayOutputStream();
  *
  *      OutputStream out = edGen.open(
- *                              bOut, new JceCMSMacCalculatorBuilder(CMSAlgorithm.DES_EDE3_CBC).setProvider(DefaultProviderName.getProviderName()).build());*
+ *                              bOut, new JceCMSMacCalculatorBuilder(PKCSObjectIdentifiers.id_hmacWithSHA256)
+ *                                  .setProvider(DefaultProviderName.getProviderName()).build());
  *      out.write(data);
  *
  *      out.close();
@@ -150,6 +151,11 @@ public class CMSAuthenticatedDataStreamGenerator
         {
             throw new CMSException(
                 "definite-length encoding requires the content length up front - use open(out, inputLength, macCalculator)");
+        }
+
+        if (digestCalculator == null)
+        {
+            CMSUtils.checkUnauthenticatedMacIV(macCalculator.getAlgorithmIdentifier());
         }
 
         try
@@ -312,6 +318,11 @@ public class CMSAuthenticatedDataStreamGenerator
         if (inputLength < 0)
         {
             throw new CMSException("inputLength cannot be negative");
+        }
+
+        if (digestCalculator == null)
+        {
+            CMSUtils.checkUnauthenticatedMacIV(macCalculator.getAlgorithmIdentifier());
         }
 
         int macLength = CMSUtils.getMacOutputLength(macCalculator.getAlgorithmIdentifier());
