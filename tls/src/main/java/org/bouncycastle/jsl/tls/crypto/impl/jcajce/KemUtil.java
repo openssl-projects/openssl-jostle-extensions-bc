@@ -54,11 +54,14 @@ class KemUtil
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
+            // TLS uses the ML-KEM shared secret itself, and the hybrid groups concatenate it raw. The
+            // provider's spec builders start with a KDF, so both specs have to switch it off.
             keyGenerator.init(KEMExtractSpec.builder()
                 .withPrivate(privateKey)
                 .withEncapsulatedKey(ciphertext)
                 .withAlgorithmName("DEF")
                 .withKeySizeInBits(256)
+                .withNoKdf()
                 .build());
             SecretKeyWithEncapsulation secEnc = (SecretKeyWithEncapsulation)keyGenerator.generateKey();
             return crypto.adoptLocalSecret(secEnc.getEncoded());
@@ -74,10 +77,12 @@ class KemUtil
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
+            // no KDF: see decapsulate
             keyGenerator.init(KEMGenerateSpec.builder()
                 .withPublicKey(publicKey)
                 .withAlgorithmName("DEF")
                 .withKeySizeInBits(256)
+                .withNoKdf()
                 .build());
             return (SecretKeyWithEncapsulation)keyGenerator.generateKey();
         }

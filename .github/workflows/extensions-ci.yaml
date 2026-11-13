@@ -304,14 +304,17 @@ jobs:
         uses: "actions/checkout@v7"
         with:
           repository: "bcgit/bc-test-data"
-          ref: "7584d20af80fcbaaeea93ee5d88020d31a66bdfa"
+          ref: "5799df197f08d25c540136559125d76d247f5572"
           path: "test-data"
           persist-credentials: false
           sparse-checkout: |
             PKITS/certs
             asn1
+            c509/test-vectors
             cmp/invalid-messages
+            openpgp/openpgp-pqc/rfc9980
             pkix
+            pqc/crypto/mlkem
             tls/credentials
             tsp/20170316_Testdaten
       # One module path per platform. Forward slashes keep the Windows path intact through bash
