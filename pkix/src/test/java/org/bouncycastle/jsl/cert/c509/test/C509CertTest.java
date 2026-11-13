@@ -1,0 +1,519 @@
+package org.bouncycastle.jsl.cert.c509.test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.util.Date;
+
+import junit.framework.TestCase;
+import org.bouncycastle.jsl.asn1.ASN1Encoding;
+import org.bouncycastle.jsl.asn1.x500.X500Name;
+import org.bouncycastle.jsl.asn1.x509.Certificate;
+import org.bouncycastle.jsl.asn1.x509.Extension;
+import org.bouncycastle.jsl.asn1.x509.Extensions;
+import org.bouncycastle.jsl.asn1.x509.ExtensionsGenerator;
+import org.bouncycastle.jsl.asn1.x509.KeyUsage;
+import org.bouncycastle.jsl.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jsl.cbor.CBORDecoder;
+import org.bouncycastle.jsl.cbor.CBOREncoder;
+import org.bouncycastle.jsl.cbor.c509.C509Certificate;
+import org.bouncycastle.jsl.cbor.c509.C509CertificationRequest;
+import org.bouncycastle.jsl.cbor.c509.C509PrivateKey;
+import org.bouncycastle.jsl.cbor.c509.C509PrivateKeyPossessionStatement;
+import org.bouncycastle.jsl.cbor.c509.C509SignatureAlgorithm;
+import org.bouncycastle.jsl.cbor.c509.COSEC509;
+import org.bouncycastle.jsl.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.jsl.cert.X509CertificateHolder;
+import org.bouncycastle.jsl.cert.X509v3CertificateBuilder;
+import org.bouncycastle.jsl.cert.c509.C509CertificateBuilder;
+import org.bouncycastle.jsl.cert.c509.C509CertificateHolder;
+import org.bouncycastle.jsl.cert.c509.C509CertificationRequestBuilder;
+import org.bouncycastle.jsl.cert.c509.C509CertificationRequestHolder;
+import org.bouncycastle.jsl.cert.c509.jcajce.JcaC509CertificateConverter;
+import org.bouncycastle.jsl.cert.c509.jcajce.JcaC509ContentVerifierProviderBuilder;
+import org.bouncycastle.jsl.cert.jcajce.JcaX509CertificateHolder;
+import org.bouncycastle.jsl.operator.ContentSigner;
+import org.bouncycastle.jsl.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.jsl.test.TestResourceFinder;
+import org.bouncycastle.jsl.util.Arrays;
+import org.bouncycastle.jsl.util.Strings;
+import org.bouncycastle.jsl.util.encoders.Hex;
+import org.bouncycastle.jsl.util.io.Streams;
+import org.bouncycastle.jsl.test.JslTestProvider;
+
+/**
+ * End to end tests for the C509 holder, builder and verifier provider classes: a
+ * natively signed (type 2) certificate and certification request are issued and
+ * verified through both the JCA/JCE and the lightweight operator paths, and an X.509
+ * certificate issued in the usual way round-trips through the type 3 re-encoding.
+ */
+public class C509CertTest
+    extends TestCase
+{
+    public void setUp()
+    {
+        if (Security.getProvider(JslTestProvider.name()) == null)
+        {
+            JslTestProvider.install();
+        }
+    }
+
+    private KeyPair generateECKeyPair()
+        throws Exception
+    {
+        KeyPairGenerator kpGen = KeyPairGenerator.getInstance("EC", JslTestProvider.name());
+        kpGen.initialize(new ECGenParameterSpec("P-256"), new SecureRandom());
+        return kpGen.generateKeyPair();
+    }
+
+    public void testNativeCertificateBuildAndVerify()
+        throws Exception
+    {
+        KeyPair issuerKp = generateECKeyPair();
+        KeyPair subjectKp = generateECKeyPair();
+
+        X500Name issuer = new X500Name("CN=C509 test CA");
+        X500Name subject = new X500Name("CN=C509 test EE");
+        Date notBefore = new Date((System.currentTimeMillis() / 1000) * 1000);
+        Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name())
+            .build(issuerKp.getPrivate());
+
+        C509CertificateHolder cert = new C509CertificateBuilder(issuer, BigInteger.valueOf(0x1F50D),
+            notBefore, notAfter, subject,
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .addExtension(Extension.keyUsage, false, new KeyUsage(KeyUsage.digitalSignature))
+            .build(signer);
+
+        assertEquals(C509Certificate.TYPE_NATIVE, cert.getCertificateType());
+        assertEquals(BigInteger.valueOf(0x1F50D), cert.getSerialNumber());
+        assertEquals(issuer, cert.getIssuer());
+        assertEquals(subject, cert.getSubject());
+        assertEquals(Integer.valueOf(C509SignatureAlgorithm.ECDSA_WITH_SHA256),
+            cert.getSignatureAlgorithm().getRegistryValue());
+        assertTrue(cert.isValidOn(new Date(notBefore.getTime() + 1000)));
+        assertNotNull(cert.getExtensions().getExtension(Extension.keyUsage));
+
+        // verification through the JCA/JCE path
+        assertTrue(cert.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(SubjectPublicKeyInfo.getInstance(issuerKp.getPublic().getEncoded()))));
+
+        // a corrupted encoding must not verify
+        byte[] encoding = cert.getEncoded();
+        byte[] tampered = Arrays.clone(encoding);
+        tampered[tampered.length - 1] ^= 1;
+        C509CertificateHolder tamperedCert = new C509CertificateHolder(tampered);
+        assertFalse(tamperedCert.isSignatureValid(new JcaC509ContentVerifierProviderBuilder()
+            .setProvider(JslTestProvider.name()).build(SubjectPublicKeyInfo.getInstance(issuerKp.getPublic().getEncoded()))));
+
+        // parse and re-encode is the identity
+        assertTrue(Arrays.areEqual(encoding, new C509CertificateHolder(encoding).getEncoded()));
+
+        // the native key uses a compressed point (0x02/0x03) by default
+        int firstKeyByte = cert.getSubjectPublicKeyInfo().getPublicKeyData().getBytes()[0] & 0xFF;
+        assertTrue(firstKeyByte == 0x02 || firstKeyByte == 0x03);
+
+        // a natively signed certificate has no X.509 form
+        try
+        {
+            cert.getC509Certificate().toX509Certificate();
+            fail("native certificate produced an X.509 view");
+        }
+        catch (IllegalStateException e)
+        {
+            // expected
+        }
+
+        // COSE_C509 wrapping round-trips
+        byte[] coseC509 = COSEC509.encode(new C509Certificate[]{ cert.getC509Certificate() });
+        C509Certificate[] decoded = COSEC509.decode(coseC509);
+        assertEquals(1, decoded.length);
+        assertTrue(Arrays.areEqual(encoding, decoded[0].getEncoded()));
+    }
+
+    public void testPkinitExtendedKeyUsage()
+        throws Exception
+    {
+        // the RFC 4556 PKINIT extended key usages are registry values 10 and 11 in the
+        // C509 EKU table, so they must compress to the specific form and come back
+        // byte-identically through both certificate types
+        KeyPair issuerKp = generateECKeyPair();
+        KeyPair subjectKp = generateECKeyPair();
+
+        Date notBefore = new Date((System.currentTimeMillis() / 1000) * 1000);
+        Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+
+        org.bouncycastle.jsl.asn1.x509.ExtendedKeyUsage eku = new org.bouncycastle.jsl.asn1.x509.ExtendedKeyUsage(
+            new org.bouncycastle.jsl.asn1.x509.KeyPurposeId[]{
+                org.bouncycastle.jsl.asn1.x509.KeyPurposeId.id_kp_pkinitClientAuth,
+                org.bouncycastle.jsl.asn1.x509.KeyPurposeId.id_kp_pkinitKdc });
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name())
+            .build(issuerKp.getPrivate());
+
+        // native (type 2): the specific EKU encoding is mandatory there
+        C509CertificateHolder nativeCert = new C509CertificateBuilder(new X500Name("CN=PKINIT CA"),
+            BigInteger.valueOf(7), notBefore, notAfter, new X500Name("CN=PKINIT client"),
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .addExtension(Extension.extendedKeyUsage, false, eku)
+            .build(signer);
+
+        assertTrue(Arrays.areEqual(eku.getEncoded(),
+            org.bouncycastle.jsl.asn1.x509.ExtendedKeyUsage.getInstance(
+                nativeCert.getExtensions().getExtensionParsedValue(Extension.extendedKeyUsage)).getEncoded()));
+        assertTrue(nativeCert.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(SubjectPublicKeyInfo.getInstance(issuerKp.getPublic().getEncoded()))));
+
+        // re-encoded (type 3): the whole certificate must reconstruct byte for byte
+        X509CertificateHolder x509 = new X509v3CertificateBuilder(new X500Name("CN=PKINIT CA"),
+            BigInteger.valueOf(8), notBefore, notAfter, new X500Name("CN=PKINIT client"),
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .addExtension(Extension.extendedKeyUsage, false, eku)
+            .build(signer);
+
+        byte[] der = x509.getEncoded();
+        C509Certificate c509 = C509Certificate.fromX509Certificate(der);
+        assertTrue(Arrays.areEqual(der, c509.toX509Certificate().getEncoded(ASN1Encoding.DER)));
+    }
+
+    public void testX509RoundTripThroughType3()
+        throws Exception
+    {
+        KeyPair issuerKp = generateECKeyPair();
+        KeyPair subjectKp = generateECKeyPair();
+
+        Date notBefore = new Date((System.currentTimeMillis() / 1000) * 1000);
+        Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+
+        ExtensionsGenerator extGen = new ExtensionsGenerator();
+        extGen.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+
+        X509CertificateHolder x509 = new X509v3CertificateBuilder(new X500Name("CN=C509 test CA"),
+            BigInteger.valueOf(4711), notBefore, notAfter, new X500Name("CN=C509 test EE"),
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .addExtension(extGen.getExtension(Extension.keyUsage))
+            .build(new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name()).build(issuerKp.getPrivate()));
+
+        byte[] der = x509.getEncoded();
+        C509Certificate c509 = C509Certificate.fromX509Certificate(der);
+        assertEquals(C509Certificate.TYPE_REENCODED_X509, c509.getCertificateType());
+
+        // reconstruction is byte identical, so the original signature verifies
+        byte[] rebuilt = c509.toX509Certificate().getEncoded(ASN1Encoding.DER);
+        assertTrue(Arrays.areEqual(der, rebuilt));
+
+        C509CertificateHolder holder = new C509CertificateHolder(c509);
+        assertTrue(holder.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(SubjectPublicKeyInfo.getInstance(issuerKp.getPublic().getEncoded()))));
+
+        // and converts to a JCA certificate that verifies with the issuer key
+        X509Certificate jcaCert = new JcaC509CertificateConverter().setProvider(JslTestProvider.name())
+            .getCertificate(holder);
+        jcaCert.verify(issuerKp.getPublic());
+        assertTrue(Arrays.areEqual(der, jcaCert.getEncoded()));
+
+        // the C509 forms produced directly and via the JCA holder agree
+        assertTrue(Arrays.areEqual(c509.getEncoded(),
+            C509Certificate.fromX509Certificate(Certificate.getInstance(der),
+                org.bouncycastle.jsl.cbor.c509.C509ConversionOptions.DEFAULT).getEncoded()));
+
+        // holder round trip through JcaX509CertificateHolder
+        assertTrue(Arrays.areEqual(der, new JcaX509CertificateHolder(jcaCert).getEncoded()));
+    }
+
+    public void testExpiredType3CannotBeRevivedByDisplacingNotAfter()
+        throws Exception
+    {
+        KeyPair issuerKp = generateECKeyPair();
+        KeyPair subjectKp = generateECKeyPair();
+
+        Date notBefore = new Date(1640995200000L);  // 2022-01-01T00:00:00Z
+        Date notAfter = new Date(1672531200000L);   // 2023-01-01T00:00:00Z
+        Date checkTime = new Date(1767225600000L);  // 2026-01-01T00:00:00Z, after expiry
+
+        X509CertificateHolder x509 = new X509v3CertificateBuilder(new X500Name("CN=C509 test CA"),
+            BigInteger.valueOf(4712), notBefore, notAfter, new X500Name("CN=C509 test EE"),
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .addExtension(Extension.keyUsage, false, new KeyUsage(KeyUsage.digitalSignature))
+            .build(new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name()).build(issuerKp.getPrivate()));
+
+        C509CertificateHolder holder = new C509CertificateHolder(
+            C509Certificate.fromX509Certificate(x509.getEncoded()));
+        assertTrue(holder.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(SubjectPublicKeyInfo.getInstance(issuerKp.getPublic().getEncoded()))));
+        assertEquals(notAfter, holder.getNotAfter());
+        assertFalse(holder.isValidOn(checkTime));
+
+        // displacing notAfter by 2^61 seconds leaves the reconstructed DER, and so the
+        // signed bytes and the issuer signature, untouched; the holder must refuse the
+        // encoding rather than let its validity decision disagree with its own getters
+        long displaced = (notAfter.getTime() / 1000) + (1L << 61);
+        assertEquals(notAfter.getTime(), displaced * 1000);
+        byte[] forged = withValidityField(holder.getEncoded(), 5, displaced);
+        try
+        {
+            new C509CertificateHolder(forged);
+            fail("accepted a notAfter displaced past 99991231235959Z");
+        }
+        catch (IOException e)
+        {
+            assertEquals("validityNotAfter is after 99991231235959Z: " + displaced, e.getMessage());
+        }
+    }
+
+    private static byte[] vector(String name)
+        throws IOException
+    {
+        InputStream in = TestResourceFinder.findTestResource("c509/test-vectors", name + ".hex");
+        return Hex.decode(Strings.fromByteArray(Streams.readAll(in)).trim());
+    }
+
+    /**
+     * The vectors the provider under test may be unable to verify, measured on JSL: 3.7 is on the SM2 curve
+     * ("unknown algorithm: SM2"). 3.11 is on FRP256v1, and 3.8, 4.21 and 4.22 are signed with
+     * SHAKE128withECDSA, SHAKE128withRSAPSS and SHAKE256withRSAPSS: OpenSSL provides none of these, so
+     * they are permanent gaps. For these a refusal is reported and skipped. Every other vector has to
+     * verify.
+     */
+    private static final String[] PROVIDER_DEPENDENT = { "3_7", "3_8", "3_11", "4_21", "4_22" };
+
+    private static boolean isProviderDependent(String tag)
+    {
+        for (int i = 0; i != PROVIDER_DEPENDENT.length; i++)
+        {
+            if (PROVIDER_DEPENDENT[i].equals(tag))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void testDraftVectorSignatures()
+        throws Exception
+    {
+        // every signed certificate of draft-ietf-cose-c509-test-vectors-02 verifies in
+        // both its forms: the type 3 signature over the reconstructed DER and the type 2
+        // signature over the CBOR TBSCertificate. Section 2's CA is unsigned and signs
+        // the X25519 and X448 certificates of Sections 3.12 and 3.13; Section 7 uses a
+        // private curve the provider cannot verify with.
+        String[] tags = { "3_1", "3_2", "3_3", "3_4", "3_5", "3_6", "3_7", "3_8", "3_9", "3_11", "3_12", "3_13",
+            "3_14", "3_15", "4_1", "4_17", "4_18", "4_19", "4_20", "4_21", "4_22" };
+        SubjectPublicKeyInfo caKey = new C509CertificateHolder(vector("2_t2")).getSubjectPublicKeyInfo();
+        String[] forms = { "_t3", "_t2" };
+        for (int i = 0; i != tags.length; i++)
+        {
+            for (int j = 0; j != forms.length; j++)
+            {
+                String name = tags[i] + forms[j];
+                C509CertificateHolder holder = new C509CertificateHolder(vector(name));
+                SubjectPublicKeyInfo key = holder.getIssuer().equals(holder.getSubject())
+                    ? holder.getSubjectPublicKeyInfo() : caKey;
+                boolean valid;
+                try
+                {
+                    valid = holder.isSignatureValid(
+                        new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(key));
+                }
+                catch (Exception e)
+                {
+                    // a FIPS module serves fewer curves and signatures still, and which ones depends on the module
+                    if (!isProviderDependent(tags[i]) && !JslTestProvider.isFips())
+                    {
+                        throw e;
+                    }
+                    System.out.println("[skipped] C509 vector " + name + ": " + JslTestProvider.name()
+                        + " cannot verify it: " + e.getMessage());
+                    continue;
+                }
+                assertTrue(name + " does not verify", valid);
+            }
+        }
+
+        // the ECDSA certification requests of Sections 8.1 and 8.2 verify with their subject key
+        String[] requests = { "8_1_t3", "8_1_t2", "8_2_t3" };
+        for (int i = 0; i != requests.length; i++)
+        {
+            C509CertificationRequestHolder holder = new C509CertificationRequestHolder(vector(requests[i]));
+            assertTrue(requests[i] + " does not verify", holder.isSignatureValid(
+                new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name()).build(holder.getSubjectPublicKeyInfo())));
+        }
+    }
+
+    public void testNativeRequestWithPossessionStatement()
+        throws Exception
+    {
+        KeyPair signatureKp = generateECKeyPair();
+        KeyPair agreementKp = generateECKeyPair();
+
+        Date notBefore = new Date((System.currentTimeMillis() / 1000) * 1000);
+        Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name())
+            .build(signatureKp.getPrivate());
+
+        // the signature certificate the holder of the key agreement key vouches with
+        C509CertificateHolder signatureCert = new C509CertificateBuilder(new X500Name("CN=C509 test CA"),
+            BigInteger.valueOf(0x2A), notBefore, notAfter, new X500Name("CN=C509 signer"),
+            SubjectPublicKeyInfo.getInstance(signatureKp.getPublic().getEncoded()))
+            .build(signer);
+
+        C509CertificationRequestHolder request = new C509CertificationRequestBuilder(
+            new X500Name("CN=C509 agreement key"),
+            SubjectPublicKeyInfo.getInstance(agreementKp.getPublic().getEncoded()))
+            .setPrivateKeyPossessionStatement(new C509PrivateKeyPossessionStatement(signatureCert.getC509Certificate()))
+            .build(signer);
+
+        assertTrue(request.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(SubjectPublicKeyInfo.getInstance(signatureKp.getPublic().getEncoded()))));
+
+        C509CertificationRequestHolder parsed = new C509CertificationRequestHolder(request.getEncoded());
+        assertEquals(1, parsed.getAttributes().length);
+        assertEquals(Long.valueOf(org.bouncycastle.jsl.cbor.c509.C509Attribute.PRIVATE_KEY_POSSESSION_STATEMENT),
+            parsed.getAttributes()[0].getRegistryValue());
+        C509PrivateKeyPossessionStatement statement = C509PrivateKeyPossessionStatement.getInstance(
+            parsed.getAttributes()[0].getValueEncoding());
+        assertEquals(new X500Name("CN=C509 test CA"), statement.getIssuer());
+        assertEquals(BigInteger.valueOf(0x2A), statement.getSerialNumber());
+        assertTrue(Arrays.areEqual(signatureCert.getEncoded(), statement.getCertificate().getEncoded()));
+    }
+
+    /**
+     * Re-encode a C509 certificate with the CBOR item at the given index of the
+     * certificate array replaced by an unsigned integer, leaving every other item,
+     * including the issuer signature, exactly as it was.
+     */
+    private static byte[] withValidityField(byte[] encoding, int index, long seconds)
+        throws IOException
+    {
+        CBORDecoder in = new CBORDecoder(encoding);
+        int count = in.readArrayHeader();
+        byte[][] items = new byte[count][];
+        for (int i = 0; i != count; i++)
+        {
+            items[i] = in.readEncodedItem();
+        }
+        in.expectEnd();
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        CBOREncoder out = new CBOREncoder(bOut);
+        out.writeArrayHeader(count);
+        for (int i = 0; i != count; i++)
+        {
+            if (i == index)
+            {
+                out.writeUnsignedInteger(seconds);
+            }
+            else
+            {
+                out.writeEncoded(items[i]);
+            }
+        }
+        return bOut.toByteArray();
+    }
+
+    public void testNativeCertificationRequestBuildAndVerify()
+        throws Exception
+    {
+        KeyPair subjectKp = generateECKeyPair();
+
+        ExtensionsGenerator extGen = new ExtensionsGenerator();
+        extGen.addExtension(Extension.keyUsage, false, new KeyUsage(KeyUsage.digitalSignature));
+        Extensions extensionRequest = extGen.generate();
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name())
+            .build(subjectKp.getPrivate());
+
+        C509CertificationRequestHolder csr = new C509CertificationRequestBuilder(
+            new X500Name("CN=C509 test EE"),
+            SubjectPublicKeyInfo.getInstance(subjectKp.getPublic().getEncoded()))
+            .setExtensionRequest(extensionRequest)
+            .setChallengePassword("secret1234")
+            .build(signer);
+
+        assertEquals(C509CertificationRequest.TYPE_NATIVE, csr.getRequestType());
+        assertEquals(new X500Name("CN=C509 test EE"), csr.getSubject());
+        assertEquals(2, csr.getAttributes().length);
+
+        // the proof-of-possession verifies with the subject public key, both paths
+        assertTrue(csr.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(csr.getSubjectPublicKeyInfo())));
+
+        // re-encode identity
+        byte[] encoding = csr.getEncoded();
+        assertTrue(Arrays.areEqual(encoding, new C509CertificationRequestHolder(encoding).getEncoded()));
+
+        // extension request survives the keyUsage int compaction in the attribute value
+        C509CertificationRequestHolder parsed = new C509CertificationRequestHolder(encoding);
+        assertEquals(Long.valueOf(0), parsed.getAttributes()[0].getRegistryValue());
+    }
+
+    public void testPKCS10RoundTripThroughType3()
+        throws Exception
+    {
+        KeyPair subjectKp = generateECKeyPair();
+
+        // build a PKCS#10 request via the C509 native builder's DER cousin: use the
+        // JCA classes directly to get a DER request with an extensionRequest
+        org.bouncycastle.jsl.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder p10Builder =
+            new org.bouncycastle.jsl.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder(
+                new javax.security.auth.x500.X500Principal("CN=C509 test EE"), subjectKp.getPublic());
+        ExtensionsGenerator extGen = new ExtensionsGenerator();
+        extGen.addExtension(Extension.keyUsage, false, new KeyUsage(KeyUsage.digitalSignature));
+        p10Builder.addAttribute(org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers.pkcs_9_at_extensionRequest,
+            extGen.generate());
+        org.bouncycastle.jsl.pkcs.PKCS10CertificationRequest p10 = p10Builder
+            .build(new JcaContentSignerBuilder("SHA256withECDSA").setProvider(JslTestProvider.name()).build(subjectKp.getPrivate()));
+
+        byte[] der = p10.getEncoded();
+        C509CertificationRequest c509 = C509CertificationRequest.fromCertificationRequest(der);
+        assertEquals(C509CertificationRequest.TYPE_REENCODED_PKCS10, c509.getRequestType());
+
+        byte[] rebuilt = c509.toCertificationRequest().getEncoded(ASN1Encoding.DER);
+        assertTrue(Arrays.areEqual(der, rebuilt));
+
+        // the copied signature verifies over the reconstructed DER
+        C509CertificationRequestHolder holder = new C509CertificationRequestHolder(c509);
+        assertTrue(holder.isSignatureValid(new JcaC509ContentVerifierProviderBuilder().setProvider(JslTestProvider.name())
+            .build(holder.getSubjectPublicKeyInfo())));
+    }
+
+    public void testPrivateKeyStructure()
+        throws Exception
+    {
+        KeyPair kp = generateECKeyPair();
+        PrivateKeyInfo pkInfo = PrivateKeyInfo.getInstance(kp.getPrivate().getEncoded());
+
+        C509PrivateKey key = C509PrivateKey.fromPrivateKeyInfo(pkInfo);
+        assertEquals(C509PrivateKey.TYPE_ASYMMETRIC_KEY_PACKAGE, key.getPrivateKeyType());
+
+        byte[] encoding = key.getEncoded();
+        C509PrivateKey parsed = C509PrivateKey.getInstance(encoding);
+        assertEquals(key, parsed);
+        assertTrue(Arrays.areEqual(encoding, parsed.getEncoded()));
+
+        // the PrivateKeyInfo view carries the same key material
+        assertTrue(Arrays.areEqual(pkInfo.getPrivateKey().getOctets(),
+            parsed.toPrivateKeyInfo().getPrivateKey().getOctets()));
+
+        // destroy zeroizes and disables the accessors
+        parsed.destroy();
+        assertTrue(parsed.isDestroyed());
+        try
+        {
+            parsed.getEncoded();
+            fail("destroyed key still encodable");
+        }
+        catch (IllegalStateException e)
+        {
+            // expected
+        }
+    }
+}

@@ -7,6 +7,12 @@ import org.bouncycastle.jsl.tls.DatagramTransport;
 public class FilteredDatagramTransport
     implements DatagramTransport
 {
+    /**
+     * The DTLS plaintext record header length. DTLSRecordLayer.RECORD_HEADER_LENGTH is package-private to
+     * org.bouncycastle.jsl.tls, so tests in this package that parse record headers share this one copy of it.
+     */
+    public static final int RECORD_HEADER_LENGTH = 13;
+
     public interface FilterPredicate
     {
         boolean allowPacket(byte[] buf, int off, int len);

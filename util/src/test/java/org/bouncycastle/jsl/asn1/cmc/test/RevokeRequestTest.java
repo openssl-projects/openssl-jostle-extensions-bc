@@ -2,6 +2,7 @@ package org.bouncycastle.jsl.asn1.cmc.test;
 
 import java.util.Date;
 
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1Enumerated;
 import org.bouncycastle.jsl.asn1.ASN1GeneralizedTime;
 import org.bouncycastle.jsl.asn1.ASN1Integer;
@@ -95,5 +96,18 @@ public class RevokeRequestTest
             isEquals("Exception type", t.getClass(), IllegalArgumentException.class);
         }
 
+        // the optional fields come once each in definition order, and nothing else may follow (github #2516)
+        X500Name revokeName = new X500Name("CN=Name");
+        try
+        {
+            RevokeRequest.getInstance(new DERSequence(new ASN1Encodable[]{
+                revokeName, new ASN1Integer(1), CRLReason.lookup(CRLReason.keyCompromise),
+                new DERUTF8String("comment"), new ASN1GeneralizedTime(new Date()) }));
+            fail("comment before invalidityDate accepted");
+        }
+        catch (IllegalArgumentException e)
+        {
+            // expected
+        }
     }
 }

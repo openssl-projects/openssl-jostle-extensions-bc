@@ -2,10 +2,12 @@ package org.bouncycastle.jsl.asn1.ess.test;
 
 import java.io.IOException;
 
+import org.bouncycastle.jsl.asn1.ASN1Encodable;
 import org.bouncycastle.jsl.asn1.ASN1InputStream;
 import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.asn1.ASN1Sequence;
 import org.bouncycastle.jsl.asn1.ASN1UTF8String;
+import org.bouncycastle.jsl.asn1.DERSequence;
 import org.bouncycastle.jsl.asn1.DERUTF8String;
 import org.bouncycastle.jsl.asn1.ess.ContentHints;
 import org.bouncycastle.jsl.asn1.util.test.ASN1UnitTest;
@@ -44,6 +46,28 @@ public class ContentHintsUnitTest
             ContentHints.getInstance(new Object());
 
             fail("getInstance() failed to detect bad object.");
+        }
+        catch (IllegalArgumentException e)
+        {
+            // expected
+        }
+
+        // nothing may follow contentType (github #2516)
+        try
+        {
+            ContentHints.getInstance(new DERSequence(new ASN1Encodable[]{
+                new DERUTF8String("Description"), new ASN1ObjectIdentifier("1.2.2.3"), new DERUTF8String("trailing") }));
+            fail("trailing element accepted");
+        }
+        catch (IllegalArgumentException e)
+        {
+            // expected
+        }
+        try
+        {
+            ContentHints.getInstance(new DERSequence(new ASN1Encodable[]{
+                new ASN1ObjectIdentifier("1.2.2.3"), new DERUTF8String("Description") }));
+            fail("contentDescription after contentType accepted");
         }
         catch (IllegalArgumentException e)
         {

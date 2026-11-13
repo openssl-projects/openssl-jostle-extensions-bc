@@ -7,11 +7,14 @@ import javax.crypto.Mac;
 
 import junit.framework.TestCase;
 import org.bouncycastle.jsl.asn1.DEROctetString;
+import org.bouncycastle.jsl.asn1.pkcs.MacData;
 import org.bouncycastle.jsl.asn1.pkcs.PBKDF2Params;
 import org.bouncycastle.jsl.asn1.pkcs.PBMAC1Params;
 import org.bouncycastle.jsl.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.jsl.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.jsl.asn1.pkcs.Pfx;
 import org.bouncycastle.jsl.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.jsl.asn1.x509.DigestInfo;
 import org.bouncycastle.jsl.cms.CMSAlgorithm;
 import org.bouncycastle.jsl.test.JslTestProvider;
 import org.bouncycastle.jsl.operator.MacCalculator;
@@ -176,6 +179,44 @@ public class PKCS12UtilTest
         PBMAC1Params params = PBMAC1Params.getInstance(calculator.getAlgorithmIdentifier().getParameters());
 
         assertEquals(PKCSObjectIdentifiers.id_PBKDF2, params.getKeyDerivationFunc().getAlgorithm());
+    }
+
+    /**
+     * Compatibility half: releases up to 1.86 wrote id-PBES2 in that field, so a PFX carrying one has
+     * to keep verifying. The readers ignore the OID and this must stay that way - lenient on read,
+     * correct on write. The MAC covers the content, not the algorithm identifier, so rewriting the
+     * OID on a good PFX reproduces exactly what an earlier release emitted.
+     * <p>
+     * Upstream builds the PFX with its lightweight PBMAC1 builder. Here it comes from pbMac1().
+     * </p>
+     */
+    public void testLegacyPbes2KdfOidStillVerifies()
+        throws Exception
+    {
+        Pfx pfx = buildPfx(pbMac1()).toASN1Structure();
+        MacData macData = pfx.getMacData();
+        DigestInfo mac = macData.getMac();
+        PBMAC1Params current = PBMAC1Params.getInstance(mac.getAlgorithmId().getParameters());
+
+        assertEquals(PKCSObjectIdentifiers.id_PBKDF2, current.getKeyDerivationFunc().getAlgorithm());
+
+        PBMAC1Params legacy = new PBMAC1Params(
+            new AlgorithmIdentifier(PKCSObjectIdentifiers.id_PBES2,
+                PBKDF2Params.getInstance(current.getKeyDerivationFunc().getParameters())),
+            current.getMessageAuthScheme());
+
+        Pfx rewritten = new Pfx(pfx.getAuthSafe(), new MacData(
+            new DigestInfo(new AlgorithmIdentifier(PKCSObjectIdentifiers.id_PBMAC1, legacy), mac.getDigest()),
+            macData.getSalt(), macData.getIterationCount().intValue()));
+
+        PKCS12PfxPdu legacyPfx = new PKCS12PfxPdu(rewritten);
+
+        assertEquals(PKCSObjectIdentifiers.id_PBES2,
+            PBMAC1Params.getInstance(legacyPfx.getMacAlgorithmID().getParameters())
+                .getKeyDerivationFunc().getAlgorithm());
+        assertTrue(legacyPfx.hasMac());
+        assertTrue("a PFX written by an earlier release no longer verifies",
+            legacyPfx.isMacValid(new JcePKCS12MacCalculatorBuilderProvider().setProvider(JslTestProvider.name()), passwd));
     }
 
     /**

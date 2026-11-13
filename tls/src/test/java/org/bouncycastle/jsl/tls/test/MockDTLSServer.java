@@ -18,6 +18,7 @@ import org.bouncycastle.jsl.tls.ProtocolVersion;
 import org.bouncycastle.jsl.tls.SignatureAlgorithm;
 import org.bouncycastle.jsl.tls.TlsCredentialedDecryptor;
 import org.bouncycastle.jsl.tls.TlsCredentialedSigner;
+import org.bouncycastle.jsl.tls.TlsCredentials;
 import org.bouncycastle.jsl.tls.TlsFatalAlert;
 import org.bouncycastle.jsl.tls.TlsUtils;
 import org.bouncycastle.jsl.tls.crypto.TlsCertificate;
@@ -80,11 +81,22 @@ class MockDTLSServer
         return serverVersion;
     }
 
+    public TlsCredentials getCredentials() throws IOException
+    {
+        /*
+         * TODO[dtls13] Should really be finding the first client-supported signature scheme that the
+         * server also supports and has credentials for.
+         */
+        if (TlsUtils.isTLSv13(context))
+        {
+            return getRSASignerCredentials();
+        }
+
+        return super.getCredentials();
+    }
+
     public CertificateRequest getCertificateRequest() throws IOException
     {
-        short[] certificateTypes = new short[]{ ClientCertificateType.rsa_sign,
-            ClientCertificateType.dss_sign, ClientCertificateType.ecdsa_sign };
-
         Vector serverSigAlgs = null;
         if (TlsUtils.isSignatureAlgorithmsExtensionAllowed(context.getServerVersion()))
         {
@@ -98,6 +110,20 @@ class MockDTLSServer
 
         // All the CA certificates are currently configured with this subject
         certificateAuthorities.addElement(new X500Name("CN=BouncyCastle TLS Test CA"));
+
+        if (TlsUtils.isTLSv13(context))
+        {
+            // TODO[dtls13] Support for non-empty request context
+            byte[] certificateRequestContext = TlsUtils.EMPTY_BYTES;
+
+            Vector serverSigAlgsCert = null;
+
+            return new CertificateRequest(certificateRequestContext, serverSigAlgs, serverSigAlgsCert,
+                certificateAuthorities);
+        }
+
+        short[] certificateTypes = new short[]{ ClientCertificateType.rsa_sign,
+            ClientCertificateType.dss_sign, ClientCertificateType.ecdsa_sign };
 
         return new CertificateRequest(certificateTypes, serverSigAlgs, certificateAuthorities);
     }
