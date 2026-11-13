@@ -9,17 +9,17 @@ BouncyCastle satellite libraries rebuilt from bc-java. They keep BC's high-level
 delegate every cryptographic primitive to the **OpenSSL Jostle ("JSL") JCA provider** instead of
 BC's own software crypto.
 
-Version `1.86.2-SNAPSHOT`, tracking bc-java 1.86. A release build takes its version from a git tag:
+Version `1.87.0-SNAPSHOT`, tracking bc-java 1.87. A release build takes its version from a git tag:
 `-PreleaseTag=v1.86.1` or bc-java's `r1rv86` (see `checkReleaseTags` for the grammar).
 
-| module | artifact | main | test | contents |
-|---|---|---|---|---|
-| `core` | `bccore-jsl` | 728 | 0 | minimized bc-java core: ASN.1, util, math, support |
-| `util` | `bcutil-jsl` | 570 | 76 | extended ASN.1 (CMS, CMP, CRMF, TSP, EST), OER, CBOR/C509 |
-| `pkix` | `bcpkix-jsl` | 744 | 80 | certificates, CMS, CMC, TSP, PKCS, operators, PEM |
-| `mail` | `bcmail-jsl` | 51 | 6 | S/MIME |
-| `pg` | `bcpg-jsl` | 324 | 35 | OpenPGP |
-| `tls` | `bctls-jsl` | 426 | 80 | (D)TLS and the JSSE provider |
+| module | artifact | contents |
+|---|---|---|
+| `core` | `bccore-jsl` | minimized bc-java core: ASN.1, util, math, support |
+| `util` | `bcutil-jsl` | extended ASN.1 (CMS, CMP, CRMF, TSP, EST), OER, CBOR/C509 |
+| `pkix` | `bcpkix-jsl` | certificates, CMS, CMC, TSP, PKCS, operators, PEM |
+| `mail` | `bcmail-jsl` | S/MIME |
+| `pg` | `bcpg-jsl` | OpenPGP |
+| `tls` | `bctls-jsl` | (D)TLS and the JSSE provider |
 
 Dependency graph: `core ← util ← pkix ← {mail, tls}`, and `pg ← util`.
 
@@ -99,34 +99,42 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 | `GCMParameterSpec` + `updateAAD` | tls `JceAEADCipherImpl` | JSL exposes no `AlgorithmParameters` for GCM/CCM |
 | `PGPS2KCalculator` seam for Argon2 | pg `PGPUtil`, `JcePGPS2KCalculator` | routes Argon2 to `SecretKeyFactory`, so `Argon2BytesGenerator` and Blake2b could be deleted |
 | public OID classes in `core`, not `internal.asn1` | `asn1.misc`, `edec`, `gnu`, `iso`, `oiw`, `cryptlib`, `rosstandart`, `iana` | upstream splits these; this fork keeps one public copy |
+| container-only `CompositePrivateKey` / `CompositePublicKey` | core `jcajce` | upstream's classes encode through the BouncyCastle provider's key factories; here they only hold the two component keys of an RFC 9980 OpenPGP key |
+| reduced `ConstraintUtils` | core `crypto.constraints` | upstream's tests for many lightweight parameter classes, several of them software crypto; here it knows RSA, DSA and DH parameters and the service names |
+| a null `Provider` means the default search order | pg `OperatorUtils.providerHelper` and the operators that use it | `JcaOpenPGPImplementation()` passes null, and upstream's `ProviderJcaJceHelper` refuses it once a certificate's self-signatures are verified at parse |
+| DTLS 1.3 record number mask through the provider | tls `JceChaCha20RecordNumberMask` | upstream uses its software ChaCha20 engine; here it is JSL's `ChaCha20` with `ChaCha20CounterParameterSpec` |
+| `withNoKdf()` on both KEM specs, and a foreign key re-imported by its encoding | tls `KemUtil` | Jostle's KEM spec builders start with a KDF, which TLS must not apply; and its ML-KEM takes only its own key objects |
+| default provider named when one is set | pkix `JcaC509CertificateConverter` | the fork's lint refuses an unqualified service lookup in production code |
 | capability probing in `JcaTlsCrypto` | `hasCryptoHashAlgorithm`, `hasSignatureAlgorithm`, `isSupportedSignatureScheme` | upstream answers "yes" flatly; here the provider may lack the digest, algorithm or curve |
 
 ## Resync state
 
-**Last resynced to bc-java `eacda831fbe15b272933e40841d8b0827b556fae` = tag `r1rv86` (2026-09-11).**
-That commit is the floor for the next resync; the one before it was `8a04208b` (2026-09-08).
-At `r1rv86` the tag and upstream's head are the same commit.
+**Last resynced to bc-java `dd1e61c26066d0793d3f348bf6b4d9b73b701e77` = tag `r1rv87` (2026-11-12).**
+That commit is the floor for the next resync; the one before it was `r1rv86`
+(`eacda831fbe15b272933e40841d8b0827b556fae`, 2026-09-11). The work was done at `00dbc69e76`, four
+commits before the tag; none of the four touches a file under the mapped trees.
 
-**The fork's main sources are fully at 1.86.** Measured floor-independently, every `.java` under the
-mapped main trees compared against `r1rv86` directly:
+**The fork's main sources are fully at 1.87.** Measured floor-independently: every `.java` under the
+mapped main trees was compared against the relocated text of `r1rv87` directly. The identical, the
+differing and the fork-only sets are listed in
+`reviews/resync-1.87-2026-11-10/census-r1rv87/main-vs-r1rv87.tsv`.
 
-| | files |
-|---|---|
-| compared | 2849 |
-| identical to `r1rv86` | 2714 |
-| differing | 88 |
-| fork-only, no upstream counterpart at that path | 47 |
+The differences are the fork's adaptations: the provider and JSSE names, Jostle's own spec classes,
+the default-provider idiom, the removed GOST and software-crypto branches, and the divergences in
+the table above.
 
-All 88 differences are deliberate. 86 are adaptations by blob history; the other two are covered
-under trap 3 below.
+### The 1.86 move, kept for its method
 
-The windowed view below is how the work was FOUND, and is a subset — never quote it as the
-comparison: of 482 upstream files changed between the floor and `r1rv86` in the mapped trees, 366
-do not exist here (pruned crypto, pqc, `jce.provider`, the `Bc*` builders), 81 were already
-identical, and 35 differed — 26 mechanically, 9 carrying adaptations. The work that came out of it
-was 25 files taken verbatim, the JSSE provider pair, and one security fix. Seven of the nine
-"hand-merge" files and seven of seven upstream-changed tests needed nothing at all; that is the
-shape to expect, not an anomaly.
+At `r1rv86` the same floor-independent comparison showed the main sources fully at 1.86, and every
+difference was deliberate: adaptations by blob history, plus the two files under trap 3 below. Its
+record is `reviews/RESYNC-PLAN-2026-09-17.md`.
+
+The windowed view (the upstream files changed between the floor and the target) is how the work is
+FOUND, and is a subset — never quote it as the comparison. In the 1.86 move most of those files do
+not exist here (pruned crypto, pqc, `jce.provider`, the `Bc*` builders), most of the rest were
+already identical, and of the few that differed most did so mechanically. Most of the "hand-merge"
+files and every upstream-changed test needed nothing at all; that is the shape to expect, not an
+anomaly.
 
 This line lives here, in a tracked file, on purpose. It used to live only in `reviews/gate-audit.md`,
 which is gitignored, and that file lagged the tree three times in one day — a stale test count, a
@@ -145,14 +153,14 @@ classify as mechanical for every future resync instead of becoming a permanent h
 Method. **Compare against the target tag directly, then use the window to explain what you find.**
 Filtering by the upstream change window FIRST hides exactly the files nobody is looking at: a file
 this fork diverges on whose last upstream change predates the floor is invisible to a windowed scan.
-Doing it that way here reported 35 differing files when the real number was 88.
+Doing it that way in the 1.86 move reported well under half of the files that really differed.
 
 Then classify each differing file by whether its exact bytes appear anywhere in upstream's history
 for that path (the `port-from-bc-java` skill, and memory `bc-java-resync-blob-history-method`), and
 ask three questions in order:
 
 1. **Did upstream MOVE the file since the floor?** If not, the difference is purely ours and there
-   is nothing to take. Getting this wrong turns a nine-file merge into a 217-file one.
+   is nothing to take. Getting this wrong turns a merge of a few files into one of hundreds.
 2. **Does the fork LACK any of upstream's changes?** Differing is not the same as being behind. A
    file can carry an adaptation, so classify as needing a hand-merge, and already be complete. Seven
    of nine did exactly that in the 1.86 move.
@@ -168,7 +176,7 @@ ask three questions in order:
 
 Two follow-ups out of the 1.86 move, neither a resync question:
 
-- Whether any of the 366 upstream files absent here should now be CARRIED rather than stay pruned.
+- Whether any of the upstream files absent here should now be CARRIED rather than stay pruned.
   That is a scope decision, Megan's, and no resync answers it.
 - The legacy PKCS#12 PBE MAC is a provider gap, not a fork one: JSL registers no `Mac` under a
   digest OID, which is what `JcePKCS12MacCalculatorBuilder` looks up. Filed in `provider-gaps.md`

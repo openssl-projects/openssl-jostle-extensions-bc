@@ -20,7 +20,8 @@ minimized. **A verbatim copy is almost always wrong.** Work through the steps be
 | `bc-java/util` (asn1 satellites) | `util/` | |
 
 The provider itself is a **separate repo** (`../openssl-jostle`), consumed from Maven Central as
-`org.openssl.jostle:openssl-jostle:0.2.0:<arch>`. Do not try to fix provider bugs from this repo.
+`org.openssl.jostle:openssl-jostle:<jostleVersion>:<arch>` (`jostleVersion` in `gradle.properties`). Do not
+try to fix provider bugs from this repo.
 
 ## 0. Classify mechanically first — do not read 400 diffs
 
@@ -38,8 +39,27 @@ git -C <upstream> hash-object <local file>             # compare against this
 - **Blob not found** — the file carries a real local edit. Three-way merge it against its closest
   upstream ancestor (the historical blob with the smallest diff to local), then resolve by hand.
 
-In the 1.85→1.86 resync this split 436 differing files into 376 mechanical and 60 needing thought.
+In the 1.85→1.86 resync this left only a small share of the differing files needing thought.
 It also makes "no local adaptation was silently reverted" checkable rather than a promise.
+
+**Since the package relocation, relocate upstream's text before you compare.** Every fork file now
+differs from upstream in its package names, so a raw blob never matches. Apply the relocation
+substitutions to the upstream blob (and `org.bouncycastle.jsl.internal.asn1.` to
+`org.bouncycastle.jsl.asn1.`), then compare. With a floor and a head that gives a three-way split per
+file: fork equals the relocated floor, so take the relocated head (mechanical); otherwise three-way
+merge, and hand-resolve what conflicts. For the files that conflict, check blob history too: a fork
+file that equals a LATER relocated upstream blob takes the head verbatim. The record of the 1.86→1.87
+resync (`reviews/resync-1.87-2026-11-10/REPORT.md`) holds the counts for each class.
+
+**Upstream keeps some classes in two modules.** `asn1.misc`, `asn1.oiw` and friends exist under core's
+`internal/asn1` and again under util's `asn1`; the fork has one copy, mapped to the internal one. A
+fix that lands only in the util copy is invisible to a path-mapped compare. After the compare, list
+every changed upstream file whose package-relative path also maps to a fork file through another
+module, and merge those by hand.
+
+**A test class the fork reorganised merges by method, not by line.** A line merge of
+`NewEnvelopedDataTest` misaligned on every hunk. List upstream's methods at the floor and the head,
+take the added ones and the changed ones by name, and leave the fork's layout alone.
 
 **Do not bulk-resolve conflicts with `git merge-file --ours`.** It keeps local in the conflicted
 hunks but still takes upstream's non-conflicting hunks. That produced files mixing upstream imports
@@ -135,8 +155,10 @@ report sitting on disk, and `build/test-results/` holds only the LAST run of eac
 SUCCESSFUL` first, then read counts, and copy the XML aside per leg if you need to compare legs.
 
 **Gotcha:** the provider jar is not in the repo. Gradle fetches it from Maven Central into
-`~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.2.0/*/openssl-jostle-0.2.0-aarch64.jar`
-(`x86_64` on an Intel machine). Use that path wherever a classpath below names the provider.
+`~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/<jostleVersion>/*/openssl-jostle-<jostleVersion>-aarch64.jar`
+(`x86_64` on an Intel machine). Use that path wherever a classpath below names the provider. When
+`jostleVersion` names a release that is not on Maven Central yet, every Gradle run needs
+`-PjostleJar=<path>` to a local provider build, and that jar is the one for the classpath.
 
 ## 4. Porting tests specifically
 

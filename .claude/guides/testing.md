@@ -45,7 +45,7 @@ export TEST_FIPS_LIB=/Users/meganwoods/openssl/openssls/osx_3_1_2/lib/ossl-modul
 
 Jar identity in this guide is an **sha256 prefix**, not a git blob hash. `git hash-object` on the
 same file returns something else entirely (`773ce110...`), which looks like a changed jar and is not
-one. Check with `shasum -a 256 ~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/0.2.0/*/openssl-jostle-0.2.0-aarch64.jar`, or against the `.sha256` Maven Central
+one. Check with `shasum -a 256 ~/.gradle/caches/modules-2/files-2.1/org.openssl.jostle/openssl-jostle/<jostleVersion>/*/openssl-jostle-<jostleVersion>-aarch64.jar`, or against the `.sha256` Maven Central
 publishes beside the jar.
 
 "Doing real work" is tests minus both skip figures, which is only knowable because the leg summary
