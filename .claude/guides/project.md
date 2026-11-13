@@ -103,7 +103,7 @@ These compile cleanly if reverted and then fail at runtime. Do not "restore" the
 | reduced `ConstraintUtils` | core `crypto.constraints` | upstream's tests for many lightweight parameter classes, several of them software crypto; here it knows RSA, DSA and DH parameters and the service names |
 | a null `Provider` means the default search order | pg `OperatorUtils.providerHelper` and the operators that use it | `JcaOpenPGPImplementation()` passes null, and upstream's `ProviderJcaJceHelper` refuses it once a certificate's self-signatures are verified at parse |
 | DTLS 1.3 record number mask through the provider | tls `JceChaCha20RecordNumberMask` | upstream uses its software ChaCha20 engine; here it is JSL's `ChaCha20` with `ChaCha20CounterParameterSpec` |
-| `withNoKdf()` on both KEM specs, and a foreign key re-imported by its encoding | tls `KemUtil` | Jostle's KEM spec builders start with a KDF, which TLS must not apply; and its ML-KEM takes only its own key objects |
+| `withNoKdf()` on both KEM specs, through Jostle's spec builders | tls `KemUtil` | Jostle's KEM spec builders start with a KDF, which TLS must not apply |
 | default provider named when one is set | pkix `JcaC509CertificateConverter` | the fork's lint refuses an unqualified service lookup in production code |
 | capability probing in `JcaTlsCrypto` | `hasCryptoHashAlgorithm`, `hasSignatureAlgorithm`, `isSupportedSignatureScheme` | upstream answers "yes" flatly; here the provider may lack the digest, algorithm or curve |
 

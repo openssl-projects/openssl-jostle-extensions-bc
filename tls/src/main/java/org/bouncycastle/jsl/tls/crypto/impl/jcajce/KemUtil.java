@@ -1,7 +1,5 @@
 package org.bouncycastle.jsl.tls.crypto.impl.jcajce;
 
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.InvalidAlgorithmParameterException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -56,17 +54,7 @@ class KemUtil
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
-            try
-            {
-                keyGenerator.init(extractSpec(privateKey, ciphertext));
-            }
-            catch (InvalidAlgorithmParameterException e)
-            {
-                // The provider's KEM takes its own key objects only. A key that came from another
-                // provider is brought across by its PKCS#8 encoding, as bc-java's provider does itself.
-                keyGenerator.init(extractSpec(KeyFactory.getInstance(kemName, keyGenerator.getProvider())
-                    .generatePrivate(new PKCS8EncodedKeySpec(privateKey.getEncoded())), ciphertext));
-            }
+            keyGenerator.init(extractSpec(privateKey, ciphertext));
             SecretKeyWithEncapsulation secEnc = (SecretKeyWithEncapsulation)keyGenerator.generateKey();
             return crypto.adoptLocalSecret(secEnc.getEncoded());
         }
@@ -104,16 +92,7 @@ class KemUtil
         try
         {
             KeyGenerator keyGenerator = crypto.getHelper().createKeyGenerator(kemName);
-            try
-            {
-                keyGenerator.init(generateSpec(publicKey));
-            }
-            catch (InvalidAlgorithmParameterException e)
-            {
-                // as in decapsulate: a key from another provider is brought across by its encoding
-                keyGenerator.init(generateSpec(KeyFactory.getInstance(kemName, keyGenerator.getProvider())
-                    .generatePublic(new X509EncodedKeySpec(publicKey.getEncoded()))));
-            }
+            keyGenerator.init(generateSpec(publicKey));
             return (SecretKeyWithEncapsulation)keyGenerator.generateKey();
         }
         catch (Exception e)
