@@ -2182,10 +2182,14 @@ public class NewEnvelopedDataTest
         }
     }
 
-    // DISABLED: single-DES absent from all three configurations.
-    public void DISABLED_testDESKEK()
+    public void testDESKEK()
         throws Exception
     {
+        if (!requireCms3DesWrap("DESEDE3 KEK") || !requireDesedeEncrypt())
+        {
+            return;
+        }
+
         tryKekAlgorithm(CMSTestUtil.makeDesede192Key(), new ASN1ObjectIdentifier("1.2.840.113549.1.9.16.3.6"));
     }
 
@@ -2562,7 +2566,24 @@ public class NewEnvelopedDataTest
         }
     }
 
-        // DISABLED: CMS OID-lookup gap: no Cipher registered for 1.2.840.113549.1.9.16.3.6.
+    // The wraps of testKeyWrapAlgorithmIdentifiers that the provider serves.
+    public void testKeyWrapAlgorithmIdentifiersServed()
+        throws Exception
+    {
+        byte[] data = Hex.decode("504b492d4320434d5320456e76656c6f706564446174612053616d706c65");
+
+        if (requireCms3DesWrap("DES_EDE3_WRAP") && requireDesedeEncrypt())
+        {
+            doVerifyKeyWrap(data, CMSAlgorithm.DES_EDE3_WRAP, false);
+        }
+        doVerifyKeyWrap(data, CMSAlgorithm.AES128_WRAP, true);
+        doVerifyKeyWrap(data, CMSAlgorithm.AES192_WRAP, true);
+        doVerifyKeyWrap(data, CMSAlgorithm.AES256_WRAP, true);
+    }
+
+    // DISABLED: the provider serves no Camellia key wrap, and its KDF key agreement refuses the
+    // Camellia-128 wrap OID 1.2.392.200011.61.1.1.3.2. The list also has the SEED wrap, and the
+    // provider has no SEED.
     public void DISABLED_testKeyWrapAlgorithmIdentifiers()
         throws Exception
     {
@@ -2683,8 +2704,8 @@ public class NewEnvelopedDataTest
         }
     }
 
-        // DISABLED: CMS OID-lookup gap: no KeyAgreement for the X9.63 OID 1.3.133.16.840.63.0.3.
-    public void DISABLED_testKDFAgreements()
+    // The ECMQV agreements are left out: the provider has no ECMQV.
+    public void testKDFAgreements()
         throws Exception
     {
         byte[] data = Hex.decode("504b492d4320434d5320456e76656c6f706564446174612053616d706c65");
@@ -2700,12 +2721,6 @@ public class NewEnvelopedDataTest
         doTryAgreement(data, CMSAlgorithm.ECCDH_SHA256KDF);
         doTryAgreement(data, CMSAlgorithm.ECCDH_SHA384KDF);
         doTryAgreement(data, CMSAlgorithm.ECCDH_SHA512KDF);
-
-        doTryAgreement(data, CMSAlgorithm.ECMQV_SHA1KDF);
-        doTryAgreement(data, CMSAlgorithm.ECMQV_SHA224KDF);
-        doTryAgreement(data, CMSAlgorithm.ECMQV_SHA256KDF);
-        doTryAgreement(data, CMSAlgorithm.ECMQV_SHA384KDF);
-        doTryAgreement(data, CMSAlgorithm.ECMQV_SHA512KDF);
     }
 
     private void doTryAgreement(byte[] data, ASN1ObjectIdentifier algorithm)
