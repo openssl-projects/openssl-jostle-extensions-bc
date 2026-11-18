@@ -55,6 +55,13 @@ are also how you tell a real FIPS run from a replayed cached one.
 
 Use `--continue` for `fipsTest`. Without it Gradle stops at the first failing module.
 
+**Windows' default random, on Unix.** From Java 9, `new SecureRandom()` on Windows is the JDK's DRBG,
+which reports 128-bit strength, and JSL refuses that for the post-quantum parameter sets above 128 bits.
+On macOS and Linux the default is `NativePRNG`, which reports no strength, so a run there cannot show
+the difference. `JAVA_TOOL_OPTIONS="-Djava.security.egd=file:/dev/./urandom" ./gradlew test` makes the
+SUN provider list its DRBG first, so `new SecureRandom()` behaves as on Windows. The
+`*WithA128BitRandomTest` classes test the same thing on every platform with an explicit DRBG.
+
 ## State of the disabled tests
 
 Some test methods are declared `DISABLED_testXxx` and run on no configuration, so they are outside

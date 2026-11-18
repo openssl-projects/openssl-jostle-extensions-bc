@@ -35,7 +35,7 @@ public class JcaOpenPGPKeyGenerator
         throws PGPException
     {
         super(
-                new JcaOpenPGPImplementation(provider, new SecureRandom()),
+                new JcaOpenPGPImplementation(provider, (SecureRandom)null),
                 version,
                 aeadProtection,
                 creationTime);

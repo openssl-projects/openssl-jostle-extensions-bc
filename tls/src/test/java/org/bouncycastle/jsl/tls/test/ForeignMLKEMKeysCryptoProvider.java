@@ -137,6 +137,14 @@ class ForeignMLKEMKeysCryptoProvider
             bcGenerator.initialize(params, random);
         }
 
+        // Without this the JDK's KeyPairGenerator.initialize(params) passes its own default random to the method
+        // above, and JSL refuses that random where it is weaker than the parameter set (the default on Windows).
+        public void initialize(AlgorithmParameterSpec params)
+            throws InvalidAlgorithmParameterException
+        {
+            bcGenerator.initialize(params);
+        }
+
         public KeyPair generateKeyPair()
         {
             KeyPair kp = bcGenerator.generateKeyPair();

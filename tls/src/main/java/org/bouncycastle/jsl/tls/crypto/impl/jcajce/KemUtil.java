@@ -36,8 +36,9 @@ class KemUtil
 //        KeyPairGenerator keyPairGenerator = KemUtil.getKeyPairGenerator(crypto, kemName);
 //        keyPairGenerator.initialize((AlgorithmParameterSpec)null, crypto.getSecureRandom());
         KeyPairGenerator keyPairGenerator = crypto.getHelper().createKeyPairGenerator("ML-KEM");
-        // JSL's MLKEMParameterSpec.fromName() keys on the lower-case parameter-set name.
-        keyPairGenerator.initialize(MLKEMParameterSpec.fromName(Strings.toLowerCase(kemName)), crypto.getSecureRandom());
+        // JSL's MLKEMParameterSpec.fromName() keys on the lower-case parameter-set name. No random is passed: JSL
+        // refuses one weaker than the parameter set needs, and the JDK default on Windows is, so JSL uses its own.
+        keyPairGenerator.initialize(MLKEMParameterSpec.fromName(Strings.toLowerCase(kemName)));
         return keyPairGenerator;
     }
 

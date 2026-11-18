@@ -6,7 +6,6 @@ import java.security.SecureRandom;
 
 import org.bouncycastle.jsl.bcpg.S2K;
 import org.bouncycastle.jsl.bcpg.SymmetricKeyAlgorithmTags;
-import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.jsl.openpgp.PGPException;
 import org.bouncycastle.jsl.openpgp.PGPObjectFactory;
 import org.bouncycastle.jsl.openpgp.PGPPrivateKey;
@@ -57,8 +56,9 @@ public class JcaOpenPGPImplementation
     {
         // No hard-coded provider: the default JCA provider chain handles classic
         // PGP algorithms (RSA/AES/SHA). For PQC keys, construct with the JSL
-        // provider explicitly via JcaOpenPGPImplementation(Provider, SecureRandom).
-        this((Provider)null, CryptoServicesRegistrar.getSecureRandom());
+        // provider explicitly via JcaOpenPGPImplementation(Provider, SecureRandom). No random: each builder then
+        // uses its own default, and the post-quantum operations, which JSL refuses a weak random for, get none.
+        this((Provider)null, (SecureRandom)null);
     }
 
     public JcaOpenPGPImplementation(Provider provider, SecureRandom secureRandom)

@@ -12,6 +12,10 @@
   derivation applied to it.
 - A 1.87.0 peer and a 1.86.x peer of these libraries do not complete a handshake on an ML-KEM or
   hybrid group: move both ends together, or have them negotiate another group.
+- On `JSL`, ML-KEM key generation in TLS, and post-quantum key generation and ML-KEM encryption in
+  OpenPGP when no random source is set, use the provider's own random source. A random source set
+  explicitly for these OpenPGP operations, or for a CMS ML-KEM recipient, must report the strength the
+  parameter set needs, or the provider refuses it.
 - Brings in DTLS 1.3 from bc-java 1.87. Its ChaCha20 record number mask is computed with the
   provider's `ChaCha20` cipher and counter spec, so `TLS_CHACHA20_POLY1305_SHA256` is available over
   DTLS 1.3 on `JSL`.

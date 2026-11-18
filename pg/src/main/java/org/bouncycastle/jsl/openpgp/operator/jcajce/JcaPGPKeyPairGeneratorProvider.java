@@ -3,7 +3,6 @@ package org.bouncycastle.jsl.openpgp.operator.jcajce;
 import org.bouncycastle.jsl.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.jsl.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.jsl.bcpg.PublicKeyPacket;
-import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.jsl.jcajce.CompositePrivateKey;
 import org.bouncycastle.jsl.jcajce.CompositePublicKey;
 import org.bouncycastle.jsl.jcajce.util.DefaultJcaJceHelper;
@@ -22,12 +21,14 @@ import org.openssl.jostle.jcajce.spec.SLHDSAParameterSpec;
 
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.util.Date;
@@ -37,7 +38,9 @@ public class JcaPGPKeyPairGeneratorProvider
 {
 
     private OperatorHelper helper;
-    private SecureRandom secureRandom = CryptoServicesRegistrar.getSecureRandom();
+    // None unless the caller sets one: JSL refuses a random weaker than a post-quantum parameter set needs, and the
+    // JDK default on Windows is, so with none JSL uses its own. The classical generators take no random either.
+    private SecureRandom secureRandom = null;
 
     public JcaPGPKeyPairGeneratorProvider()
     {
@@ -236,12 +239,12 @@ public class JcaPGPKeyPairGeneratorProvider
             try
             {
                 KeyPairGenerator eddsaGen = helper.createKeyPairGenerator("EDDSA");
-                eddsaGen.initialize(
-                    "Ed25519".equals(curveName) ? EdDSAParameterSpec.ED25519 : EdDSAParameterSpec.ED448, random);
+                initialize(eddsaGen,
+                    "Ed25519".equals(curveName) ? EdDSAParameterSpec.ED25519 : EdDSAParameterSpec.ED448);
                 KeyPair eddsaKp = eddsaGen.generateKeyPair();
 
                 KeyPairGenerator mldsaGen = helper.createKeyPairGenerator("ML-DSA");
-                mldsaGen.initialize(mldsaSpec, random);
+                initialize(mldsaGen, mldsaSpec);
                 KeyPair mldsaKp = mldsaGen.generateKeyPair();
 
                 return new JcaPGPKeyPair(version, algorithm, compose(eddsaKp, mldsaKp), creationTime);
@@ -259,7 +262,7 @@ public class JcaPGPKeyPairGeneratorProvider
             try
             {
                 KeyPairGenerator gen = helper.createKeyPairGenerator("SLH-DSA");
-                gen.initialize(spec, random);
+                initialize(gen, spec);
                 KeyPair keyPair = gen.generateKeyPair();
                 return new JcaPGPKeyPair(version, algorithm, keyPair, creationTime);
             }
@@ -283,7 +286,7 @@ public class JcaPGPKeyPairGeneratorProvider
                 KeyPair xdhKp = xdhGen.generateKeyPair();
 
                 KeyPairGenerator mlkemGen = helper.createKeyPairGenerator("ML-KEM");
-                mlkemGen.initialize(mlkemSpec, random);
+                initialize(mlkemGen, mlkemSpec);
                 KeyPair mlkemKp = mlkemGen.generateKeyPair();
 
                 return new JcaPGPKeyPair(version, algorithm, compose(xdhKp, mlkemKp), creationTime);
@@ -291,6 +294,22 @@ public class JcaPGPKeyPairGeneratorProvider
             catch (GeneralSecurityException e)
             {
                 throw new PGPException("Cannot generate ML-KEM + " + curveName + " key pair", e);
+            }
+        }
+
+        /**
+         * The caller's random if one was set, otherwise none, so that the provider uses its own source.
+         */
+        private void initialize(KeyPairGenerator gen, AlgorithmParameterSpec spec)
+            throws InvalidAlgorithmParameterException
+        {
+            if (random == null)
+            {
+                gen.initialize(spec);
+            }
+            else
+            {
+                gen.initialize(spec, random);
             }
         }
 

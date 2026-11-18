@@ -237,6 +237,12 @@ public abstract class PBEKeyEncryptionMethodGenerator
             }
 
             byte[] iv = new byte[AEADUtils.getIVLength(aeadAlgorithm)];
+
+            if (random == null)
+            {
+                random = new SecureRandom();
+            }
+
             random.nextBytes(iv);
 
             int tagLen = AEADUtils.getAuthTagLength(aeadAlgorithm);

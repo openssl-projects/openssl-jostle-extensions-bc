@@ -1,6 +1,5 @@
 package org.bouncycastle.jsl.openpgp.api.jcajce;
 
-import org.bouncycastle.jsl.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.jsl.openpgp.PGPException;
 import org.bouncycastle.jsl.openpgp.api.OpenPGPApi;
 import org.bouncycastle.jsl.openpgp.api.OpenPGPPolicy;
@@ -20,7 +19,7 @@ public class JcaOpenPGPApi
 
     public JcaOpenPGPApi(Provider provider)
     {
-        this(provider, CryptoServicesRegistrar.getSecureRandom());
+        this(provider, (SecureRandom)null);
     }
 
     public JcaOpenPGPApi(Provider provider, SecureRandom random)
@@ -31,7 +30,7 @@ public class JcaOpenPGPApi
 
     public JcaOpenPGPApi(Provider provider, OpenPGPPolicy policy)
     {
-        this(provider, CryptoServicesRegistrar.getSecureRandom(), policy);
+        this(provider, (SecureRandom)null, policy);
     }
 
     public JcaOpenPGPApi(Provider provider, SecureRandom random, OpenPGPPolicy policy)

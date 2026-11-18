@@ -132,6 +132,15 @@ to `SecretKeyFactory.getInstance("ARGON2")`. That let `Blake2bDigest` and the wh
 be deleted while leaving the feature reachable the moment JSL grows the service. See
 `.claude/guides/provider-gaps.md`.
 
+**Never pass a random the caller did not choose where JSL checks its strength:** key pair generation
+for ML-KEM, ML-DSA, SLH-DSA and the hybrid KEMs, ML-KEM encapsulation (the KeyGenerators), and the
+ML-KEM KTS cipher. JSL refuses a random that reports less strength than the parameter set needs, and
+the JDK default on Windows (its DRBG, 128 bits) is such a random. Signing is not checked, so
+`JcaPGPContentSignerBuilder`'s default hedge random for ML-DSA and SLH-DSA stays as upstream has it. Upstream's `KemUtil`, `JcaPGPKeyPairGeneratorProvider`,
+`JcaOpenPGPImplementation`, `JcaOpenPGPApi` and `JcaOpenPGPKeyGenerator` supply a default random there;
+keep the fork's versions, which pass none. `KemGroupsWithA128BitRandomTest` and
+`PqcKeysWithA128BitRandomTest` fail if one comes back.
+
 If a needed class lives in bc-java's `prov` module, copy it into `core` here — and strip any
 software-crypto coupling on the way in (e.g. `Argon2KeySpec`'s constants were inlined so it no longer
 imports `Argon2Parameters`).
