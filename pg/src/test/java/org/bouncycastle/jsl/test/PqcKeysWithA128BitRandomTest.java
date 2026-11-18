@@ -3,8 +3,9 @@ package org.bouncycastle.jsl.test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
+import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.Date;
@@ -28,7 +29,9 @@ import org.bouncycastle.jsl.util.Strings;
 import org.bouncycastle.jsl.util.io.Streams;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.openssl.jostle.jcajce.interfaces.MLDSAKey;
 import org.openssl.jostle.jcajce.interfaces.MLKEMKey;
 import org.openssl.jostle.jcajce.interfaces.SLHDSAKey;
@@ -49,6 +52,9 @@ import static org.junit.Assume.assumeTrue;
  */
 public class PqcKeysWithA128BitRandomTest
 {
+
+    @Rule
+    public TestName testName = new TestName();
     private static final byte[] PLAINTEXT = Strings.toUTF8ByteArray("post-quantum, weak default random\n");
 
     private SecureRandom drbg;
@@ -57,15 +63,7 @@ public class PqcKeysWithA128BitRandomTest
     public void setUp()
     {
         JslTestProvider.install();
-        try
-        {
-            drbg = SecureRandom.getInstance("DRBG");
-        }
-        catch (NoSuchAlgorithmException e)
-        {
-            assumeTrue("no DRBG SecureRandom on this JDK", false);
-        }
-        assertTrue("the default DRBG reports 128-bit strength", reportedParameters(drbg).startsWith("128,"));
+        drbg = jdkDrbg128();
         CryptoServicesRegistrar.setSecureRandom(drbg);
     }
 
@@ -185,12 +183,57 @@ public class PqcKeysWithA128BitRandomTest
         return new JcaPGPKeyConverter().setProvider(JslTestProvider.provider());
     }
 
-    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. */
-    private static String reportedParameters(SecureRandom random)
+    /**
+     * The JDK's own DRBG at its default configuration: the default random on Windows from Java 9, reporting 128-bit
+     * strength. Asked of SUN by name, so that the provider under test, which registers a DRBG of its own, cannot
+     * stand in for it. Java 8 has none, and its default random reports no strength, so the case does not arise.
+     */
+    private SecureRandom jdkDrbg128()
     {
+        SecureRandom random;
         try
         {
-            return String.valueOf(SecureRandom.class.getMethod("getParameters").invoke(random));
+            random = SecureRandom.getInstance("DRBG", "SUN");
+        }
+        catch (GeneralSecurityException e)
+        {
+            skip("the JDK has no DRBG SecureRandom (Java 8), so its default reports no strength and the provider"
+                + " checks none");
+            return null;
+        }
+        String parameters = reportedParameters(random);
+        if (parameters == null)
+        {
+            skip("the JDK cannot report a SecureRandom's strength (Java 8), so the provider checks none");
+            return null;
+        }
+        assertEquals("the JDK's DRBG provider", "SUN", random.getProvider().getName());
+        assertEquals("the JDK's DRBG algorithm", "DRBG", random.getAlgorithm());
+        assertTrue("the JDK's default DRBG reports 128-bit strength: " + parameters, parameters.startsWith("128,"));
+        return random;
+    }
+
+    private void skip(String reason)
+    {
+        System.out.println("[skipped] " + testName.getMethodName() + ": " + reason);
+        assumeTrue(reason, false);
+    }
+
+    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. Null when absent. */
+    private static String reportedParameters(SecureRandom random)
+    {
+        Method getParameters;
+        try
+        {
+            getParameters = SecureRandom.class.getMethod("getParameters");
+        }
+        catch (NoSuchMethodException e)
+        {
+            return null;
+        }
+        try
+        {
+            return String.valueOf(getParameters.invoke(random));
         }
         catch (Exception e)
         {

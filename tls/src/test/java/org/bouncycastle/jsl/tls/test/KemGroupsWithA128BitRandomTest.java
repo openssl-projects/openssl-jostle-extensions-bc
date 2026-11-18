@@ -3,7 +3,8 @@ package org.bouncycastle.jsl.tls.test;
 import java.io.IOException;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
-import java.security.NoSuchAlgorithmException;
+import java.lang.reflect.Method;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Vector;
 
@@ -28,7 +29,9 @@ import org.bouncycastle.jsl.tls.TlsUtils;
 import org.bouncycastle.jsl.tls.crypto.TlsCrypto;
 import org.bouncycastle.jsl.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 import org.bouncycastle.jsl.util.Strings;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -41,6 +44,9 @@ import static org.junit.Assume.assumeTrue;
  */
 public class KemGroupsWithA128BitRandomTest
 {
+
+    @Rule
+    public TestName testName = new TestName();
     private static final int[] GROUPS = { NamedGroup.MLKEM768, NamedGroup.MLKEM1024, NamedGroup.X25519MLKEM768,
         NamedGroup.SecP256r1MLKEM768, NamedGroup.SecP384r1MLKEM1024 };
 
@@ -51,7 +57,7 @@ public class KemGroupsWithA128BitRandomTest
     public void everyGroupTheProviderServesIsOfferedWithA128BitRandom()
         throws Exception
     {
-        TlsCrypto crypto = crypto(drbg128());
+        TlsCrypto crypto = crypto(jdkDrbg128());
         TlsCrypto reference = crypto(null);
 
         int checked = 0;
@@ -72,7 +78,7 @@ public class KemGroupsWithA128BitRandomTest
     public void everyGroupTheProviderServesCompletesAHandshakeWithA128BitRandom()
         throws Exception
     {
-        SecureRandom random = drbg128();
+        SecureRandom random = jdkDrbg128();
         TlsCrypto reference = crypto(null);
 
         int checked = 0;
@@ -93,29 +99,57 @@ public class KemGroupsWithA128BitRandomTest
         assumeTrue("the provider serves none of the groups", checked > 0);
     }
 
-    /** The JDK's DRBG at its default configuration, which reports 128-bit strength; absent before Java 9. */
-    private static SecureRandom drbg128()
+    /**
+     * The JDK's own DRBG at its default configuration: the default random on Windows from Java 9, reporting 128-bit
+     * strength. Asked of SUN by name, so that the provider under test, which registers a DRBG of its own, cannot
+     * stand in for it. Java 8 has none, and its default random reports no strength, so the case does not arise.
+     */
+    private SecureRandom jdkDrbg128()
     {
         SecureRandom random;
         try
         {
-            random = SecureRandom.getInstance("DRBG");
+            random = SecureRandom.getInstance("DRBG", "SUN");
         }
-        catch (NoSuchAlgorithmException e)
+        catch (GeneralSecurityException e)
         {
-            assumeTrue("no DRBG SecureRandom on this JDK", false);
+            skip("the JDK has no DRBG SecureRandom (Java 8), so its default reports no strength and the provider"
+                + " checks none");
             return null;
         }
-        assertTrue("the default DRBG reports 128-bit strength", reportedParameters(random).startsWith("128,"));
+        String parameters = reportedParameters(random);
+        if (parameters == null)
+        {
+            skip("the JDK cannot report a SecureRandom's strength (Java 8), so the provider checks none");
+            return null;
+        }
+        assertEquals("the JDK's DRBG provider", "SUN", random.getProvider().getName());
+        assertEquals("the JDK's DRBG algorithm", "DRBG", random.getAlgorithm());
+        assertTrue("the JDK's default DRBG reports 128-bit strength: " + parameters, parameters.startsWith("128,"));
         return random;
     }
 
-    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. */
-    static String reportedParameters(SecureRandom random)
+    private void skip(String reason)
     {
+        System.out.println("[skipped] " + testName.getMethodName() + ": " + reason);
+        assumeTrue(reason, false);
+    }
+
+    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. Null when absent. */
+    private static String reportedParameters(SecureRandom random)
+    {
+        Method getParameters;
         try
         {
-            return String.valueOf(SecureRandom.class.getMethod("getParameters").invoke(random));
+            getParameters = SecureRandom.class.getMethod("getParameters");
+        }
+        catch (NoSuchMethodException e)
+        {
+            return null;
+        }
+        try
+        {
+            return String.valueOf(getParameters.invoke(random));
         }
         catch (Exception e)
         {

@@ -1,9 +1,10 @@
 package org.bouncycastle.jsl.test;
 
+import java.lang.reflect.Method;
+import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
 import org.bouncycastle.jsl.cms.CMSAlgorithm;
@@ -13,8 +14,11 @@ import org.bouncycastle.jsl.cms.CMSProcessableByteArray;
 import org.bouncycastle.jsl.cms.jcajce.JceCMSContentEncryptorBuilder;
 import org.bouncycastle.jsl.cms.jcajce.JceKEMRecipientInfoGenerator;
 import org.bouncycastle.jsl.util.Strings;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
@@ -26,6 +30,9 @@ import static org.junit.Assume.assumeTrue;
  */
 public class CmsKemWithA128BitRandomTest
 {
+
+    @Rule
+    public TestName testName = new TestName();
     @Test
     public void anExplicitlySetWeakRandomIsRefusedWithTheProvidersCause()
         throws Exception
@@ -34,17 +41,7 @@ public class CmsKemWithA128BitRandomTest
         JslTestProvider.assumeAlgorithm("KeyPairGenerator.ML-KEM-768");
         assumeTrue("a FIPS module draws its own entropy and does not check the caller's", !JslTestProvider.isFips());
 
-        SecureRandom drbg;
-        try
-        {
-            drbg = SecureRandom.getInstance("DRBG");
-        }
-        catch (NoSuchAlgorithmException e)
-        {
-            assumeTrue("no DRBG SecureRandom on this JDK", false);
-            return;
-        }
-        assertTrue("the default DRBG reports 128-bit strength", reportedParameters(drbg).startsWith("128,"));
+        SecureRandom drbg = jdkDrbg128();
 
         KeyPair kp = KeyPairGenerator.getInstance("ML-KEM-768", JslTestProvider.name()).generateKeyPair();
         CMSEnvelopedDataGenerator gen = new CMSEnvelopedDataGenerator();
@@ -70,12 +67,57 @@ public class CmsKemWithA128BitRandomTest
         }
     }
 
-    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. */
-    private static String reportedParameters(SecureRandom random)
+    /**
+     * The JDK's own DRBG at its default configuration: the default random on Windows from Java 9, reporting 128-bit
+     * strength. Asked of SUN by name, so that the provider under test, which registers a DRBG of its own, cannot
+     * stand in for it. Java 8 has none, and its default random reports no strength, so the case does not arise.
+     */
+    private SecureRandom jdkDrbg128()
     {
+        SecureRandom random;
         try
         {
-            return String.valueOf(SecureRandom.class.getMethod("getParameters").invoke(random));
+            random = SecureRandom.getInstance("DRBG", "SUN");
+        }
+        catch (GeneralSecurityException e)
+        {
+            skip("the JDK has no DRBG SecureRandom (Java 8), so its default reports no strength and the provider"
+                + " checks none");
+            return null;
+        }
+        String parameters = reportedParameters(random);
+        if (parameters == null)
+        {
+            skip("the JDK cannot report a SecureRandom's strength (Java 8), so the provider checks none");
+            return null;
+        }
+        assertEquals("the JDK's DRBG provider", "SUN", random.getProvider().getName());
+        assertEquals("the JDK's DRBG algorithm", "DRBG", random.getAlgorithm());
+        assertTrue("the JDK's default DRBG reports 128-bit strength: " + parameters, parameters.startsWith("128,"));
+        return random;
+    }
+
+    private void skip(String reason)
+    {
+        System.out.println("[skipped] " + testName.getMethodName() + ": " + reason);
+        assumeTrue(reason, false);
+    }
+
+    /** SecureRandom.getParameters() is Java 9 and later; these tests also compile for Java 8. Null when absent. */
+    private static String reportedParameters(SecureRandom random)
+    {
+        Method getParameters;
+        try
+        {
+            getParameters = SecureRandom.class.getMethod("getParameters");
+        }
+        catch (NoSuchMethodException e)
+        {
+            return null;
+        }
+        try
+        {
+            return String.valueOf(getParameters.invoke(random));
         }
         catch (Exception e)
         {
